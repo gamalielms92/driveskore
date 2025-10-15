@@ -5,13 +5,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 export default function ScannerScreen() {
@@ -21,12 +21,18 @@ export default function ScannerScreen() {
   const [confidence, setConfidence] = useState<number | null>(null);
   const [plateValidation, setPlateValidation] = useState<PlateValidation | null>(null);
 
-  // Convertir imagen a Base64
+  // Convertir imagen a Base64 optimizada para OCR
   const convertToBase64 = async (uri: string): Promise<string> => {
     try {
+      // Leer la imagen con calidad reducida para OCR más rápido
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: 'base64',
       });
+      
+      // Verificar tamaño (opcional, para debugging)
+      const sizeInMB = (base64.length * 0.75) / (1024 * 1024);
+      console.log(`📊 Tamaño de imagen: ${sizeInMB.toFixed(2)} MB`);
+      
       return `data:image/jpeg;base64,${base64}`;
     } catch (error) {
       console.error('Error convirtiendo a base64:', error);
@@ -46,7 +52,8 @@ export default function ScannerScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      quality: 1,
+      quality: 0.8, // Reducir calidad para procesamiento más rápido
+      aspect: [4, 3],
     });
 
     if (!result.canceled) {
@@ -77,8 +84,8 @@ export default function ScannerScreen() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      quality: 1,
-      aspect: [16, 9],
+      quality: 0.8, // Reducir calidad para procesamiento más rápido
+      aspect: [4, 3],
     });
 
     if (!result.canceled) {
@@ -122,12 +129,22 @@ export default function ScannerScreen() {
           [{ text: 'Entendido' }]
         );
       } else {
+        // Mensaje según la confianza
+        let confidenceMsg = '';
+        if (conf < 50) {
+          confidenceMsg = '\n\n⚠️ Confianza baja. Verifica que sea correcta.';
+        } else if (conf < 70) {
+          confidenceMsg = '\n\n⚡ Confianza media. Revisa el resultado.';
+        } else {
+          confidenceMsg = '\n\n✅ Alta confianza en el resultado.';
+        }
+        
         Alert.alert(
-          '✅ Matrícula válida',
+          '✅ Matrícula detectada',
           `Formato: ${validation.format}\n` +
           `Matrícula: ${validation.plate}\n` +
           `Período: ${validation.year}\n` +
-          `Confianza: ${conf.toFixed(1)}%`,
+          `Confianza: ${conf.toFixed(1)}%${confidenceMsg}`,
           [
             { text: 'Cancelar', style: 'cancel' },
             { 
@@ -140,8 +157,14 @@ export default function ScannerScreen() {
     } else {
       Alert.alert(
         '❌ No se detectó matrícula válida',
-        `Texto detectado: "${correctedText}"\n\n` +
-        'Asegúrate de que la imagen muestre claramente una matrícula española.',
+        `Texto detectado: "${correctedText}"\n` +
+        `Confianza: ${conf.toFixed(1)}%\n\n` +
+        '💡 Consejos para mejorar:\n' +
+        '• Asegúrate de que la matrícula esté centrada\n' +
+        '• Usa buena iluminación\n' +
+        '• Evita reflejos y sombras\n' +
+        '• La matrícula debe estar limpia\n' +
+        '• Acércate más a la matrícula',
         [{ text: 'Reintentar' }]
       );
     }
