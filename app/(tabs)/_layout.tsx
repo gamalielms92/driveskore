@@ -20,16 +20,14 @@ export default function TabLayout() {
         }}
       />
       
-      {/* Solo mostrar tab "Evaluar" en móvil */}
-      {Platform.OS !== 'web' && (
-        <Tabs.Screen
-          name="capture"
-          options={{
-            title: 'Evaluar',
-            tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
-          }}
-        />
-      )}
+      <Tabs.Screen
+        name="capture"
+        options={{
+          title: 'Evaluar',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
+          href: Platform.OS === 'web' ? null : undefined, // ← OCULTAR EN WEB
+        }}
+      />
       
       <Tabs.Screen
         name="search"
@@ -38,6 +36,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🔍</Text>,
         }}
       />
+      
       <Tabs.Screen
         name="profile"
         options={{
