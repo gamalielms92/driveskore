@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 
 export default function TabLayout() {
   return (
@@ -19,13 +19,18 @@ export default function TabLayout() {
           headerTitle: '🚗 DriveSkore',
         }}
       />
-      <Tabs.Screen
-        name="scanner"
-        options={{
-          title: 'Evaluar',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
-        }}
-      />
+      
+      {/* Solo mostrar tab "Evaluar" en móvil */}
+      {Platform.OS !== 'web' && (
+        <Tabs.Screen
+          name="capture"
+          options={{
+            title: 'Evaluar',
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
+          }}
+        />
+      )}
+      
       <Tabs.Screen
         name="search"
         options={{

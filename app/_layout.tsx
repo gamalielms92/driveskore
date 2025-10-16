@@ -1,51 +1,61 @@
 import { Session } from '@supabase/supabase-js';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../src/config/supabase';
 
 export default function RootLayout() {
-  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
   const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
-    // Verificar sesión inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
-      handleAuthChange(session);
+      setSession(session);
+      setLoading(false);
     });
 
-    // Escuchar cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleAuthChange(session);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleAuthChange = (session: Session | null) => {
-    const inAuth = segments[0] === '(tabs)';
+  useEffect(() => {
+    if (loading) return;
 
-    if (session && !inAuth) {
-      // Usuario autenticado → ir a tabs
-      router.replace('/(tabs)');
-    } else if (!session && inAuth) {
-      // Usuario no autenticado → ir a login
-      router.replace('/');
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!session && !inAuthGroup) {
+      // No hay sesión y no está en auth -> redirigir a login
+      router.replace('/(auth)/login');
+    } else if (session && inAuthGroup) {
+      // Hay sesión y está en auth -> redirigir a select-vehicle
+      router.replace('/select-vehicle');
     }
-  };
+  }, [session, segments, loading]);
+
+  if (loading) {
+    return null;
+  }
 
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen 
-        name="rate" 
+        name="select-vehicle" 
         options={{ 
-          presentation: 'modal',
-          title: 'Valorar Conductor',
-          headerStyle: { backgroundColor: '#007AFF' },
-          headerTintColor: '#fff'
+          headerShown: true,
+          title: 'Seleccionar Vehículo',
+          headerBackVisible: false
         }} 
       />
+      <Stack.Screen name="rate" options={{ headerShown: true, title: 'Evaluar Conductor' }} />
+      <Stack.Screen name="conductor/[plate]" options={{ headerShown: true }} />
     </Stack>
   );
 }

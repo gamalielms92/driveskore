@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import { isBlacklisted, validateSpanishPlate } from '../../src/utils/plateValidator';
 
 interface ConductorProfile {
   plate: string;
@@ -15,10 +16,43 @@ export default function SearchScreen() {
   const [searchPlate, setSearchPlate] = useState('');
   const [loading, setLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<ConductorProfile[]>([]);
+  const [plateValidation, setPlateValidation] = useState<any>(null);
+
+  const handleSearchChange = (text: string) => {
+    const cleanText = text.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
+    setSearchPlate(cleanText);
+    
+    const validation = validateSpanishPlate(cleanText);
+    setPlateValidation(validation);
+    
+    if (/^\d{4}[A-Z]{1,3}$/.test(cleanText)) {
+      const formatted = cleanText.replace(/(\d{4})([A-Z]+)/, '$1 $2');
+      setSearchPlate(formatted);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchPlate || searchPlate.trim().length < 4) {
-      Alert.alert('Error', 'Introduce una matrícula válida (mínimo 4 caracteres)');
+      Alert.alert('Error', 'Introduce una matrícula válida');
+      return;
+    }
+
+    const validation = validateSpanishPlate(searchPlate);
+    
+    if (!validation.isValid) {
+      Alert.alert(
+        '⚠️ Formato no válido',
+        `"${searchPlate}" no es una matrícula española válida.\n\nFormatos aceptados:\n• 1234 ABC (actual)\n• M 1234 BC (provincial)`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (isBlacklisted(searchPlate)) {
+      Alert.alert(
+        '🚫 Matrícula no válida',
+        `La combinación "${validation.letters}" no es válida según la DGT.`
+      );
       return;
     }
 
@@ -26,7 +60,6 @@ export default function SearchScreen() {
     setLoading(true);
 
     try {
-      // Buscar perfil del conductor
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -50,7 +83,6 @@ export default function SearchScreen() {
         return;
       }
 
-      // Navegar al perfil del conductor
       router.push(`/conductor/${plateUpper}`);
       
     } catch (error: any) {
@@ -61,7 +93,6 @@ export default function SearchScreen() {
 
   const loadRecentProfiles = async () => {
     try {
-      // Cargar los 5 perfiles con más valoraciones
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -98,14 +129,33 @@ export default function SearchScreen() {
 
         <View style={styles.searchContainer}>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              plateValidation?.isValid === true && styles.inputValid,
+              plateValidation?.isValid === false && searchPlate.length >= 4 && styles.inputInvalid
+            ]}
             placeholder="Ej: 1234ABC"
             value={searchPlate}
-            onChangeText={setSearchPlate}
+            onChangeText={handleSearchChange}
             autoCapitalize="characters"
             maxLength={10}
             onSubmitEditing={handleSearch}
           />
+          
+          {searchPlate.length >= 4 && (
+            <View style={styles.validationFeedback}>
+              {plateValidation?.isValid ? (
+                <Text style={styles.validText}>
+                  ✅ {plateValidation.format === 'current' ? 'Formato actual' : 'Formato provincial'}
+                </Text>
+              ) : (
+                <Text style={styles.invalidText}>
+                  ⚠️ Formato no válido
+                </Text>
+              )}
+            </View>
+          )}
+          
           <TouchableOpacity 
             style={[styles.searchButton, loading && styles.searchButtonDisabled]}
             onPress={handleSearch}
@@ -193,9 +243,29 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 15,
+    marginBottom: 10,
     borderWidth: 2,
     borderColor: '#007AFF',
+  },
+  inputValid: {
+    borderColor: '#34C759',
+  },
+  inputInvalid: {
+    borderColor: '#FF3B30',
+  },
+  validationFeedback: {
+    marginBottom: 15,
+  },
+  validText: {
+    fontSize: 14,
+    color: '#34C759',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  invalidText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    textAlign: 'center',
   },
   searchButton: {
     backgroundColor: '#007AFF',

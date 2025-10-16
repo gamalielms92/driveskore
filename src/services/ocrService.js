@@ -1,7 +1,19 @@
 // src/services/ocrService.js
+import {
+  correctOCRErrors,
+  formatPlate,
+  validateSpanishPlate
+} from '../utils/plateValidator';
 import { preprocessImageForOCR } from './imageProcessing';
 
-const OCR_API_KEY = 'K88775413588957'; // API KEY de OCR.space
+// Leer API key desde variables de entorno
+const OCR_API_KEY = process.env.EXPO_PUBLIC_OCR_API_KEY;
+
+if (!OCR_API_KEY) {
+  console.error('⚠️ FALTA OCR_API_KEY en archivo .env');
+  throw new Error('OCR_API_KEY no está configurada. Añádela al archivo .env con el prefijo EXPO_PUBLIC_');
+}
+
 const OCR_API_URL = 'https://api.ocr.space/parse/image';
 
 /**
@@ -48,7 +60,7 @@ export const extractTextFromImage = async (imageUri) => {
     formData.append('isOverlayRequired', 'false');
     formData.append('detectOrientation', 'true');
     formData.append('scale', 'true');
-    formData.append('OCREngine', '2'); // Motor 2 es mejor para textos cortos
+    formData.append('OCREngine', '2');
 
     console.log('📤 Enviando a OCR.space...');
 
@@ -63,10 +75,9 @@ export const extractTextFromImage = async (imageUri) => {
 
     if (result.OCRExitCode === 1 && result.ParsedResults?.[0]?.ParsedText) {
       const text = result.ParsedResults[0].ParsedText.trim();
-      console.log('✅ Texto extraído:', text);
+      console.log('✅ Texto extraído (raw):', text);
       return text;
     } else if (result.OCRExitCode === 99) {
-      // Error de API (rate limit, key inválida, etc.)
       throw new Error(`Error OCR.space: ${result.ErrorMessage || 'Límite de API alcanzado'}`);
     } else {
       throw new Error('No se pudo extraer texto de la imagen');
@@ -78,44 +89,64 @@ export const extractTextFromImage = async (imageUri) => {
 };
 
 /**
- * Extrae matrícula del texto OCR
- * Patrones mejorados para España y formatos comunes
+ * Extrae matrícula del texto OCR usando el validador avanzado
  */
 export const extractPlateFromText = (text) => {
-  // Limpiar texto agresivamente
-  const cleanText = text
-    .replace(/[\n\r\s\-_.,:;]/g, '') // Quitar espacios y símbolos
-    .toUpperCase()
-    .replace(/O/g, '0') // OCR confunde O con 0
-    .replace(/[IÍ]/g, '1') // I latina por 1
-    .replace(/[SŞ]/g, '5') // S por 5 (a veces)
-    .replace(/[ZŽ]/g, '2') // Z por 2
-    .replace(/[B]/g, '8') // B por 8 (a veces)
-    .replace(/[G]/g, '6'); // G por 6 (a veces)
+  console.log('🔍 Texto original OCR:', text);
 
-  console.log('🧹 Texto limpio:', cleanText);
-
-  // Patrones españoles (orden de más específico a más general)
-  const patterns = [
-    /\d{4}[A-Z]{3}/, // 1234ABC (formato actual español - MÁS COMÚN)
-    /\d{4}[BCDFGHJKLMNPRSTVWXYZ]{3}/, // Sin vocales (formato real español)
-    /[A-Z]{1,2}\d{4}[A-Z]{1,2}/, // A1234BC (formato antiguo)
-    /\d{3,4}[A-Z]{2,4}/, // Más flexible
-    /[A-Z0-9]{6,9}/, // Último recurso: 6-9 alfanuméricos
-  ];
-
-  for (const pattern of patterns) {
-    const match = cleanText.match(pattern);
-    if (match) {
-      console.log('✅ Matrícula encontrada con patrón:', pattern, '→', match[0]);
-      return match[0];
-    }
+  // PASO 1: Intentar validar directamente el texto original
+  let validation = validateSpanishPlate(text);
+  
+  if (validation.isValid) {
+    console.log('✅ Matrícula detectada directamente:', validation.plate);
+    return validation.plate;
   }
 
-  // Si no encuentra nada con patrones, toma los primeros 7 caracteres alfanuméricos
-  const fallback = cleanText.replace(/[^A-Z0-9]/g, '').substring(0, 10);
-  console.log('⚠️ Sin patrón claro, usando fallback:', fallback);
-  return fallback || 'ERROR';
+  console.log('⚠️ No se detectó directamente, intentando corrección OCR...');
+
+  // PASO 2: Si no funciona, aplicar correcciones de OCR
+  const correctedText = correctOCRErrors(text);
+  console.log('🔧 Texto corregido:', correctedText);
+
+  validation = validateSpanishPlate(correctedText);
+
+  if (validation.isValid) {
+    console.log('✅ Matrícula detectada tras corrección:', validation.plate);
+    return validation.plate;
+  }
+
+  console.log('⚠️ No se detectó con corrección, intentando limpieza básica...');
+
+  // PASO 3: Limpieza muy básica y re-intento
+  const cleanedText = text
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, '') // Solo alfanuméricos y espacios
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  console.log('🧹 Texto limpio:', cleanedText);
+
+  validation = validateSpanishPlate(cleanedText);
+
+  if (validation.isValid) {
+    console.log('✅ Matrícula detectada tras limpieza:', validation.plate);
+    return validation.plate;
+  }
+
+  // PASO 4: Último intento - buscar cualquier secuencia 4 dígitos + 3 letras
+  const emergencyPattern = /(\d{4})\s?([A-Z]{3})/;
+  const match = cleanedText.match(emergencyPattern);
+
+  if (match) {
+    const emergencyPlate = `${match[1]} ${match[2]}`;
+    console.log('🆘 Matrícula detectada con patrón de emergencia:', emergencyPlate);
+    return emergencyPlate;
+  }
+
+  console.log('❌ No se pudo detectar ninguna matrícula válida');
+  
+  // Devolver el texto limpio para que el usuario pueda editarlo
+  return cleanedText.substring(0, 10) || 'ERROR';
 };
 
 /**
@@ -128,14 +159,19 @@ export const detectPlateFromImage = async (imageUri) => {
     // Extraer texto con OCR
     const text = await extractTextFromImage(imageUri);
     
-    // Extraer matrícula del texto
+    // Extraer y validar matrícula
     const plate = extractPlateFromText(text);
     
-    if (plate === 'ERROR' || plate.length < 4) {
+    // Validar el resultado final
+    const validation = validateSpanishPlate(plate);
+    
+    if (!validation.isValid) {
       throw new Error('No se detectó una matrícula válida');
     }
     
-    return plate;
+    // Devolver la matrícula formateada correctamente
+    return formatPlate(plate);
+    
   } catch (error) {
     console.error('❌ Error detectando matrícula:', error);
     throw error;

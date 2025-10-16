@@ -4,115 +4,113 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { detectPlateFromImage } from '../../src/services/ocrService';
-
+import { isBlacklisted, validateSpanishPlate } from '../../src/utils/plateValidator';
 
 export default function CaptureScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState<string | null>(null);
   const [plate, setPlate] = useState('');
+  const [plateValidation, setPlateValidation] = useState<any>(null);
   const [cameraRef, setCameraRef] = useState<any>(null);
 
- // const takePicture = async () => {
- //   if (cameraRef) {
- //     try {
- //       const photo = await cameraRef.takePictureAsync({ quality: 0.5 });
- //       setPhoto(photo.uri);
- //       Alert.alert('Foto capturada', 'Introduce la matrícula manualmente');
- //     } catch (error) {
- //       Alert.alert('Error', 'No se pudo capturar la foto');
- //     }
- //   }
- // };
-
- const takePicture = async () => {
-  if (cameraRef) {
-    try {
-      const photo = await cameraRef.takePictureAsync({ quality: 0.5 });
-      setPhoto(photo.uri);
-      
-      // Mostrar alerta inicial
-      Alert.alert('📸 Foto capturada', 'Analizando matrícula con OCR...');
-      
-      // Intentar detectar matrícula automáticamente
+  const takePicture = async () => {
+    if (cameraRef) {
       try {
-        const detectedPlate = await detectPlateFromImage(photo.uri);
+        const photo = await cameraRef.takePictureAsync({ quality: 0.5 });
+        setPhoto(photo.uri);
+        
+        Alert.alert('📸 Foto capturada', 'Analizando matrícula con OCR...');
+        
+        try {
+          const detectedPlate = await detectPlateFromImage(photo.uri);
+          
+          if (detectedPlate && detectedPlate !== 'ERROR') {
+            setPlate(detectedPlate);
+            
+            const validation = validateSpanishPlate(detectedPlate);
+            setPlateValidation(validation);
+            
+            let message = `Se detectó: ${detectedPlate}\n\n`;
+            
+            if (validation.isValid) {
+              message += `✅ Formato: ${validation.format === 'current' ? 'Actual (2000+)' : 'Provincial (1971-2000)'}\n`;
+              if (validation.year) {
+                message += `📅 Época: ${validation.year}\n`;
+              }
+            }
+            
+            message += '\nPuedes editarla si es incorrecta.';
+            
+            Alert.alert('✅ Matrícula detectada', message);
+          } else {
+            Alert.alert('⚠️ No se pudo detectar', 'Introduce la matrícula manualmente');
+          }
+        } catch (ocrError) {
+          console.log('Error OCR:', ocrError);
+          Alert.alert('⚠️ Error en OCR', 'Introduce la matrícula manualmente');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'No se pudo capturar la foto');
+      }
+    }
+  };
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setPhoto(result.assets[0].uri);
+      
+      Alert.alert('📁 Imagen seleccionada', 'Analizando matrícula con OCR...');
+      
+      try {
+        const detectedPlate = await detectPlateFromImage(result.assets[0].uri);
         
         if (detectedPlate && detectedPlate !== 'ERROR') {
           setPlate(detectedPlate);
-          Alert.alert(
-            '✅ Matrícula detectada', 
-            `Se detectó: ${detectedPlate}\n\nPuedes editarla si es incorrecta.`
-          );
+          
+          const validation = validateSpanishPlate(detectedPlate);
+          setPlateValidation(validation);
+          
+          let message = `Se detectó: ${detectedPlate}\n\n`;
+          
+          if (validation.isValid) {
+            message += `✅ Formato: ${validation.format === 'current' ? 'Actual (2000+)' : 'Provincial (1971-2000)'}\n`;
+            if (validation.year) {
+              message += `📅 Época: ${validation.year}\n`;
+            }
+          }
+          
+          message += '\nPuedes editarla si es incorrecta.';
+          
+          Alert.alert('✅ Matrícula detectada', message);
         } else {
-          Alert.alert(
-            '⚠️ No se pudo detectar', 
-            'Introduce la matrícula manualmente'
-          );
+          Alert.alert('⚠️ No se pudo detectar', 'Introduce la matrícula manualmente');
         }
       } catch (ocrError) {
         console.log('Error OCR:', ocrError);
-        Alert.alert(
-          '⚠️ Error en OCR', 
-          'Introduce la matrícula manualmente'
-        );
+        Alert.alert('⚠️ Error en OCR', 'Introduce la matrícula manualmente');
       }
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo capturar la foto');
     }
-  }
   };
 
-//  const pickImage = async () => {
-//    const result = await ImagePicker.launchImageLibraryAsync({
-//      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-//      allowsEditing: true,
-//      quality: 0.5,
-//    });
-
-//    if (!result.canceled) {
-//      setPhoto(result.assets[0].uri);
-//      Alert.alert('Imagen seleccionada', 'Introduce la matrícula manualmente');
-//    }
-//  };
-
-  const pickImage = async () => {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    quality: 0.5,
-  });
-
-  if (!result.canceled) {
-    setPhoto(result.assets[0].uri);
+  const handlePlateChange = (text: string) => {
+    const cleanText = text.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
     
-    // Mostrar alerta inicial
-    Alert.alert('📁 Imagen seleccionada', 'Analizando matrícula con OCR...');
+    setPlate(cleanText);
     
-    // Intentar detectar matrícula
-    try {
-      const detectedPlate = await detectPlateFromImage(result.assets[0].uri);
-      
-      if (detectedPlate && detectedPlate !== 'ERROR') {
-        setPlate(detectedPlate);
-        Alert.alert(
-          '✅ Matrícula detectada', 
-          `Se detectó: ${detectedPlate}\n\nPuedes editarla si es incorrecta.`
-        );
-      } else {
-        Alert.alert(
-          '⚠️ No se pudo detectar', 
-          'Introduce la matrícula manualmente'
-        );
-      }
-    } catch (ocrError) {
-      console.log('Error OCR:', ocrError);
-      Alert.alert(
-        '⚠️ Error en OCR', 
-        'Introduce la matrícula manualmente'
-      );
+    const validation = validateSpanishPlate(cleanText);
+    setPlateValidation(validation);
+    
+    if (/^\d{4}[A-Z]{1,3}$/.test(cleanText)) {
+      const formatted = cleanText.replace(/(\d{4})([A-Z]+)/, '$1 $2');
+      setPlate(formatted);
     }
-  }
   };
 
   const handleNext = () => {
@@ -120,13 +118,42 @@ export default function CaptureScreen() {
       Alert.alert('Error', 'Introduce una matrícula válida (mínimo 4 caracteres)');
       return;
     }
+
+    const validation = validateSpanishPlate(plate);
+    
+    if (!validation.isValid) {
+      Alert.alert(
+        '⚠️ Matrícula no válida',
+        `El formato "${plate}" no corresponde a una matrícula española.\n\n¿Quieres continuar de todas formas?`,
+        [
+          { text: 'Corregir', style: 'cancel' },
+          { 
+            text: 'Continuar',
+            onPress: () => proceedToRate()
+          }
+        ]
+      );
+      return;
+    }
+
+    if (isBlacklisted(plate)) {
+      Alert.alert(
+        '🚫 Matrícula bloqueada',
+        `La combinación de letras "${validation.letters}" está en la lista negra de la DGT.\n\nNo puede ser una matrícula válida.`
+      );
+      return;
+    }
+
+    proceedToRate();
+  };
+
+  const proceedToRate = () => {
     router.push({
       pathname: '/rate',
-      params: { plate: plate.toUpperCase(), photoUri: photo || '' }
+      params: { plate: plate.toUpperCase().trim(), photoUri: photo || '' }
     });
   };
 
-  // Verificar permisos
   if (!permission) {
     return (
       <View style={styles.container}>
@@ -159,16 +186,23 @@ export default function CaptureScreen() {
     <View style={styles.container}>
       {!photo ? (
         <>
-          <CameraView 
-            style={styles.camera}
-            facing="back"
-            ref={(ref) => setCameraRef(ref)}
-          >
+          <View style={styles.cameraContainer}>
+            <CameraView 
+              style={styles.camera}
+              facing="back"
+              ref={(ref) => setCameraRef(ref)}
+            />
             <View style={styles.cameraOverlay}>
               <View style={styles.frame} />
-              <Text style={styles.hint}>Centra la matrícula en el recuadro</Text>
+              <Text style={styles.hint}>
+                📷 Consejos para mejor detección:{'\n'}
+                • Luz natural o buena iluminación{'\n'}
+                • Matrícula centrada y perpendicular{'\n'}
+                • Sin reflejos ni sombras{'\n'}
+                • Enfoque nítido
+              </Text>
             </View>
-          </CameraView>
+          </View>
           
           <View style={styles.controls}>
             <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
@@ -185,13 +219,39 @@ export default function CaptureScreen() {
           
           <Text style={styles.label}>Matrícula detectada:</Text>
           <TextInput
-            style={styles.input}
-            placeholder="Ej: 1234ABC"
+            style={[
+              styles.input,
+              plateValidation?.isValid === true && styles.inputValid,
+              plateValidation?.isValid === false && plate.length >= 4 && styles.inputInvalid
+            ]}
+            placeholder="Ej: 1234ABC o 1234 ABC"
             value={plate}
-            onChangeText={setPlate}
+            onChangeText={handlePlateChange}
             autoCapitalize="characters"
             maxLength={10}
           />
+          
+          {plate.length >= 4 && (
+            <View style={styles.validationContainer}>
+              {plateValidation?.isValid ? (
+                <>
+                  <Text style={styles.validationIcon}>✅</Text>
+                  <Text style={styles.validationText}>
+                    {plateValidation.format === 'current' 
+                      ? `Formato actual (${plateValidation.year})`
+                      : `Formato provincial (${plateValidation.year})`}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.validationIcon}>⚠️</Text>
+                  <Text style={styles.validationTextError}>
+                    Formato no válido. Ej: 1234 ABC o M 1234 BC
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
           
           <View style={styles.buttonRow}>
             <TouchableOpacity 
@@ -199,6 +259,7 @@ export default function CaptureScreen() {
               onPress={() => {
                 setPhoto(null);
                 setPlate('');
+                setPlateValidation(null);
               }}
             >
               <Text style={styles.buttonText}>🔄 Repetir</Text>
@@ -252,13 +313,18 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 30,
   },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   camera: {
     flex: 1,
   },
   cameraOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    pointerEvents: 'box-none',
   },
   frame: {
     width: 300,
@@ -269,12 +335,14 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     marginTop: 20,
     textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 15,
+    borderRadius: 10,
+    maxWidth: '90%',
+    lineHeight: 20,
   },
   controls: {
     position: 'absolute',
@@ -324,9 +392,36 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
     borderWidth: 2,
     borderColor: '#007AFF',
+  },
+  inputValid: {
+    borderColor: '#34C759',
+  },
+  inputInvalid: {
+    borderColor: '#FF3B30',
+  },
+  validationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 10,
+  },
+  validationIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  validationText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  validationTextError: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FF3B30',
   },
   buttonRow: {
     flexDirection: 'row',
