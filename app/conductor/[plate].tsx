@@ -8,8 +8,9 @@ import {
   getDriverRank,
   getEarnedBadges,
   getTopAttributes,
-  type AttributeStat,
-  type AttributeStats
+  type AttributeStat, // ← Renombrar import
+  type AttributeStats,
+  type Profile as GamificationProfile
 } from '../../src/utils/gamification';
 
 interface Rating {
@@ -19,7 +20,7 @@ interface Rating {
   created_at: string;
 }
 
-interface Profile {
+interface ConductorProfile { // ← Renombrado
   plate: string;
   total_score: number;
   num_ratings: number;
@@ -31,8 +32,8 @@ interface Profile {
 interface DriverProfile {
   total_score: number;
   num_ratings: number;
-  positive_attributes?: { [key: string]: number };
-  total_votes?: number;
+  positive_attributes: { [key: string]: number };
+  total_votes: number;
 }
 
 interface Driver {
@@ -45,7 +46,7 @@ interface Driver {
 export default function ConductorProfileScreen() {
   const { plate } = useLocalSearchParams<{ plate: string }>();
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<ConductorProfile | null>(null); // ← Usar ConductorProfile
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
@@ -56,7 +57,7 @@ export default function ConductorProfileScreen() {
   const loadConductorData = async () => {
     try {
       // 1. Cargar perfil genérico del vehículo
-      const { data: vehicleProfile } = await supabase
+      const { data: vehicleProfile, error: vehicleError } = await supabase
         .from('profiles')
         .select('*')
         .eq('plate', plate)
@@ -64,34 +65,41 @@ export default function ConductorProfileScreen() {
         .maybeSingle();
 
       // 2. Cargar conductores registrados con esta matrícula
-      const { data: driversData } = await supabase
+      const { data: driversData, error: driversError } = await supabase
         .from('user_vehicles')
         .select('user_id, nickname, online')
         .eq('plate', plate);
 
-      // 3. Para cada conductor, obtener su perfil específico
-      const driversWithProfiles: Driver[] = await Promise.all(
-        (driversData || []).map(async (driver) => {
-          const { data: driverProfile } = await supabase
-            .from('profiles')
-            .select('total_score, num_ratings, positive_attributes, total_votes')
-            .eq('plate', plate)
-            .eq('user_id', driver.user_id)
-            .maybeSingle();
+// 3. Para cada conductor, obtener su perfil específico
+const driversWithProfiles: Driver[] = await Promise.all(
+  (driversData || []).map(async (driver) => {
+    const { data: driverProfile } = await supabase
+      .from('profiles')
+      .select('total_score, num_ratings, positive_attributes, total_votes')
+      .eq('plate', plate)
+      .eq('user_id', driver.user_id)
+      .maybeSingle();
 
-          return {
-            user_id: driver.user_id,
-            nickname: driver.nickname,
-            online: driver.online,
-            profile: driverProfile ? {
-              total_score: driverProfile.total_score,
-              num_ratings: driverProfile.num_ratings,
-              positive_attributes: driverProfile.positive_attributes || {},
-              total_votes: driverProfile.total_votes || 0
-            } : undefined
-          };
-        })
-      );
+    // Construir el objeto Driver con tipado correcto
+    const driverObj: Driver = {
+      user_id: driver.user_id,
+      nickname: driver.nickname,
+      online: driver.online
+    };
+
+    // Solo añadir profile si existe
+    if (driverProfile) {
+      driverObj.profile = {
+        total_score: driverProfile.total_score,
+        num_ratings: driverProfile.num_ratings,
+        positive_attributes: driverProfile.positive_attributes || {},
+        total_votes: driverProfile.total_votes || 0
+      };
+    }
+
+    return driverObj;
+  })
+);
 
       setDrivers(driversWithProfiles);
 
@@ -114,14 +122,7 @@ export default function ConductorProfileScreen() {
           });
         }
       } else if (vehicleProfile) {
-        setProfile({
-          plate: vehicleProfile.plate,
-          user_id: vehicleProfile.user_id,
-          total_score: vehicleProfile.total_score,
-          num_ratings: vehicleProfile.num_ratings,
-          positive_attributes: vehicleProfile.positive_attributes || {},
-          total_votes: vehicleProfile.total_votes || 0
-        });
+        setProfile(vehicleProfile);
       }
 
       // 4. Cargar valoraciones
@@ -196,10 +197,26 @@ export default function ConductorProfileScreen() {
   const average = calculateAverage();
   const distribution = getScoreDistribution();
   const driverRank = getDriverRank(average);
-  const earnedBadges = getEarnedBadges(profile);
+
+  // Convertir ConductorProfile a GamificationProfile
+  const gamificationProfile: GamificationProfile = profile ? {
+    plate: profile.plate,
+    total_score: profile.total_score,
+    num_ratings: profile.num_ratings,
+    positive_attributes: profile.positive_attributes,
+    total_votes: profile.total_votes
+  } : {
+    plate: plate || '',
+    total_score: 0,
+    num_ratings: 0,
+    positive_attributes: {},
+    total_votes: 0
+  };
+
+  const earnedBadges = getEarnedBadges(gamificationProfile);
   const attributeStats: AttributeStats = calculateAttributeStats(
-    profile.positive_attributes, 
-    profile.total_votes || 0
+    profile?.positive_attributes || {},
+    profile?.total_votes || 0
   );
   const topAttributes: AttributeStat[] = getTopAttributes(attributeStats);
 
@@ -213,11 +230,13 @@ export default function ConductorProfileScreen() {
         }} 
       />
 
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.plateIcon}>🚗</Text>
         <Text style={styles.plate}>{plate}</Text>
       </View>
 
+      {/* Conductores registrados */}
       {drivers.length > 0 && (
         <View style={styles.driversSection}>
           <Text style={styles.driversSectionTitle}>
@@ -274,6 +293,7 @@ export default function ConductorProfileScreen() {
         </View>
       )}
 
+      {/* Rango del conductor */}
       <View style={[styles.rankCard, { backgroundColor: driverRank.color + '15' }]}>
         <Text style={styles.rankIcon}>{driverRank.icon}</Text>
         <View style={styles.rankInfo}>
@@ -284,6 +304,7 @@ export default function ConductorProfileScreen() {
         </View>
       </View>
 
+      {/* Puntuación principal */}
       <View style={styles.scoreCard}>
         <Text style={styles.scoreValue}>{average.toFixed(1)}</Text>
         <Text style={styles.scoreStars}>{renderStars(Math.round(average))}</Text>
@@ -292,6 +313,7 @@ export default function ConductorProfileScreen() {
         </Text>
       </View>
 
+      {/* Insignias */}
       {earnedBadges.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🏅 Insignias Conseguidas</Text>
@@ -307,6 +329,7 @@ export default function ConductorProfileScreen() {
         </View>
       )}
 
+      {/* Top 3 Atributos */}
       {topAttributes.length > 0 && (profile.total_votes || 0) > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>✨ Mejores Cualidades</Text>
@@ -338,6 +361,7 @@ export default function ConductorProfileScreen() {
         </View>
       )}
 
+      {/* Todos los atributos */}
       {(profile.total_votes || 0) > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Estadísticas Detalladas</Text>
@@ -345,29 +369,65 @@ export default function ConductorProfileScreen() {
             const stat = attributeStats[attr.id];
             if (!stat) return null;
             
+            // Calcular votos negativos
+            const negativeVotes = profile.total_votes - stat.votes;
+            const negativePercentage = profile.total_votes > 0 
+              ? Math.round((negativeVotes / profile.total_votes) * 100) 
+              : 0;
+            
             return (
-              <View key={attr.id} style={styles.attributeStatRow}>
-                <View style={styles.attributeStatHeader}>
-                  <Text style={styles.attributeStatIcon}>{attr.icon}</Text>
-                  <Text style={styles.attributeStatLabel}>{attr.label}</Text>
+              <View key={attr.id} style={styles.attributeBidirectionalRow}>
+                {/* Etiqueta del atributo */}
+                <View style={styles.attributeLabelContainer}>
+                  <Text style={styles.attributeIcon}>{attr.icon}</Text>
+                  <Text style={styles.attributeLabel}>{attr.label}</Text>
                 </View>
-                <View style={styles.attributeStatBarContainer}>
-                  <View 
-                    style={[
-                      styles.attributeStatBar,
-                      { width: `${stat.percentage}%` }
-                    ]}
-                  />
+
+                {/* Barra bidireccional */}
+                <View style={styles.bidirectionalBarContainer}>
+                  {/* Lado negativo (rojo) */}
+                  <View style={styles.negativeBarSection}>
+                    <Text style={styles.negativePercentageText}>{negativePercentage}%</Text>
+                    <View style={styles.negativeBarWrapper}>
+                      <View 
+                        style={[
+                          styles.negativeBar,
+                          { width: `${negativePercentage}%` }
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Divisor central */}
+                  <View style={styles.centerDivider} />
+
+                  {/* Lado positivo (verde) */}
+                  <View style={styles.positiveBarSection}>
+                    <View style={styles.positiveBarWrapper}>
+                      <View 
+                        style={[
+                          styles.positiveBar,
+                          { width: `${stat.percentage}%` }
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.positivePercentageText}>{stat.percentage}%</Text>
+                  </View>
                 </View>
-                <Text style={styles.attributeStatText}>
-                  {stat.percentage}% ({stat.votes}/{profile.total_votes})
-                </Text>
+
+                {/* Contadores */}
+                <View style={styles.votesCounter}>
+                  <Text style={styles.votesText}>
+                    {negativeVotes} ❌ | ✅ {stat.votes}
+                  </Text>
+                </View>
               </View>
             );
           })}
         </View>
       )}
 
+      {/* Distribución de puntuaciones */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>📈 Distribución de Valoraciones</Text>
         {[5, 4, 3, 2, 1].map((stars) => {
@@ -393,6 +453,7 @@ export default function ConductorProfileScreen() {
         })}
       </View>
 
+      {/* Comentarios */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>💬 Comentarios ({ratings.filter(r => r.comment).length})</Text>
         
@@ -429,76 +490,482 @@ export default function ConductorProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  header: { backgroundColor: '#007AFF', padding: 30, alignItems: 'center' },
-  plateIcon: { fontSize: 60, marginBottom: 10 },
-  plate: { fontSize: 32, fontWeight: 'bold', color: 'white', letterSpacing: 3 },
-  driversSection: { backgroundColor: 'white', marginHorizontal: 20, marginTop: 20, marginBottom: 20, padding: 20, borderRadius: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  driversSectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#000' },
-  driverCard: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 10, marginBottom: 10 },
-  driverHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  driverInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  driverIcon: { fontSize: 24, marginRight: 10 },
-  driverDetails: { flex: 1 },
-  driverName: { fontSize: 16, fontWeight: 'bold', color: '#000' },
-  driverStatus: { fontSize: 12, color: '#34C759', fontWeight: '600' },
-  driverStats: { alignItems: 'flex-end' },
-  driverScore: { fontSize: 24, fontWeight: 'bold', color: '#34C759' },
-  driverStars: { fontSize: 14, marginVertical: 2 },
-  driverRatings: { fontSize: 11, color: '#999' },
-  driverRankBadge: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8 },
-  driverRankIcon: { fontSize: 20, marginRight: 8 },
-  driverRankText: { fontSize: 14, fontWeight: 'bold' },
-  noRatingsText: { fontSize: 14, color: '#999', fontStyle: 'italic' },
-  rankCard: { margin: 20, padding: 20, borderRadius: 15, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  rankIcon: { fontSize: 50, marginRight: 15 },
-  rankInfo: { flex: 1 },
-  rankName: { fontSize: 22, fontWeight: 'bold', marginBottom: 5 },
-  rankDescription: { fontSize: 14, color: '#666' },
-  scoreCard: { backgroundColor: 'white', marginHorizontal: 20, marginBottom: 20, padding: 30, borderRadius: 15, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  scoreValue: { fontSize: 72, fontWeight: 'bold', color: '#34C759', marginBottom: 10 },
-  scoreStars: { fontSize: 32, marginBottom: 10 },
-  scoreLabel: { fontSize: 14, color: '#666' },
-  section: { padding: 20, paddingTop: 0 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#000' },
-  badgesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  badge: { backgroundColor: 'white', padding: 15, borderRadius: 10, alignItems: 'center', width: '47%', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  badgeIcon: { fontSize: 40, marginBottom: 8 },
-  badgeName: { fontSize: 14, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
-  badgeDesc: { fontSize: 11, color: '#666', textAlign: 'center' },
-  topAttributeCard: { backgroundColor: 'white', padding: 15, borderRadius: 10, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  topAttributeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  topAttributeRank: { fontSize: 28, marginRight: 8 },
-  topAttributeIcon: { fontSize: 24, marginRight: 8 },
-  topAttributeLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: '#333' },
-  topAttributeStats: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  progressBarContainer: { flex: 1, height: 20, backgroundColor: '#e0e0e0', borderRadius: 10, marginRight: 10, overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#34C759' },
-  topAttributePercentage: { fontSize: 16, fontWeight: 'bold', color: '#34C759', width: 50, textAlign: 'right' },
-  topAttributeVotes: { fontSize: 12, color: '#999' },
-  attributeStatRow: { marginBottom: 15 },
-  attributeStatHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  attributeStatIcon: { fontSize: 18, marginRight: 8 },
-  attributeStatLabel: { fontSize: 14, color: '#333', flex: 1 },
-  attributeStatBarContainer: { height: 8, backgroundColor: '#e0e0e0', borderRadius: 4, marginBottom: 3, overflow: 'hidden' },
-  attributeStatBar: { height: '100%', backgroundColor: '#4CAF50' },
-  attributeStatText: { fontSize: 12, color: '#666' },
-  distributionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  distributionLabel: { width: 50, fontSize: 16 },
-  distributionBarContainer: { flex: 1, height: 20, backgroundColor: '#e0e0e0', borderRadius: 10, marginHorizontal: 10, overflow: 'hidden' },
-  distributionBar: { height: '100%', backgroundColor: '#34C759' },
-  distributionCount: { width: 30, textAlign: 'right', fontSize: 14, color: '#666' },
-  commentCard: { backgroundColor: 'white', padding: 15, borderRadius: 10, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  commentStars: { fontSize: 20 },
-  commentDate: { fontSize: 12, color: '#999' },
-  commentText: { fontSize: 14, color: '#333', fontStyle: 'italic', lineHeight: 20 },
-  emptyComments: { padding: 30, alignItems: 'center' },
-  emptyCommentsText: { fontSize: 16, color: '#999' },
-  emptyText: { fontSize: 80, marginBottom: 20 },
-  emptyMessage: { fontSize: 18, color: '#666' },
-  footer: { padding: 20, alignItems: 'center' },
-  footerText: { fontSize: 12, color: '#999', textAlign: 'center' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#007AFF',
+    padding: 30,
+    alignItems: 'center',
+  },
+  plateIcon: {
+    fontSize: 60,
+    marginBottom: 10,
+  },
+  plate: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    letterSpacing: 3,
+  },
+  driversSection: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  driversSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000',
+  },
+  driverCard: {
+    backgroundColor: '#f9f9f9',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  driverHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  driverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  driverIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  driverDetails: {
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  driverStatus: {
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  driverStats: {
+    alignItems: 'flex-end',
+  },
+  driverScore: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#34C759',
+  },
+  driverStars: {
+    fontSize: 14,
+    marginVertical: 2,
+  },
+  driverRatings: {
+    fontSize: 11,
+    color: '#999',
+  },
+  driverRankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+  },
+  driverRankIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  driverRankText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  noRatingsText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  rankCard: {
+    margin: 20,
+    padding: 20,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  rankIcon: {
+    fontSize: 50,
+    marginRight: 15,
+  },
+  rankInfo: {
+    flex: 1,
+  },
+  rankName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  rankDescription: {
+    fontSize: 14,
+    color: '#666',
+  },
+  scoreCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  scoreValue: {
+    fontSize: 72,
+    fontWeight: 'bold',
+    color: '#34C759',
+    marginBottom: 10,
+  },
+  scoreStars: {
+    fontSize: 32,
+    marginBottom: 10,
+  },
+  scoreLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  section: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  badge: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    width: '47%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  badgeIcon: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  badgeName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  badgeDesc: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+  },
+  topAttributeCard: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  topAttributeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  topAttributeRank: {
+    fontSize: 28,
+    marginRight: 8,
+  },
+  topAttributeIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  topAttributeLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  topAttributeStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 20,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 10,
+    marginRight: 10,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#34C759',
+  },
+  topAttributePercentage: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#34C759',
+    width: 50,
+    textAlign: 'right',
+  },
+  topAttributeVotes: {
+    fontSize: 12,
+    color: '#999',
+  },
+  attributeStatRow: {
+    marginBottom: 15,
+  },
+  attributeStatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  attributeStatIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  attributeStatLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  attributeStatBarContainer: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 3,
+    overflow: 'hidden',
+  },
+  attributeStatBar: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+  },
+  attributeStatText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  distributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  distributionLabel: {
+    width: 50,
+    fontSize: 16,
+  },
+  distributionBarContainer: {
+    flex: 1,
+    height: 20,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 10,
+    marginHorizontal: 10,
+    overflow: 'hidden',
+  },
+  distributionBar: {
+    height: '100%',
+    backgroundColor: '#34C759',
+  },
+  distributionCount: {
+    width: 30,
+    textAlign: 'right',
+    fontSize: 14,
+    color: '#666',
+  },
+  commentCard: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commentStars: {
+    fontSize: 20,
+  },
+  commentDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  commentText: {
+    fontSize: 14,
+    color: '#333',
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  emptyComments: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyCommentsText: {
+    fontSize: 16,
+    color: '#999',
+  },
+  emptyText: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  emptyMessage: {
+    fontSize: 18,
+    color: '#666',
+  },
+  footer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+  },
+  attributeBidirectionalRow: {
+    marginBottom: 20,
+  },
+  attributeLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  attributeIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  attributeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  bidirectionalBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  negativeBarSection: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  negativePercentageText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#FF3B30',
+    marginRight: 8,
+    minWidth: 35,
+    textAlign: 'right',
+  },
+  negativeBarWrapper: {
+    flex: 1,
+    height: 20,
+    backgroundColor: '#FFE5E5',
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  negativeBar: {
+    height: '100%',
+    backgroundColor: '#FF3B30',
+  },
+  centerDivider: {
+    width: 3,
+    height: 30,
+    backgroundColor: '#333',
+    marginHorizontal: 2,
+  },
+  positiveBarSection: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  positiveBarWrapper: {
+    flex: 1,
+    height: 20,
+    backgroundColor: '#E8F5E9',
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  positiveBar: {
+    height: '100%',
+    backgroundColor: '#34C759',
+  },
+  positivePercentageText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#34C759',
+    marginLeft: 8,
+    minWidth: 35,
+    textAlign: 'left',
+  },
+  votesCounter: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  votesText: {
+    fontSize: 11,
+    color: '#999',
+  }
 });

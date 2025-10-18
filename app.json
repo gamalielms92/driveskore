@@ -6,8 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "driveskore",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#007AFF"
     },
@@ -16,23 +17,61 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.driveskore.app"
+      "bundleIdentifier": "com.driveskore.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DriveSkore necesita acceso a la cámara para capturar fotos de matrículas y evaluar conductores.",
+        "NSPhotoLibraryUsageDescription": "DriveSkore necesita acceso a tus fotos para seleccionar imágenes de matrículas.",
+        "NSMicrophoneUsageDescription": "DriveSkore necesita acceso al micrófono para reconocimiento de voz durante la evaluación en modo conducción.",
+        "NSSpeechRecognitionUsageDescription": "DriveSkore utiliza reconocimiento de voz para evaluar conductores de forma segura mientras conduces, sin necesidad de tocar el móvil."
+      }
     },
     "android": {
+      "package": "com.driveskore.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#007AFF"
       },
-      "package": "com.drivescore.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WRITE_SETTINGS",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
-      "bundler": "metro",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
     },
-    "scheme": "driveskore",
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir a DriveSkore usar la cámara para capturar matrículas y evaluar conductores."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir a DriveSkore acceder a tus fotos para cargar imágenes de matrículas."
+        }
+      ],
+      "./app.plugin.js",
       "expo-router"
-    ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "439df021-c142-4d5b-8dad-2a0d5fbf18a5"
+      }
+    },
+    "owner": "gamalielms92"
   }
 }

@@ -5,6 +5,7 @@ import { supabase } from '../src/config/supabase';
 import { DRIVING_ATTRIBUTES } from '../src/utils/gamification';
 import { formatPlate, validateSpanishPlate } from '../src/utils/plateValidator';
 
+
 // Tipo para los atributos
 type AttributeVotes = {
   [key: string]: boolean | null;
@@ -63,15 +64,25 @@ export default function RateScreen() {
         throw new Error('No hay usuario autenticado');
       }
   
+      // Normalizar matrícula (importante para que coincida)
+      const normalizedPlate = params.plate.replace(/\s+/g, ' ').trim().toUpperCase();
+      
+      console.log('🔍 Evaluando matrícula:', normalizedPlate);
+  
       // 1. Buscar conductor activo para esta matrícula
-      const { data: activeDriver } = await supabase
+      const { data: activeDriver, error: driverError } = await supabase
         .from('user_vehicles')
-        .select('user_id')
-        .eq('plate', params.plate)
+        .select('user_id, nickname')
+        .eq('plate', normalizedPlate)
         .eq('online', true)
         .maybeSingle();
   
+      console.log('👤 Conductor activo encontrado:', activeDriver);
+      console.log('❌ Error búsqueda:', driverError);
+  
       const driverUserId = activeDriver?.user_id || null;
+  
+      console.log('✅ Driver User ID final:', driverUserId);
   
       // ⚠️ VALIDACIÓN: No puede votarse a sí mismo
       if (driverUserId && driverUserId === user.id) {
@@ -94,28 +105,37 @@ export default function RateScreen() {
       // 3. Calcular puntuación basada en votos
       const score = calculateScore();
   
+      console.log('⭐ Puntuación calculada:', score);
+  
       // 4. Guardar valoración con driver_user_id
       const { error: ratingError } = await supabase
         .from('ratings')
         .insert({
-          plate: params.plate,
+          plate: normalizedPlate,
           score: Math.round(score),
           comment: comment,
           photo_url: params.photoUri || '',
           rater_id: user.id,
-          driver_user_id: driverUserId,
+          driver_user_id: driverUserId, // ← ESTE ES EL CAMPO CLAVE
           ...attributeData,
         });
   
-      if (ratingError) throw ratingError;
+      if (ratingError) {
+        console.error('❌ Error guardando rating:', ratingError);
+        throw ratingError;
+      }
   
-      // 5. Actualizar perfil correspondiente
+      console.log('✅ Valoración guardada correctamente');
+  
+      // 5. Actualizar o crear perfil correspondiente
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
-        .eq('plate', params.plate)
-        .eq('user_id', driverUserId || null)
+        .eq('plate', normalizedPlate)
+        .eq('user_id', driverUserId)
         .maybeSingle();
+  
+      console.log('📊 Perfil existente:', existingProfile);
   
       // Calcular atributos positivos acumulados
       const positiveAttributes: { [key: string]: number } = existingProfile?.positive_attributes || {};
@@ -131,7 +151,7 @@ export default function RateScreen() {
         const newTotal = existingProfile.total_score + score;
         const newCount = existingProfile.num_ratings + 1;
         
-        await supabase
+        const { error: updateError } = await supabase
           .from('profiles')
           .update({
             total_score: newTotal,
@@ -139,19 +159,31 @@ export default function RateScreen() {
             positive_attributes: positiveAttributes,
             total_votes: totalVotes,
           })
-          .eq('plate', params.plate)
-          .eq('user_id', driverUserId || null);
+          .eq('plate', normalizedPlate)
+          .eq('user_id', driverUserId);
+  
+        if (updateError) {
+          console.error('❌ Error actualizando perfil:', updateError);
+        } else {
+          console.log('✅ Perfil actualizado correctamente');
+        }
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from('profiles')
           .insert({
-            plate: params.plate,
+            plate: normalizedPlate,
             user_id: driverUserId,
             total_score: score,
             num_ratings: 1,
             positive_attributes: positiveAttributes,
             total_votes: totalVotes,
           });
+  
+        if (insertError) {
+          console.error('❌ Error creando perfil:', insertError);
+        } else {
+          console.log('✅ Perfil creado correctamente');
+        }
       }
   
       const { positive, negative } = getVoteSummary();
@@ -159,7 +191,8 @@ export default function RateScreen() {
       let successMessage = `Gracias por contribuir a una conducción más segura.\n\n✅ ${positive} positivos\n❌ ${negative} negativos\n⭐ Puntuación: ${score.toFixed(1)}/5.0`;
       
       if (driverUserId) {
-        successMessage += '\n\n👤 Valoración registrada en el perfil del conductor activo';
+        const driverName = activeDriver?.nickname || 'Conductor';
+        successMessage += `\n\n👤 Valoración registrada en el perfil de: ${driverName}`;
       } else {
         successMessage += '\n\n🚗 Valoración registrada en el perfil del vehículo';
       }
@@ -173,6 +206,7 @@ export default function RateScreen() {
         }]
       );
     } catch (error: any) {
+      console.error('💥 ERROR COMPLETO:', error);
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
