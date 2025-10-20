@@ -58,7 +58,10 @@
           "photosPermission": "Permitir a DriveSkore acceder a tus fotos para cargar imágenes de matrículas."
         }
       ],
-      "./app.plugin.js",
+      [
+        "expo-speech-recognition",
+        { "microphonePermission": "Necesitamos el micrófono para comandos de voz" }
+      ],
       "expo-router"
     ],
     "experiments": {

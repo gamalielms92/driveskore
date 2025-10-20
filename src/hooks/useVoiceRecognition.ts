@@ -1,3 +1,4 @@
+import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { useCallback, useEffect, useState } from 'react';
 import { voiceService, type VoiceCommand } from '../services/voiceService';
 
@@ -14,28 +15,46 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Polling para actualizar estado
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsListening(voiceService.getIsListening());
-    }, 500);
+  useSpeechRecognitionEvent('result', (event) => {
+    if (!event.results || event.results.length === 0) return;
+    
+    const text = event.results[0]?.transcript || '';
+    console.log('✅ TEXTO DETECTADO:', text);
+    
+    setTranscript(text);
+    voiceService.handleRecognitionResult(text);
+    
+    if (options.onResult) {
+      options.onResult(text);
+    }
+  });
 
-    return () => clearInterval(interval);
-  }, []);
+  useSpeechRecognitionEvent('error', (event) => {
+    const errorCode = event.error || 'unknown';
+    console.error('❌ Error:', errorCode);
+    
+    setError(`Error: ${errorCode}`);
+    setIsListening(false);
+  });
 
-  // Configurar callbacks del servicio
+  useSpeechRecognitionEvent('end', () => {
+    console.log('🎤 Reconocimiento terminado');
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent('start', () => {
+    console.log('🎤 Reconocimiento iniciado');
+    setIsListening(true);
+    setError(null);
+  });
+
   useEffect(() => {
     if (options.onCommand) {
       voiceService.onCommand(options.onCommand);
     }
 
     if (options.onResult) {
-      voiceService.onResult((text) => {
-        setTranscript(text);
-        if (options.onResult) {
-          options.onResult(text);
-        }
-      });
+      voiceService.onResult(options.onResult);
     }
 
     return () => {
@@ -43,28 +62,14 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
     };
   }, [options.onCommand, options.onResult]);
 
-  // Auto-start si está configurado
-  useEffect(() => {
-    if (options.autoStart) {
-      startListening();
-    }
-
-    return () => {
-      stopListening();
-    };
-  }, [options.autoStart]);
-
   const startListening = useCallback(async () => {
     setError(null);
     setTranscript('');
     
-    const started = await voiceService.start({
-      continuous: options.continuous || false,
-    });
-    
+    const started = await voiceService.start();
     setIsListening(started);
     return started;
-  }, [options.continuous]);
+  }, []);
 
   const stopListening = useCallback(async () => {
     await voiceService.stop();
@@ -75,14 +80,6 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
     await voiceService.speak(text);
   }, []);
 
-  const clearTranscript = useCallback(() => {
-    setTranscript('');
-  }, []);
-
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
   return {
     isListening,
     transcript,
@@ -90,7 +87,7 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
     startListening,
     stopListening,
     speak,
-    clearTranscript,
-    clearError,
+    clearTranscript: () => setTranscript(''),
+    clearError: () => setError(null),
   };
 };
