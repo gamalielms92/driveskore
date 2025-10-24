@@ -54,6 +54,16 @@ export default function RateScreen() {
       );
       return;
     }
+
+    // NUEVO: Validar que existe matrícula antes de continuar
+    if (!params.plate || params.plate.trim().length === 0) {
+      Alert.alert(
+        '⚠️ Sin matrícula',
+        'No se puede enviar la evaluación sin matrícula del vehículo',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+      return;
+    }
   
     setLoading(true);
   
@@ -207,7 +217,7 @@ export default function RateScreen() {
       );
     } catch (error: any) {
       console.error('💥 ERROR COMPLETO:', error);
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'No se pudo guardar la evaluación');
     } finally {
       setLoading(false);
     }
@@ -225,7 +235,7 @@ export default function RateScreen() {
         )}
 
         <Text style={styles.plateLabel}>Evaluando a:</Text>
-        <Text style={styles.plate}>{displayPlate}</Text>
+        <Text style={styles.plate}>{displayPlate || 'Sin matrícula'}</Text>
         
         {plateValidation.isValid && (
           <View style={styles.plateInfo}>

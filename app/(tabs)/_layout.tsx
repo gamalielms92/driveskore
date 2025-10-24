@@ -28,7 +28,15 @@ export default function TabLayout() {
           href: Platform.OS === 'web' ? null : undefined, // ← OCULTAR EN WEB
         }}
       />
-      
+
+      <Tabs.Screen
+        name="pending"
+        options={{
+          title: 'Pendientes',
+          tabBarIcon: ({ color }) => (<Text style={{ fontSize: 24 }}>⏰</Text>),
+        }}
+      />
+
       <Tabs.Screen
         name="search"
         options={{

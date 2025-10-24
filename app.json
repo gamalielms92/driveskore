@@ -2,15 +2,15 @@
   "expo": {
     "name": "DriveSkore",
     "slug": "driveskore",
+    "scheme": "driveskore",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "userInterfaceStyle": "light",
-    "scheme": "driveskore",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#007AFF"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -19,27 +19,43 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.driveskore.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "DriveSkore necesita acceso a la cámara para capturar fotos de matrículas y evaluar conductores.",
-        "NSPhotoLibraryUsageDescription": "DriveSkore necesita acceso a tus fotos para seleccionar imágenes de matrículas.",
-        "NSMicrophoneUsageDescription": "DriveSkore necesita acceso al micrófono para reconocimiento de voz durante la evaluación en modo conducción.",
-        "NSSpeechRecognitionUsageDescription": "DriveSkore utiliza reconocimiento de voz para evaluar conductores de forma segura mientras conduces, sin necesidad de tocar el móvil."
+        "NSLocationWhenInUseUsageDescription": "DriveSkore necesita tu ubicación para identificar conductores cercanos cuando evalúas su comportamiento.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "DriveSkore necesita tu ubicación en segundo plano cuando activas el Modo Conductor para registrar tu posición y permitir que otros te evalúen.",
+        "NSLocationAlwaysUsageDescription": "DriveSkore necesita tu ubicación en segundo plano cuando activas el Modo Conductor.",
+        "NSBluetoothAlwaysUsageDescription": "DriveSkore usa Bluetooth para conectar con tu botón de evaluación y detectar dispositivos cercanos para identificar conductores.",
+        "NSBluetoothPeripheralUsageDescription": "DriveSkore usa Bluetooth para conectar con tu botón de evaluación.",
+        "NSMotionUsageDescription": "DriveSkore usa sensores de movimiento para detectar tu velocidad y dirección al conducir.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.driveskore.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#007AFF"
+        "backgroundColor": "#ffffff"
       },
+      "package": "com.driveskore.app",
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.WRITE_SETTINGS",
-        "android.permission.WAKE_LOCK"
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "VIBRATE",
+        "CAMERA"
       ]
+      //"config": {
+      //  "googleMaps": {
+      //    "apiKey": "pegar aquí si se llega a usar a pelo, no admite otra forma, y mirar opcion de securizarla"
+      //  }
+      //}
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
@@ -47,30 +63,23 @@
     },
     "plugins": [
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "DriveSkore necesita acceso a tu ubicación para identificar conductores cercanos y para el modo conductor.",
+          "locationAlwaysPermission": "DriveSkore necesita acceso a tu ubicación en segundo plano cuando activas el Modo Conductor.",
+          "locationWhenInUsePermission": "DriveSkore necesita acceso a tu ubicación para identificar conductores cercanos.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
         "expo-camera",
         {
-          "cameraPermission": "Permitir a DriveSkore usar la cámara para capturar matrículas y evaluar conductores."
+          "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."
         }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Permitir a DriveSkore acceder a tus fotos para cargar imágenes de matrículas."
-        }
-      ],
-      [
-        "expo-speech-recognition",
-        { "microphonePermission": "Necesitamos el micrófono para comandos de voz" }
-      ],
-      "expo-router"
+      ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
-      "router": {
-        "origin": false
-      },
       "eas": {
         "projectId": "439df021-c142-4d5b-8dad-2a0d5fbf18a5"
       }
