@@ -1,16 +1,40 @@
 // src/services/EventCaptureService.ts
 
-import * as Location from 'expo-location';
-import * as Sensors from 'expo-sensors';
-// ✅ BLUETOOTH HABILITADO (Development Build)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import { Audio } from 'expo-av';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
-import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform, Vibration } from 'react-native';
-import BleManager from 'react-native-ble-manager';
+import * as Location from 'expo-location';
+import * as Sensors from 'expo-sensors';
+import { LogBox, PermissionsAndroid, Platform, Vibration } from 'react-native';
 import DriverMatchingService from './DriverMatchingService';
+
+// ✅ Import condicional de Bluetooth (solo móvil)
+let BleManager: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    BleManager = require('react-native-ble-manager').default;
+  } catch (error) {
+    console.warn('⚠️ react-native-ble-manager no disponible');
+  }
+}
+
+// ✅ Tipo para periféricos Bluetooth
+interface BlePeripheral {
+  id: string;
+  rssi?: number;
+  name?: string;
+  advertising?: any;
+}
+
+// ✅ Suprimir warnings conocidos de react-native-ble-manager
+if (Platform.OS !== 'web') {
+  LogBox.ignoreLogs([
+    'new NativeEventEmitter',
+    'EventEmitter.removeListener',
+  ]);
+}
 
 // Tipos importados
 import type {
@@ -21,15 +45,13 @@ import type {
   MotionData
 } from '../types/events';
 
-const BleManagerModule = NativeModules.BleManager;
-const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
-
 class EventCaptureService {
   private currentUserId: string | null = null;
   private accelerometerSubscription: any = null;
   private lastAcceleration: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
   private confirmationSound: Audio.Sound | null = null;
   private bleInitialized: boolean = false;
+  private bleEnabled: boolean = true; // ✅ Flag para deshabilitar BT si falla
 
   /**
    * Inicializa el servicio
@@ -115,9 +137,26 @@ class EventCaptureService {
   }
 
   /**
-   * ✅ NUEVO: Inicializa el módulo de Bluetooth
+   * ✅ Inicializa el módulo de Bluetooth
+   * Solo funciona en móvil (Android/iOS), no en Web
    */
   private async initializeBluetooth() {
+    // ✅ CRÍTICO: Bluetooth no existe en Web
+    if (Platform.OS === 'web') {
+      console.log('ℹ️ Plataforma Web detectada - Bluetooth deshabilitado');
+      this.bleInitialized = false;
+      this.bleEnabled = false;
+      return;
+    }
+
+    // Verificar que BleManager esté disponible
+    if (!BleManager) {
+      console.warn('⚠️ BleManager no disponible - Bluetooth deshabilitado');
+      this.bleInitialized = false;
+      this.bleEnabled = false;
+      return;
+    }
+
     try {
       console.log('📡 Inicializando Bluetooth...');
       await BleManager.start({ showAlert: false });
@@ -306,6 +345,12 @@ class EventCaptureService {
    * CRÍTICO: Solo guardamos hashes de MAC por privacidad
    */
   private async scanNearbyBluetooth(): Promise<BluetoothDevice[]> {
+    // Verificar si BT está habilitado
+    if (!this.bleEnabled) {
+      console.log('ℹ️ Bluetooth deshabilitado por flag - saltando escaneo');
+      return [];
+    }
+
     if (!this.bleInitialized) {
       console.warn('⚠️ Bluetooth no inicializado - saltando escaneo');
       return [];
@@ -314,24 +359,22 @@ class EventCaptureService {
     console.log('📡 Escaneando dispositivos Bluetooth...');
 
     try {
-      // ✅ NUEVO: Timeout de 3 segundos para no bloquear
-      const scanPromise = this.performBluetoothScan();
-      const timeoutPromise = new Promise<BluetoothDevice[]>((resolve) => {
-        setTimeout(() => {
-          console.warn('⏱️ Timeout de Bluetooth - continuando sin BT');
-          resolve([]);
-        }, 3000); // 3 segundos máximo
-      });
-
-      // Race entre scan y timeout
-      const devices = await Promise.race([scanPromise, timeoutPromise]);
+      // ✅ Timeout agresivo de 2.5 segundos total
+      const devices = await Promise.race([
+        this.performBluetoothScan(),
+        new Promise<BluetoothDevice[]>((resolve) => {
+          setTimeout(() => {
+            console.warn('⏱️ Timeout de Bluetooth (2.5s) - continuando sin BT');
+            resolve([]);
+          }, 2500);
+        })
+      ]);
       
-      console.log(`✅ Escaneo completado: ${devices.length} dispositivos`);
+      console.log(`✅ Escaneo BT completado: ${devices.length} dispositivos`);
       return devices;
 
     } catch (error) {
       console.error('❌ Error escaneando Bluetooth:', error);
-      // Retornar array vacío en caso de error - matching continuará con GPS
       return [];
     }
   }
@@ -340,19 +383,34 @@ class EventCaptureService {
    * ✅ NUEVO: Realiza el escaneo Bluetooth real
    */
   private async performBluetoothScan(): Promise<BluetoothDevice[]> {
-    try {
-      // Escanear durante 2 segundos (reducido de 5)
-      await BleManager.scan([], 2, false);
+    // Verificación adicional de seguridad
+    if (!BleManager) {
+      console.warn('⚠️ BleManager no disponible en performBluetoothScan');
+      return [];
+    }
 
-      // Esperar a que termine el escaneo
+    try {
+      console.log('📡 Iniciando BleManager.scan()...');
+      
+      // Escanear durante 2 segundos
+      await BleManager.scan([], 2, false);
+      console.log('📡 BleManager.scan() iniciado');
+
+      // Esperar a que termine el escaneo (2.1s)
       await new Promise(resolve => setTimeout(resolve, 2100));
+      console.log('📡 Esperando periféricos descubiertos...');
 
       // Obtener periféricos descubiertos
       const peripherals = await BleManager.getDiscoveredPeripherals();
-      console.log(`📱 Dispositivos encontrados: ${peripherals.length}`);
+      console.log(`📱 Dispositivos BT encontrados: ${peripherals.length}`);
+
+      if (peripherals.length === 0) {
+        console.log('ℹ️ No se encontraron dispositivos Bluetooth');
+        return [];
+      }
 
       // Convertir a nuestro formato y hashear MACs
-      const devices: BluetoothDevice[] = peripherals.map((peripheral) => {
+      const devices: BluetoothDevice[] = peripherals.map((peripheral: BlePeripheral) => {
         // Hash SHA-256 de la MAC address para privacidad
         const macHash = CryptoJS.SHA256(peripheral.id).toString();
 
@@ -360,18 +418,15 @@ class EventCaptureService {
           mac_address_hash: macHash,
           rssi: peripheral.rssi || -100,
           name: peripheral.name || 'Unknown',
-          // Estimación de distancia basada en RSSI
-          // RSSI -40 ≈ 0.5m, -70 ≈ 10m, -90 ≈ 50m
           distance_estimate: this.estimateDistanceFromRSSI(peripheral.rssi || -100),
         };
       });
 
-      console.log('✅ Dispositivos Bluetooth procesados:', devices.length);
-      
       // Log de primeros 3 dispositivos para debug
       if (devices.length > 0) {
+        console.log('✅ Dispositivos BT procesados:', devices.length);
         devices.slice(0, 3).forEach((device, i) => {
-          console.log(`  ${i + 1}. RSSI: ${device.rssi}dBm, Distancia: ${device.distance_estimate}m, Hash: ${device.mac_address_hash.substring(0, 8)}...`);
+          console.log(`  ${i + 1}. RSSI: ${device.rssi}dBm, Dist: ${device.distance_estimate}m`);
         });
       }
 
@@ -442,9 +497,9 @@ class EventCaptureService {
     const hour = new Date().getHours();
     let lightCondition: 'day' | 'night' | 'dusk';
 
-    if (hour >= 7 && hour < 15) {
+    if (hour >= 7 && hour < 19) {
       lightCondition = 'day';
-    } else if (hour >= 15 && hour < 21) {
+    } else if (hour >= 19 && hour < 21) {
       lightCondition = 'dusk';
     } else {
       lightCondition = 'night';
@@ -619,6 +674,22 @@ class EventCaptureService {
     } catch (error) {
       console.error('❌ Error limpiando candidatos huérfanos:', error);
     }
+  }
+
+  /**
+   * ✅ NUEVO: Deshabilita Bluetooth temporalmente (útil si da problemas)
+   */
+  disableBluetooth() {
+    console.log('⚠️ Bluetooth deshabilitado manualmente');
+    this.bleEnabled = false;
+  }
+
+  /**
+   * ✅ NUEVO: Re-habilita Bluetooth
+   */
+  enableBluetooth() {
+    console.log('✅ Bluetooth re-habilitado');
+    this.bleEnabled = true;
   }
 
   /**
