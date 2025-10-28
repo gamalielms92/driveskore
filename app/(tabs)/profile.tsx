@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import EventCaptureService from '../../src/services/EventCaptureService';
 import {
   calculateAttributeStats,
   getDriverRank,
@@ -146,8 +147,15 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // ✅ NUEVO: Limpiar EventCaptureService ANTES de cerrar sesión
+              console.log('🧹 Limpiando EventCaptureService antes de logout...');
+              EventCaptureService.cleanup();
+              
+              // Cerrar sesión en Supabase
               const { error } = await supabase.auth.signOut();
               if (error) throw error;
+              
+              console.log('✅ Sesión cerrada correctamente');
             } catch (error: any) {
               Alert.alert('Error', error.message);
             }

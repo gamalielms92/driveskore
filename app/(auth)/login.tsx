@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import EventCaptureService from '../../src/services/EventCaptureService';
+
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -33,12 +35,20 @@ export default function LoginScreen() {
           [{ text: 'OK', onPress: () => setIsSignUp(false) }]
         );
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        // LOGIN
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (error) throw error;
+        
+        // ✅ NUEVO: Inicializar EventCaptureService con el userId
+        if (data.user) {
+          console.log('🔐 Login exitoso, inicializando EventCaptureService...');
+          await EventCaptureService.initialize(data.user.id);
+          console.log('✅ EventCaptureService inicializado para:', data.user.email);
+        }
         
         // El _layout.tsx se encargará de redirigir
       }

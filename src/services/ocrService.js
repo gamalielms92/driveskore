@@ -1,4 +1,6 @@
 // src/services/ocrService.js
+// VERSIÓN MODERNA: Compatible con expo-file-system SDK 54+ (nueva API)
+import { File } from 'expo-file-system';
 import {
   correctOCRErrors,
   formatPlate,
@@ -17,24 +19,25 @@ if (!OCR_API_KEY) {
 const OCR_API_URL = 'https://api.ocr.space/parse/image';
 
 /**
- * Convierte imagen URI a base64
+ * Convierte imagen URI a base64 usando la NUEVA API de File (SDK 54+)
+ * MUCHO MÁS RÁPIDO que FileReader
  */
 const imageToBase64 = async (uri) => {
   try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    console.time('⏱️ Conversión a base64');
     
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    // NUEVA API: Usar clase File
+    const file = new File(uri);
+    
+    // Leer como base64 directamente
+    const base64 = await file.base64();
+    
+    console.timeEnd('⏱️ Conversión a base64');
+    console.log('✅ Usando API moderna de File (rápida)');
+    
+    return base64;
   } catch (error) {
-    console.error('Error convirtiendo a base64:', error);
+    console.error('❌ Error convirtiendo a base64:', error);
     throw error;
   }
 };
@@ -45,11 +48,14 @@ const imageToBase64 = async (uri) => {
 export const extractTextFromImage = async (imageUri) => {
   try {
     console.log('🔍 Iniciando OCR con OCR.space...');
+    console.time('⏱️ OCR Total');
 
     // Pre-procesar imagen
+    console.time('⏱️ Pre-procesamiento');
     const processedUri = await preprocessImageForOCR(imageUri);
+    console.timeEnd('⏱️ Pre-procesamiento');
     
-    // Convertir a base64
+    // Convertir a base64 (RÁPIDO con nueva API)
     const base64Image = await imageToBase64(processedUri);
 
     // Crear FormData
@@ -63,15 +69,19 @@ export const extractTextFromImage = async (imageUri) => {
     formData.append('OCREngine', '2');
 
     console.log('📤 Enviando a OCR.space...');
+    console.time('⏱️ OCR API Request');
 
     const response = await fetch(OCR_API_URL, {
       method: 'POST',
       body: formData,
     });
 
+    console.timeEnd('⏱️ OCR API Request');
+
     const result = await response.json();
 
     console.log('📥 Respuesta OCR.space:', result);
+    console.timeEnd('⏱️ OCR Total');
 
     if (result.OCRExitCode === 1 && result.ParsedResults?.[0]?.ParsedText) {
       const text = result.ParsedResults[0].ParsedText.trim();
@@ -84,6 +94,7 @@ export const extractTextFromImage = async (imageUri) => {
     }
   } catch (error) {
     console.error('❌ Error en OCR:', error);
+    console.timeEnd('⏱️ OCR Total');
     throw error;
   }
 };

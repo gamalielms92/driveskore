@@ -1,49 +1,111 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Alert,
-  StyleSheet,
+  View,
   Text,
+  StyleSheet,
+  FlatList,
   TouchableOpacity,
-  View
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventCaptureService from '../src/services/EventCaptureService';
-import type { DriverCandidate } from '../src/types/events';
 import { getVerificationBadge } from '../src/utils/verificationBadges';
+import type { DriverCandidate } from '../src/types/events';
 
 export default function MatchingResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  const eventId = params.eventId as string;
-  const candidatesParam = params.candidates as string;
+  const [candidates, setCandidates] = useState<DriverCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const [candidates] = useState<DriverCandidate[]>(
-    candidatesParam ? JSON.parse(candidatesParam) : []
-  );
+  console.log('🎬 [MatchingResults] Componente montado');
+  console.log('📦 [MatchingResults] Params:', params);
+  
+  const eventId = params.eventId as string;
+  
+  // ✅ NUEVO: Cargar candidates desde AsyncStorage
+  useEffect(() => {
+    loadCandidates();
+  }, []);
+
+  const loadCandidates = async () => {
+    try {
+      console.log('🔄 [MatchingResults] Cargando candidates desde AsyncStorage...');
+      
+      if (!eventId) {
+        throw new Error('eventId no proporcionado');
+      }
+      
+      const tempKey = `temp_candidates_${eventId}`;
+      console.log('🔍 [MatchingResults] Buscando key:', tempKey);
+      
+      const candidatesJson = await AsyncStorage.getItem(tempKey);
+      
+      if (!candidatesJson) {
+        throw new Error('No se encontraron candidates en AsyncStorage');
+      }
+      
+      const parsedCandidates: DriverCandidate[] = JSON.parse(candidatesJson);
+      console.log('✅ [MatchingResults] Candidates cargados:', parsedCandidates.length);
+      console.log('📋 [MatchingResults] Primer candidate:', parsedCandidates[0]);
+      
+      // Validar estructura
+      const allValid = parsedCandidates.every(c => 
+        c.user_id && c.plate && c.match_score !== undefined && c.match_factors
+      );
+      
+      if (!allValid) {
+        console.error('❌ [MatchingResults] Estructura de candidates inválida');
+        throw new Error('Estructura de candidates inválida');
+      }
+      
+      setCandidates(parsedCandidates);
+      
+      // ✅ Limpiar de AsyncStorage después de cargar
+      await AsyncStorage.removeItem(tempKey);
+      console.log('🧹 [MatchingResults] Temp data limpiada de AsyncStorage');
+      
+    } catch (error: any) {
+      console.error('❌ [MatchingResults] Error cargando candidates:', error);
+      setError(error.message || 'Error cargando datos');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelectCandidate = async (candidate: DriverCandidate) => {
+    console.log('👆 [MatchingResults] Candidate seleccionado:', candidate.plate);
+    
     Alert.alert(
       '✅ Confirmar Conductor',
-      `¿Evaluar a este conductor?\n\nScore de confianza: ${candidate.match_score}/100`,
+      `¿Evaluar a este conductor?\n\nMatrícula: ${candidate.plate}\nScore: ${candidate.match_score}/100`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Confirmar',
           onPress: async () => {
-            // Eliminar evento de pendientes
-            await EventCaptureService.removeEvent(eventId);
-            
-            // Ir a pantalla de valoración con el conductor confirmado
-            router.replace({
-              pathname: '/rate',
-              params: {
-                userId: candidate.user_id,
-                plate: candidate.plate,
-                matchScore: candidate.match_score.toString(),
-                fromMatching: 'true',
-              },
-            });
+            try {
+              console.log('🗑️ [MatchingResults] Eliminando evento:', eventId);
+              await EventCaptureService.removeEvent(eventId);
+              
+              console.log('🧭 [MatchingResults] Navegando a /rate...');
+              router.replace({
+                pathname: '/rate',
+                params: {
+                  userId: candidate.user_id,
+                  plate: candidate.plate,
+                  matchScore: candidate.match_score.toString(),
+                  fromMatching: 'true',
+                },
+              });
+            } catch (error) {
+              console.error('❌ [MatchingResults] Error:', error);
+              Alert.alert('Error', 'No se pudo confirmar el conductor');
+            }
           },
         },
       ]
@@ -51,6 +113,8 @@ export default function MatchingResultsScreen() {
   };
 
   const handleManualEntry = async () => {
+    console.log('✍️ [MatchingResults] Usuario eligió entrada manual');
+    
     Alert.alert(
       'Evaluación Manual',
       'No has encontrado al conductor. Podrás introducir la matrícula manualmente.',
@@ -59,13 +123,21 @@ export default function MatchingResultsScreen() {
         {
           text: 'Continuar',
           onPress: async () => {
-            await EventCaptureService.removeEvent(eventId);
-            router.replace({
-              pathname: '/rate',
-              params: {
-                fromMatching: 'manual',
-              },
-            });
+            try {
+              console.log('🗑️ [MatchingResults] Eliminando evento:', eventId);
+              await EventCaptureService.removeEvent(eventId);
+              
+              console.log('🧭 [MatchingResults] Navegando a /rate (manual)...');
+              router.replace({
+                pathname: '/rate',
+                params: {
+                  fromMatching: 'manual',
+                },
+              });
+            } catch (error) {
+              console.error('❌ [MatchingResults] Error:', error);
+              Alert.alert('Error', 'No se pudo continuar');
+            }
           },
         },
       ]
@@ -73,10 +145,10 @@ export default function MatchingResultsScreen() {
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return '#4CAF50'; // Verde - Alta confianza
-    if (score >= 60) return '#FFC107'; // Amarillo - Media confianza
-    if (score >= 40) return '#FF9800'; // Naranja - Baja confianza
-    return '#F44336'; // Rojo - Muy baja confianza
+    if (score >= 80) return '#4CAF50';
+    if (score >= 60) return '#FFC107';
+    if (score >= 40) return '#FF9800';
+    return '#F44336';
   };
 
   const getScoreLabel = (score: number) => {
@@ -87,7 +159,7 @@ export default function MatchingResultsScreen() {
   };
 
   const renderFactorBar = (label: string, score: number, maxScore: number, emoji: string) => {
-    const percentage = (score / maxScore) * 100;
+    const percentage = Math.min(100, (score / maxScore) * 100);
     
     return (
       <View style={styles.factorRow}>
@@ -109,7 +181,27 @@ export default function MatchingResultsScreen() {
   };
 
   const renderCandidateCard = ({ item, index }: { item: DriverCandidate; index: number }) => {
-    const badge = getVerificationBadge(item.match_score);
+    console.log(`🎨 [MatchingResults] Renderizando card ${index}:`, item.plate);
+    
+    // ✅ VALIDACIÓN: Verificar que match_factors existe
+    if (!item.match_factors) {
+      console.error('❌ match_factors es undefined para:', item.plate);
+      return (
+        <View style={[styles.card, { borderColor: '#F44336', borderWidth: 2 }]}>
+          <Text style={{ color: '#F44336', padding: 20, textAlign: 'center' }}>
+            ❌ Error: Datos de matching incompletos
+          </Text>
+        </View>
+      );
+    }
+    
+    let badge;
+    try {
+      badge = getVerificationBadge(item.match_score);
+    } catch (error) {
+      console.error('❌ Error obteniendo badge:', error);
+      badge = { badge: '❓', text: 'Error', description: 'Error al verificar' };
+    }
     
     return (
     <TouchableOpacity
@@ -142,7 +234,6 @@ export default function MatchingResultsScreen() {
           <Text style={styles.plateValue}>{item.plate || 'No disponible'}</Text>
         </View>
 
-        {/* NUEVO: Badge de verificación */}
         <View style={styles.verificationBadgeContainer}>
           <Text style={styles.verificationBadgeEmoji}>{badge.badge}</Text>
           <View style={styles.verificationBadgeTextContainer}>
@@ -163,28 +254,135 @@ export default function MatchingResultsScreen() {
         <View style={styles.factorsContainer}>
           <Text style={styles.factorsTitle}>Factores de Matching:</Text>
           
-          {renderFactorBar('Proximidad GPS', item.match_factors.gps_proximity, 40, '📍')}
+          {renderFactorBar('Proximidad GPS', item.match_factors.gps_proximity || 0, 40, '📍')}
           {renderFactorBar('Bluetooth', item.match_factors.bluetooth_detected ? 30 : 0, 30, '📡')}
-          {renderFactorBar('Dirección', item.match_factors.direction_match, 20, '🧭')}
-          {renderFactorBar('Velocidad', item.match_factors.speed_match, 10, '🚀')}
+          {renderFactorBar('Dirección', item.match_factors.direction_match || 0, 20, '🧭')}
+          {renderFactorBar('Velocidad', item.match_factors.speed_match || 0, 10, '🚀')}
         </View>
-
-        {item.location && (
-          <View style={styles.distanceContainer}>
-            <Text style={styles.distanceLabel}>📏 Ubicación registrada</Text>
-            <Text style={styles.distanceValue}>
-              Lat: {item.location.latitude.toFixed(5)}, Lon: {item.location.longitude.toFixed(5)}
-            </Text>
-          </View>
-        )}
       </View>
 
       <View style={styles.cardFooter}>
-        <Text style={styles.selectButtonText}>Toca para evaluar a este conductor</Text>
+        <Text style={styles.selectButtonText}>👆 Toca para evaluar este conductor</Text>
       </View>
     </TouchableOpacity>
   );
+  };
 
+  // ✅ Pantalla de loading
+  if (loading) {
+    console.log('🎨 [MatchingResults] Renderizando pantalla de loading');
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={{ marginTop: 16, fontSize: 16, color: '#666' }}>
+            Cargando candidatos...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ✅ Pantalla de error
+  if (error) {
+    console.log('🎨 [MatchingResults] Renderizando pantalla de error');
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>❌</Text>
+          <Text style={styles.emptyTitle}>Error</Text>
+          <Text style={styles.emptyMessage}>{error}</Text>
+          
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              console.log('← [MatchingResults] Volviendo...');
+              router.back();
+            }}
+          >
+            <Text style={styles.backButtonText}>← Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ✅ Sin candidatos
+  if (candidates.length === 0) {
+    console.log('🎨 [MatchingResults] Renderizando pantalla sin candidatos');
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>🤷</Text>
+          <Text style={styles.emptyTitle}>No se encontraron candidatos</Text>
+          <Text style={styles.emptyMessage}>
+            No había conductores activos cerca en ese momento.
+          </Text>
+          
+          <TouchableOpacity
+            style={styles.manualButton}
+            onPress={handleManualEntry}
+          >
+            <Text style={styles.manualButtonText}>✍️ Introducir Manualmente</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              console.log('← [MatchingResults] Volviendo...');
+              router.back();
+            }}
+          >
+            <Text style={styles.backButtonText}>← Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ✅ Lista de candidatos
+  console.log('🎨 [MatchingResults] Renderizando lista de', candidates.length, 'candidatos');
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.headerBackButton}
+          onPress={() => {
+            console.log('← [MatchingResults] Volviendo...');
+            router.back();
+          }}
+        >
+          <Text style={styles.headerBackText}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Candidatos Encontrados</Text>
+          <Text style={styles.headerSubtitle}>
+            {candidates.length} conductor{candidates.length !== 1 ? 'es' : ''} cercano{candidates.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      </View>
+
+      <FlatList
+        data={candidates}
+        renderItem={renderCandidateCard}
+        keyExtractor={(item, index) => `${item.user_id || 'unknown'}-${index}`}
+        contentContainerStyle={styles.listContent}
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              ¿No encuentras al conductor correcto?
+            </Text>
+            <TouchableOpacity
+              style={styles.manualButton}
+              onPress={handleManualEntry}
+            >
+              <Text style={styles.manualButtonText}>✍️ Introducir Manualmente</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -384,24 +582,6 @@ const styles = StyleSheet.create({
     width: 40,
     textAlign: 'right',
   },
-  distanceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  distanceLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  distanceValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
   cardFooter: {
     marginTop: 12,
     paddingTop: 12,
@@ -470,4 +650,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
-}

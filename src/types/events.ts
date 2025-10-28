@@ -13,10 +13,15 @@ export interface CapturedEvent {
   motion: MotionData;
   context: EventContext;
   status: EventStatus;
-  plate?: string; // NUEVO: Matrícula capturada
-  photo_uri?: string; // NUEVO: URI de la foto
+  plate?: string;
+  photo_uri?: string;
   candidates?: DriverCandidate[];
   confirmed_driver?: ConfirmedDriver;
+  
+  // ✅ NUEVO: Metadata de matching pre-calculado
+  has_candidates?: boolean;        // Indica si ya se ejecutó matching
+  candidates_count?: number;        // Número de candidatos encontrados
+  matching_executed_at?: string;   // Timestamp cuando se ejecutó matching
 }
 
 export interface LocationData {
@@ -90,7 +95,7 @@ export interface ActiveDriver {
   location: {
     latitude: number;
     longitude: number;
-    captured_at: string;  // Renombrado de timestamp
+    captured_at: string;
   };
   motion: {
     speed: number;

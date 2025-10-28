@@ -1,44 +1,66 @@
-import { useFocusEffect } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import DriverMatchingService from '../../src/services/DriverMatchingService';
+import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../src/config/supabase';
 import EventCaptureService from '../../src/services/EventCaptureService';
-import type { CapturedEvent } from '../../src/types/events';
+import DriverMatchingService from '../../src/services/DriverMatchingService';
+import type { CapturedEvent, DriverCandidate } from '../../src/types/events';
 
 export default function PendingScreen() {
   const router = useRouter();
   const [pendingEvents, setPendingEvents] = useState<CapturedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [matchingEventId, setMatchingEventId] = useState<string | null>(null);
 
-  // Cargar eventos al montar el componente
   useEffect(() => {
-    loadPendingEvents();
+    loadPendingEventsIfAuthenticated();
+    
+    // ✅ Limpiar candidatos huérfanos al montar
+    EventCaptureService.cleanupOrphanedCandidates();
   }, []);
 
-  // NUEVO: Recargar cada vez que la tab gana foco
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 Tab Pendientes enfocada - Recargando eventos...');
-      loadPendingEvents();
+      loadPendingEventsIfAuthenticated();
     }, [])
   );
+
+  const loadPendingEventsIfAuthenticated = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        console.log('ℹ️ No hay sesión activa, omitiendo carga de eventos');
+        setPendingEvents([]);
+        setLoading(false);
+        return;
+      }
+      
+      await loadPendingEvents();
+    } catch (error) {
+      console.error('Error verificando sesión:', error);
+      setLoading(false);
+    }
+  };
 
   const loadPendingEvents = async () => {
     try {
       setLoading(true);
+      await EventCaptureService.cleanupLegacyEvents();
       const events = await EventCaptureService.getPendingEvents();
-      // Ordenar por más recientes primero
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setPendingEvents(events);
     } catch (error) {
@@ -57,15 +79,33 @@ export default function PendingScreen() {
 
   const handleReviewEvent = async (event: CapturedEvent) => {
     try {
-      Alert.alert(
-        '🔍 Buscando Candidatos',
-        'Analizando conductores cercanos en ese momento...',
-        [{ text: 'OK' }]
-      );
+      console.log('🔍 Iniciando revisión de evento:', event.id);
+      
+      // ✅ PASO 1: Intentar cargar candidatos pre-calculados
+      const candidatesKey = `candidates_${event.id}`;
+      const savedCandidatesJson = await AsyncStorage.getItem(candidatesKey);
+      
+      let candidates: DriverCandidate[] = [];
+      let usedPreCalculated = false;
+      
+      if (savedCandidatesJson) {
+        // ✅ HAY CANDIDATOS PRE-CALCULADOS
+        console.log('📦 Usando candidatos pre-calculados del momento de captura');
+        candidates = JSON.parse(savedCandidatesJson);
+        usedPreCalculated = true;
+        console.log(`✅ ${candidates.length} candidatos pre-calculados cargados`);
+      } else {
+        // ⚠️ NO HAY CANDIDATOS PRE-CALCULADOS - Ejecutar matching ahora
+        console.log('🔍 No hay candidatos guardados, ejecutando matching en vivo...');
+        
+        setMatchingEventId(event.id);
+        candidates = await DriverMatchingService.findCandidates(event);
+        setMatchingEventId(null);
+        
+        console.log(`📊 Matching en vivo completado: ${candidates.length} candidatos`);
+      }
 
-      // Ejecutar algoritmo de matching - pasando el evento completo
-      const candidates = await DriverMatchingService.findCandidates(event);
-
+      // ✅ PASO 2: Procesar resultados
       if (candidates.length === 0) {
         Alert.alert(
           'Sin Resultados',
@@ -74,11 +114,8 @@ export default function PendingScreen() {
             { text: 'Cancelar', style: 'cancel' },
             {
               text: 'Evaluar Manual',
-              onPress: () => {
-                // Eliminar evento de pendientes
-                EventCaptureService.removeEvent(event.id);
-                
-                // Ir a rate con los datos del evento
+              onPress: async () => {
+                await EventCaptureService.removeEvent(event.id);
                 router.push({
                   pathname: '/rate',
                   params: {
@@ -95,16 +132,24 @@ export default function PendingScreen() {
         return;
       }
 
-      // Mostrar candidatos al usuario (próxima pantalla)
+      // ✅ PASO 3: Guardar en AsyncStorage temporal para navegación
+      const tempKey = `temp_candidates_${event.id}`;
+      await AsyncStorage.setItem(tempKey, JSON.stringify(candidates));
+      console.log('💾 Candidatos copiados a temp storage para navegación');
+
+      // ✅ PASO 4: Navegar a matching-results
+      console.log('🚀 Navegando a matching-results');
       router.push({
         pathname: '/matching-results',
         params: {
           eventId: event.id,
-          candidates: JSON.stringify(candidates),
+          preCalculated: usedPreCalculated ? 'true' : 'false',
         },
       });
+      
     } catch (error) {
-      console.log('Error buscando candidatos:', error);
+      console.log('❌ Error revisando evento:', error);
+      setMatchingEventId(null);
       Alert.alert('Error', 'No se pudo ejecutar el matching. Intenta de nuevo.');
     }
   };
@@ -164,80 +209,108 @@ export default function PendingScreen() {
     }
   };
 
-  const renderEventCard = ({ item }: { item: CapturedEvent }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitle}>
-          <Text style={styles.emoji}>{getDeviceEmoji(item.context.device_type)}</Text>
-          <View>
-            <Text style={styles.cardTitleText}>
-              Evento capturado
+  const renderEventCard = ({ item }: { item: CapturedEvent }) => {
+    // ✅ Verificar si tiene candidatos pre-calculados
+    const hasCandidates = item.has_candidates === true;
+    const candidatesCount = item.candidates_count || 0;
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardTitle}>
+            <Text style={styles.emoji}>{getDeviceEmoji(item.context.device_type)}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitleText}>Evento capturado</Text>
+              <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+              
+              {/* ✅ NUEVO: Badge de candidatos disponibles */}
+              {hasCandidates && (
+                <View style={styles.candidatesBadge}>
+                  <Text style={styles.candidatesBadgeText}>
+                    ✅ {candidatesCount} candidato{candidatesCount !== 1 ? 's' : ''} encontrado{candidatesCount !== 1 ? 's' : ''}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={() => handleDeleteEvent(item.id)}
+            style={styles.deleteButton}
+          >
+            <Text style={styles.deleteButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cardInfo}>
+          {item.plate && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>🚗 Matrícula:</Text>
+              <Text style={[styles.infoValue, styles.plateHighlight]}>
+                {item.plate}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>📍 Ubicación:</Text>
+            <Text style={styles.infoValue}>
+              {item.location.latitude.toFixed(5)}, {item.location.longitude.toFixed(5)}
             </Text>
-            <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+          </View>
+
+          {item.location.speed !== undefined && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>🚀 Velocidad:</Text>
+              <Text style={styles.infoValue}>
+                {(item.location.speed * 3.6).toFixed(1)} km/h
+              </Text>
+            </View>
+          )}
+
+          {item.motion.heading !== undefined && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>🧭 Dirección:</Text>
+              <Text style={styles.infoValue}>{item.motion.heading}°</Text>
+            </View>
+          )}
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>🌙 Condición:</Text>
+            <Text style={styles.infoValue}>
+              {item.context.light_condition === 'day'
+                ? '☀️ Día'
+                : item.context.light_condition === 'night'
+                ? '🌙 Noche'
+                : '🌆 Atardecer'}
+            </Text>
           </View>
         </View>
+
         <TouchableOpacity
-          onPress={() => handleDeleteEvent(item.id)}
-          style={styles.deleteButton}
+          style={[
+            styles.reviewButton,
+            matchingEventId === item.id && styles.reviewButtonDisabled,
+            hasCandidates && styles.reviewButtonWithCandidates,
+          ]}
+          onPress={() => handleReviewEvent(item)}
+          disabled={matchingEventId === item.id}
         >
-          <Text style={styles.deleteButtonText}>✕</Text>
+          {matchingEventId === item.id ? (
+            <View style={styles.buttonContent}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.reviewButtonText}>Buscando...</Text>
+            </View>
+          ) : (
+            <Text style={styles.reviewButtonText}>
+              {hasCandidates 
+                ? `👥 Ver ${candidatesCount} Candidato${candidatesCount !== 1 ? 's' : ''}`
+                : '🔍 Buscar Conductor'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
-
-      <View style={styles.cardInfo}>
-        {/* NUEVO: Mostrar matrícula si existe */}
-        {item.plate && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>🚗 Matrícula:</Text>
-            <Text style={[styles.infoValue, styles.plateHighlight]}>
-              {item.plate}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>📍 Ubicación:</Text>
-          <Text style={styles.infoValue}>
-            {item.location.latitude.toFixed(5)}, {item.location.longitude.toFixed(5)}
-          </Text>
-        </View>
-
-        {item.location.speed !== undefined && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>🚀 Velocidad:</Text>
-            <Text style={styles.infoValue}>
-              {(item.location.speed * 3.6).toFixed(1)} km/h
-            </Text>
-          </View>
-        )}
-
-        {item.motion.heading !== undefined && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>🧭 Dirección:</Text>
-            <Text style={styles.infoValue}>{item.motion.heading}°</Text>
-          </View>
-        )}
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>🌙 Condición:</Text>
-          <Text style={styles.infoValue}>
-            {item.context.light_condition === 'day'
-              ? '☀️ Día'
-              : item.context.light_condition === 'night'
-              ? '🌙 Noche'
-              : '🌆 Atardecer'}
-          </Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.reviewButton}
-        onPress={() => handleReviewEvent(item)}
-      >
-        <Text style={styles.reviewButtonText}>🔍 Buscar Conductor</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -338,7 +411,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
   },
   emoji: {
@@ -354,6 +427,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+  },
+  candidatesBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  candidatesBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2E7D32',
   },
   deleteButton: {
     width: 32,
@@ -398,6 +486,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+  },
+  reviewButtonDisabled: {
+    backgroundColor: '#B0B0B0',
+    opacity: 0.7,
+  },
+  reviewButtonWithCandidates: {
+    backgroundColor: '#4CAF50',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   reviewButtonText: {
     color: '#fff',

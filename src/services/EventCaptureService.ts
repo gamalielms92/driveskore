@@ -2,13 +2,15 @@
 
 import * as Location from 'expo-location';
 import * as Sensors from 'expo-sensors';
-// BLUETOOTH DESHABILITADO: Requiere development build (no funciona en Expo Go)
-// Descomentar cuando tengamos APK custom
-// import BleManager from 'react-native-ble-manager';
+// ✅ BLUETOOTH HABILITADO (Development Build)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
+import { Audio } from 'expo-av';
 import * as Crypto from 'expo-crypto';
-import { Vibration } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform, Vibration } from 'react-native';
+import BleManager from 'react-native-ble-manager';
+import DriverMatchingService from './DriverMatchingService';
 
 // Tipos importados
 import type {
@@ -19,22 +21,41 @@ import type {
   MotionData
 } from '../types/events';
 
+const BleManagerModule = NativeModules.BleManager;
+const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
+
 class EventCaptureService {
   private currentUserId: string | null = null;
   private accelerometerSubscription: any = null;
   private lastAcceleration: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+  private confirmationSound: Audio.Sound | null = null;
+  private bleInitialized: boolean = false;
 
   /**
    * Inicializa el servicio
    */
   async initialize(userId: string) {
+    console.log('🔄 EventCaptureService.initialize() llamado');
+    console.log('📋 userId recibido:', userId);
+    console.log('📋 currentUserId anterior:', this.currentUserId);
+    
     this.currentUserId = userId;
+    
+    console.log('✅ currentUserId actualizado:', this.currentUserId);
     
     // Solicitar permisos necesarios
     await this.requestPermissions();
     
+    // ✅ Inicializar Bluetooth
+    await this.initializeBluetooth();
+    
     // Inicializar sensor de acelerómetro
     this.startAccelerometerTracking();
+    
+    // Cargar sonido de confirmación (opcional)
+    await this.loadConfirmationSound();
+    
+    console.log('✅ EventCaptureService inicializado completamente');
   }
 
   /**
@@ -47,8 +68,85 @@ class EventCaptureService {
       throw new Error('Permiso de ubicación denegado');
     }
 
-    // Permisos de Bluetooth se solicitan al escanear
-    // Los sensores no requieren permisos explícitos en la mayoría de plataformas
+    // ✅ Permisos de Bluetooth (Android)
+    if (Platform.OS === 'android') {
+      const apiLevel = Platform.Version;
+      
+      if (apiLevel >= 31) {
+        // Android 12+ (API 31+): Requiere BLUETOOTH_SCAN y BLUETOOTH_CONNECT
+        const scanPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          {
+            title: 'Permiso Bluetooth',
+            message: 'DriveSkore necesita escanear dispositivos Bluetooth cercanos',
+            buttonPositive: 'Permitir',
+          }
+        );
+        
+        const connectPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          {
+            title: 'Permiso Bluetooth',
+            message: 'DriveSkore necesita conectarse a dispositivos Bluetooth',
+            buttonPositive: 'Permitir',
+          }
+        );
+        
+        if (scanPermission !== PermissionsAndroid.RESULTS.GRANTED || 
+            connectPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.warn('⚠️ Permisos de Bluetooth denegados (Android 12+)');
+        }
+      } else {
+        // Android < 12: Solo requiere ACCESS_FINE_LOCATION
+        const locationPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Permiso de Ubicación',
+            message: 'DriveSkore necesita ubicación para escanear Bluetooth',
+            buttonPositive: 'Permitir',
+          }
+        );
+        
+        if (locationPermission !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.warn('⚠️ Permiso de ubicación denegado (necesario para BLE)');
+        }
+      }
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Inicializa el módulo de Bluetooth
+   */
+  private async initializeBluetooth() {
+    try {
+      console.log('📡 Inicializando Bluetooth...');
+      await BleManager.start({ showAlert: false });
+      this.bleInitialized = true;
+      console.log('✅ Bluetooth inicializado correctamente');
+    } catch (error) {
+      console.error('❌ Error inicializando Bluetooth:', error);
+      this.bleInitialized = false;
+      // No lanzar error - la app puede funcionar sin Bluetooth
+    }
+  }
+
+  /**
+   * Cargar archivo de sonido de confirmación (opcional)
+   */
+  private async loadConfirmationSound() {
+    try {
+      // NOTA: Descomentar cuando tengas el archivo de sonido
+      // const { sound } = await Audio.Sound.createAsync(
+      //   require('../assets/sounds/confirmation.mp3')
+      // );
+      // this.confirmationSound = sound;
+      // console.log('🔊 Sonido de confirmación cargado');
+      
+      console.log('ℹ️ Sonido de confirmación deshabilitado (archivo no encontrado)');
+    } catch (error) {
+      console.log('ℹ️ Sonido de confirmación no disponible:', error);
+      // No es crítico, continuar solo con haptics
+    }
   }
 
   /**
@@ -72,21 +170,38 @@ class EventCaptureService {
     plate?: string,
     photoUri?: string
   ): Promise<CapturedEvent> {
-    console.log('📸 Capturando evento...');
+    console.log('📸 ========== INICIANDO CAPTURA DE EVENTO ==========');
+    console.log('📸 deviceType:', deviceType);
+    console.log('📸 plate:', plate);
+    console.log('📸 photoUri:', photoUri ? 'presente' : 'no presente');
 
     const eventId = Crypto.randomUUID();
     const timestamp = new Date().toISOString();
+    console.log('📸 eventId generado:', eventId);
 
     try {
-      // Capturar en paralelo para minimizar latencia
+      console.log('📍 [1/5] Capturando ubicación...');
+      const locationPromise = this.captureLocation();
+      
+      console.log('📡 [2/5] Escaneando Bluetooth...');
+      const bluetoothPromise = this.scanNearbyBluetooth();
+      
+      console.log('⏳ Esperando ubicación y Bluetooth en paralelo...');
       const [location, nearbyBluetooth] = await Promise.all([
-        this.captureLocation(),
-        this.scanNearbyBluetooth(),
+        locationPromise,
+        bluetoothPromise,
       ]);
+      console.log('✅ Ubicación y Bluetooth completados');
 
+      console.log('🏃 [3/5] Capturando movimiento...');
       const motion = this.captureMotion(location);
-      const context = this.captureContext(deviceType);
+      console.log('✅ Movimiento capturado');
 
+      console.log('🌍 [4/5] Capturando contexto...');
+      const context = this.captureContext(deviceType);
+      console.log('✅ Contexto capturado');
+
+      console.log('📦 [5/5] Construyendo objeto de evento...');
       const event: CapturedEvent = {
         id: eventId,
         evaluator_user_id: this.currentUserId!,
@@ -96,22 +211,71 @@ class EventCaptureService {
         motion,
         context,
         status: 'pending',
-        plate: plate, // NUEVO: Guardar matrícula
-        photo_uri: photoUri, // NUEVO: Guardar URI de foto
+        plate: plate,
+        photo_uri: photoUri,
       };
+      console.log('✅ Objeto de evento construido');
 
-      // Guardar evento en almacenamiento local
+      console.log('💾 Guardando evento localmente...');
       await this.saveEventLocally(event);
+      console.log('✅ Evento guardado');
 
-      // Feedback al usuario (vibración + sonido)
+      console.log('🔍 Ejecutando matching en background...');
+      this.executeBackgroundMatching(event).catch(error => {
+        console.error('❌ Error en matching background:', error);
+      });
+
+      console.log('📳 Proporcionando feedback al usuario...');
       await this.provideFeedback();
+      console.log('✅ Feedback completado');
 
-      console.log('✅ Evento capturado exitosamente:', eventId);
+      console.log('✅ ========== EVENTO CAPTURADO EXITOSAMENTE ==========');
+      console.log('✅ Event ID:', eventId);
 
       return event;
     } catch (error) {
-      console.error('❌ Error capturando evento:', error);
+      console.error('❌ ========== ERROR EN CAPTURA DE EVENTO ==========');
+      console.error('❌ Error:', error);
+      console.error('❌ Stack:', error instanceof Error ? error.stack : 'N/A');
       throw error;
+    }
+  }
+
+  /**
+   * Ejecuta matching en segundo plano y guarda candidatos
+   */
+  private async executeBackgroundMatching(event: CapturedEvent): Promise<void> {
+    try {
+      console.log('🔍 [Background] Iniciando matching para evento:', event.id);
+      
+      // Ejecutar matching
+      const candidates = await DriverMatchingService.findCandidates(event);
+      
+      console.log(`📊 [Background] Encontrados ${candidates.length} candidatos`);
+      
+      if (candidates.length > 0) {
+        // Guardar candidatos en AsyncStorage
+        const candidatesKey = `candidates_${event.id}`;
+        await AsyncStorage.setItem(candidatesKey, JSON.stringify(candidates));
+        console.log('💾 [Background] Candidatos guardados para:', event.id);
+        
+        // Actualizar el evento con metadata
+        const eventKey = `pending_event_${this.currentUserId}_${event.id}`;
+        const updatedEvent: CapturedEvent = {
+          ...event,
+          has_candidates: true,
+          candidates_count: candidates.length,
+          matching_executed_at: new Date().toISOString(),
+        };
+        await AsyncStorage.setItem(eventKey, JSON.stringify(updatedEvent));
+        console.log(`✅ [Background] Evento actualizado con ${candidates.length} candidatos`);
+      } else {
+        console.log('ℹ️ [Background] No se encontraron candidatos para:', event.id);
+      }
+      
+    } catch (error) {
+      console.error('❌ [Background] Error en matching:', error);
+      // No lanzamos el error para que no afecte la captura del evento
     }
   }
 
@@ -138,85 +302,129 @@ class EventCaptureService {
   }
 
   /**
-   * Escanea dispositivos Bluetooth cercanos
+   * ✅ ACTIVADO: Escanea dispositivos Bluetooth cercanos
    * CRÍTICO: Solo guardamos hashes de MAC por privacidad
-   * 
-   * ⚠️ TEMPORALMENTE DESHABILITADO: Requiere development build
-   * Bluetooth no funciona en Expo Go, necesita APK custom
    */
   private async scanNearbyBluetooth(): Promise<BluetoothDevice[]> {
-    console.log('⚠️ Bluetooth deshabilitado temporalmente (requiere development build)');
-    return []; // Retorna array vacío - matching funcionará solo con GPS + Motion
-    
-    /* TODO: Descomentar cuando tengamos development build con react-native-ble-manager
+    if (!this.bleInitialized) {
+      console.warn('⚠️ Bluetooth no inicializado - saltando escaneo');
+      return [];
+    }
+
     console.log('📡 Escaneando dispositivos Bluetooth...');
 
     try {
-      // Escanear durante 5 segundos
-      await BleManager.scan([], 5, false);
+      // ✅ NUEVO: Timeout de 3 segundos para no bloquear
+      const scanPromise = this.performBluetoothScan();
+      const timeoutPromise = new Promise<BluetoothDevice[]>((resolve) => {
+        setTimeout(() => {
+          console.warn('⏱️ Timeout de Bluetooth - continuando sin BT');
+          resolve([]);
+        }, 3000); // 3 segundos máximo
+      });
 
-      // Obtener dispositivos descubiertos
-      const devices = await BleManager.getDiscoveredPeripherals();
+      // Race entre scan y timeout
+      const devices = await Promise.race([scanPromise, timeoutPromise]);
+      
+      console.log(`✅ Escaneo completado: ${devices.length} dispositivos`);
+      return devices;
 
-      const nearbyDevices = devices
-        .filter((device) => device.rssi && device.rssi > -90) // Solo dispositivos cercanos
-        .map((device) => ({
-          mac_address_hash: this.hashMacAddress(device.id),
-          rssi: device.rssi || -100,
-          distance_estimate: this.estimateDistanceFromRSSI(device.rssi || -100),
-          name: device.name || undefined,
-        }));
-
-      console.log(`✅ Encontrados ${nearbyDevices.length} dispositivos BT cercanos`);
-
-      return nearbyDevices;
     } catch (error) {
       console.error('❌ Error escaneando Bluetooth:', error);
-      return []; // No fallar si BT no disponible
+      // Retornar array vacío en caso de error - matching continuará con GPS
+      return [];
     }
-    */
   }
 
   /**
-   * Hash del MAC address por privacidad (RGPD compliance)
+   * ✅ NUEVO: Realiza el escaneo Bluetooth real
    */
-  private hashMacAddress(macAddress: string): string {
-    return CryptoJS.SHA256(macAddress).toString();
+  private async performBluetoothScan(): Promise<BluetoothDevice[]> {
+    try {
+      // Escanear durante 2 segundos (reducido de 5)
+      await BleManager.scan([], 2, false);
+
+      // Esperar a que termine el escaneo
+      await new Promise(resolve => setTimeout(resolve, 2100));
+
+      // Obtener periféricos descubiertos
+      const peripherals = await BleManager.getDiscoveredPeripherals();
+      console.log(`📱 Dispositivos encontrados: ${peripherals.length}`);
+
+      // Convertir a nuestro formato y hashear MACs
+      const devices: BluetoothDevice[] = peripherals.map((peripheral) => {
+        // Hash SHA-256 de la MAC address para privacidad
+        const macHash = CryptoJS.SHA256(peripheral.id).toString();
+
+        return {
+          mac_address_hash: macHash,
+          rssi: peripheral.rssi || -100,
+          name: peripheral.name || 'Unknown',
+          // Estimación de distancia basada en RSSI
+          // RSSI -40 ≈ 0.5m, -70 ≈ 10m, -90 ≈ 50m
+          distance_estimate: this.estimateDistanceFromRSSI(peripheral.rssi || -100),
+        };
+      });
+
+      console.log('✅ Dispositivos Bluetooth procesados:', devices.length);
+      
+      // Log de primeros 3 dispositivos para debug
+      if (devices.length > 0) {
+        devices.slice(0, 3).forEach((device, i) => {
+          console.log(`  ${i + 1}. RSSI: ${device.rssi}dBm, Distancia: ${device.distance_estimate}m, Hash: ${device.mac_address_hash.substring(0, 8)}...`);
+        });
+      }
+
+      return devices;
+    } catch (error) {
+      console.error('❌ Error en performBluetoothScan:', error);
+      return [];
+    }
   }
 
   /**
-   * Estima distancia basada en RSSI
-   * Fórmula: d = 10 ^ ((TxPower - RSSI) / (10 * N))
-   * Donde TxPower ≈ -59 dBm a 1m, N ≈ 2 (factor de propagación)
+   * Estima distancia en metros basada en RSSI
+   * Formula: d = 10 ^ ((TxPower - RSSI) / (10 * n))
+   * TxPower asumido: -59 dBm (típico a 1m)
+   * n (factor ambiental): 2.0 (espacio abierto)
    */
   private estimateDistanceFromRSSI(rssi: number): number {
-    const txPower = -59; // dBm a 1 metro (valor típico)
-    const n = 2.5; // Factor de propagación (2-4, promedio 2.5)
+    const txPower = -59; // Potencia de transmisión típica a 1 metro
+    const n = 2.0; // Factor de propagación (2.0 = espacio abierto)
 
-    const distance = Math.pow(10, (txPower - rssi) / (10 * n));
-    return Math.round(distance * 10) / 10; // Redondear a 1 decimal
+    if (rssi === 0) {
+      return -1; // Señal no disponible
+    }
+
+    const ratio = (txPower - rssi) / (10 * n);
+    const distance = Math.pow(10, ratio);
+
+    // Redondear a 1 decimal
+    return Math.round(distance * 10) / 10;
   }
 
   /**
    * Captura datos de movimiento del acelerómetro
    */
   private captureMotion(location: LocationData): MotionData {
-    // Estimar velocidad desde GPS (más preciso) o calcular desde acelerómetro
-    const velocityMs = location.speed || 0;
-    const velocityKmh = velocityMs * 3.6;
+    const { x, y, z } = this.lastAcceleration;
 
-    // Calcular heading desde acelerómetro si GPS no lo provee
-    const heading = location.heading || this.calculateHeadingFromAccelerometer();
+    // Calcular magnitud de aceleración (vectorial)
+    const magnitude = Math.sqrt(x * x + y * y + z * z);
 
     return {
-      acceleration: this.lastAcceleration,
-      velocity_estimated: Math.round(velocityKmh * 10) / 10,
-      heading: heading,
+      acceleration: {
+        x,
+        y,
+        z,
+      },
+      velocity_estimated: location.speed || 0,
+      heading: location.heading || this.calculateHeadingFromAccelerometer(),
     };
   }
 
   /**
-   * Calcula dirección aproximada desde el acelerómetro
+   * Calcula heading aproximado desde acelerómetro si GPS no lo tiene
    */
   private calculateHeadingFromAccelerometer(): number {
     const { x, y } = this.lastAcceleration;
@@ -234,9 +442,9 @@ class EventCaptureService {
     const hour = new Date().getHours();
     let lightCondition: 'day' | 'night' | 'dusk';
 
-    if (hour >= 7 && hour < 19) {
+    if (hour >= 7 && hour < 15) {
       lightCondition = 'day';
-    } else if (hour >= 19 && hour < 21) {
+    } else if (hour >= 15 && hour < 21) {
       lightCondition = 'dusk';
     } else {
       lightCondition = 'night';
@@ -250,10 +458,11 @@ class EventCaptureService {
   }
 
   /**
-   * Guarda el evento en almacenamiento local
+   * Guarda el evento en almacenamiento local con aislamiento por usuario
    */
   private async saveEventLocally(event: CapturedEvent) {
-    const key = `pending_event_${event.id}`;
+    // IMPORTANTE: Incluir userId para aislar eventos por usuario
+    const key = `pending_event_${event.evaluator_user_id}_${event.id}`;
     const eventString = JSON.stringify(event);
     await AsyncStorage.setItem(key, eventString);
     console.log('💾 Evento guardado localmente:', key);
@@ -269,28 +478,55 @@ class EventCaptureService {
   }
 
   /**
-   * Proporciona feedback al usuario (vibración + sonido)
+   * Proporciona feedback al usuario con múltiples opciones
    */
   private async provideFeedback() {
-    Vibration.vibrate(100); // 100ms vibración
+    try {
+      // 1. HAPTICS (Prioridad alta - feedback táctil nativo)
+      await Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success
+      );
+      console.log('✅ Feedback háptico ejecutado');
+    } catch (hapticsError) {
+      console.log('⚠️ Haptics no disponible:', hapticsError);
+      
+      // Fallback a vibración simple
+      try {
+        Vibration.vibrate(100);
+        console.log('✅ Vibración ejecutada (fallback)');
+      } catch (vibrationError) {
+        console.log('⚠️ Vibración no disponible:', vibrationError);
+      }
+    }
 
-    // TODO: Añadir sonido de confirmación
-    // import { Audio } from 'expo-av';
-    // const { sound } = await Audio.Sound.createAsync(require('./assets/confirmation.mp3'));
-    // await sound.playAsync();
+    // 2. SONIDO (Opcional - solo si está cargado)
+    if (this.confirmationSound) {
+      try {
+        await this.confirmationSound.replayAsync();
+        console.log('🔊 Sonido de confirmación reproducido');
+      } catch (soundError) {
+        console.log('⚠️ Error reproduciendo sonido:', soundError);
+      }
+    }
   }
 
   /**
-   * Obtiene todos los eventos pendientes
+   * Obtiene todos los eventos pendientes DEL USUARIO ACTUAL
    */
   async getPendingEvents(): Promise<CapturedEvent[]> {
-    console.log('🔍 Buscando eventos pendientes...');
+    if (!this.currentUserId) {
+      console.warn('⚠️ No hay usuario autenticado');
+      return [];
+    }
+
+    console.log('🔍 Buscando eventos pendientes del usuario:', this.currentUserId);
     const keys = await AsyncStorage.getAllKeys();
     console.log('📋 Total keys en AsyncStorage:', keys.length);
     
-    const pendingKeys = keys.filter((key) => key.startsWith('pending_event_'));
-    console.log('📌 Keys de eventos pendientes:', pendingKeys.length);
-    pendingKeys.forEach(key => console.log('  -', key));
+    // IMPORTANTE: Filtrar solo eventos de este usuario
+    const userPrefix = `pending_event_${this.currentUserId}_`;
+    const pendingKeys = keys.filter((key) => key.startsWith(userPrefix));
+    console.log('📌 Keys de eventos del usuario actual:', pendingKeys.length);
 
     const events = await Promise.all(
       pendingKeys.map(async (key) => {
@@ -309,17 +545,109 @@ class EventCaptureService {
    * Elimina un evento después de confirmarlo o descartarlo
    */
   async removeEvent(eventId: string) {
-    await AsyncStorage.removeItem(`pending_event_${eventId}`);
-    console.log('🗑️ Evento eliminado:', eventId);
+    if (!this.currentUserId) {
+      console.warn('⚠️ No hay usuario autenticado');
+      return;
+    }
+
+    const key = `pending_event_${this.currentUserId}_${eventId}`;
+    await AsyncStorage.removeItem(key);
+    console.log('🗑️ Evento eliminado:', key);
+    
+    // También eliminar candidatos asociados
+    const candidatesKey = `candidates_${eventId}`;
+    await AsyncStorage.removeItem(candidatesKey);
+    console.log('🗑️ Candidatos eliminados:', candidatesKey);
   }
 
   /**
-   * Limpia el servicio al salir
+   * Limpia eventos antiguos que no tienen userId en la clave (migración)
+   */
+  async cleanupLegacyEvents() {
+    console.log('🧹 Limpiando eventos legacy sin userId...');
+    
+    const keys = await AsyncStorage.getAllKeys();
+    
+    // Buscar eventos con formato antiguo: pending_event_{uuid}
+    const legacyPattern = /^pending_event_[a-f0-9\-]{36}$/;
+    const legacyKeys = keys.filter(key => legacyPattern.test(key));
+    
+    console.log('📋 Eventos legacy encontrados:', legacyKeys.length);
+    
+    if (legacyKeys.length > 0) {
+      await Promise.all(legacyKeys.map(key => AsyncStorage.removeItem(key)));
+      console.log('✅ Eventos legacy eliminados:', legacyKeys.length);
+    }
+  }
+
+  /**
+   * Limpia candidatos guardados de eventos eliminados
+   */
+  async cleanupOrphanedCandidates(): Promise<void> {
+    try {
+      console.log('🧹 Limpiando candidatos huérfanos...');
+      
+      const allKeys = await AsyncStorage.getAllKeys();
+      const candidateKeys = allKeys.filter(key => key.startsWith('candidates_'));
+      
+      if (candidateKeys.length === 0) {
+        console.log('✅ No hay candidatos guardados');
+        return;
+      }
+      
+      console.log(`🔍 Encontrados ${candidateKeys.length} candidatos guardados`);
+      
+      const orphanedKeys: string[] = [];
+      
+      for (const candidateKey of candidateKeys) {
+        const eventId = candidateKey.replace('candidates_', '');
+        const eventKey = `pending_event_${this.currentUserId}_${eventId}`;
+        const eventExists = await AsyncStorage.getItem(eventKey);
+        
+        if (!eventExists) {
+          orphanedKeys.push(candidateKey);
+        }
+      }
+      
+      if (orphanedKeys.length > 0) {
+        await AsyncStorage.multiRemove(orphanedKeys);
+        console.log(`🗑️ Eliminados ${orphanedKeys.length} candidatos huérfanos`);
+      } else {
+        console.log('✅ No hay candidatos huérfanos');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error limpiando candidatos huérfanos:', error);
+    }
+  }
+
+  /**
+   * Limpia el servicio al cerrar sesión
    */
   cleanup() {
+    console.log('🧹 Limpiando EventCaptureService...');
+    
+    // Limpiar subscripciones
     if (this.accelerometerSubscription) {
       this.accelerometerSubscription.remove();
+      this.accelerometerSubscription = null;
     }
+    
+    // Limpiar sonido
+    if (this.confirmationSound) {
+      this.confirmationSound.unloadAsync().catch(err => {
+        console.log('⚠️ Error descargando sonido:', err);
+      });
+      this.confirmationSound = null;
+    }
+    
+    // Limpiar estado de Bluetooth
+    this.bleInitialized = false;
+    
+    // IMPORTANTE: Limpiar userId al cerrar sesión
+    this.currentUserId = null;
+    
+    console.log('✅ EventCaptureService limpiado');
   }
 }
 

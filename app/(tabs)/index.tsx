@@ -143,10 +143,6 @@ export default function HomeScreen() {
           <Text style={styles.vehicleManagementArrow}>→</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push('/test-voice')}>
-          <Text>TEST VOZ</Text>
-        </TouchableOpacity>
-
         {/* Información */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>

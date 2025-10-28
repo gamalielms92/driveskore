@@ -27,6 +27,7 @@ export default function CaptureScreen() {
   const [plateValidation, setPlateValidation] = useState<any>(null);
   const [cameraRef, setCameraRef] = useState<any>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false); // NUEVO: Estado separado para OCR
 
   if (Platform.OS === 'web') {
     return (
@@ -68,8 +69,12 @@ export default function CaptureScreen() {
         setIsCapturing(true);
         const photo = await cameraRef.takePictureAsync({ quality: 0.5 });
         setPhoto(photo.uri);
+        setIsCapturing(false); // ← LIBERAR INMEDIATAMENTE después de capturar
         
-        // Intentar detectar matrícula con OCR
+        // OCR en background con su propio estado de loading
+        setIsProcessingOCR(true);
+        console.log('🔍 Iniciando detección OCR en background...');
+        
         try {
           const detectedPlate = await detectPlateFromImage(photo.uri);
           
@@ -95,11 +100,13 @@ export default function CaptureScreen() {
             'Introduce la matrícula manualmente.',
             [{ text: 'OK', style: 'default' }]
           );
+        } finally {
+          setIsProcessingOCR(false);
         }
+        
       } catch (error) {
         console.log('ℹ️ No se pudo capturar foto:', error);
         Alert.alert('Error', 'No se pudo capturar la foto');
-      } finally {
         setIsCapturing(false);
       }
     }
@@ -116,7 +123,9 @@ export default function CaptureScreen() {
       if (!result.canceled) {
         setPhoto(result.assets[0].uri);
         
-        // Intentar detectar matrícula con OCR
+        // OCR en background
+        setIsProcessingOCR(true);
+        
         try {
           const detectedPlate = await detectPlateFromImage(result.assets[0].uri);
           
@@ -142,6 +151,8 @@ export default function CaptureScreen() {
             'Introduce la matrícula manualmente.',
             [{ text: 'OK', style: 'default' }]
           );
+        } finally {
+          setIsProcessingOCR(false);
         }
       }
     } catch (error) {
@@ -161,8 +172,6 @@ export default function CaptureScreen() {
       setPlateValidation(null);
     }
   };
-
-// En capture.tsx - handleNext COMPLETO Y CORREGIDO
 
 const handleNext = async () => {
   if (!plate || plate.trim().length < 4) {
@@ -293,66 +302,72 @@ const handleNext = async () => {
         
         <Image source={{ uri: photo }} style={styles.preview} />
         
+        {/* NUEVO: Indicador de OCR procesando */}
+        {isProcessingOCR && (
+          <View style={styles.ocrLoadingContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.ocrLoadingText}>🔍 Detectando matrícula...</Text>
+          </View>
+        )}
+        
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Matrícula:</Text>
+          <Text style={styles.label}>Matrícula del vehículo:</Text>
           <TextInput
             style={[
               styles.input,
               plateValidation?.isValid && styles.inputValid,
-              plateValidation !== null && !plateValidation?.isValid && styles.inputInvalid
+              plateValidation && !plateValidation.isValid && styles.inputInvalid,
             ]}
+            placeholder="Ej: 1234 ABC"
             value={plate}
             onChangeText={handlePlateChange}
-            placeholder="Ej: 1234 ABC"
-            placeholderTextColor="#999"
             autoCapitalize="characters"
+            autoCorrect={false}
             maxLength={10}
-            editable={!isCapturing}
+            editable={!isProcessingOCR} // Deshabilitar mientras procesa OCR
           />
           
           {plateValidation && (
             <View style={styles.validationContainer}>
-              {plateValidation.isValid ? (
-                <>
-                  <Text style={styles.validationValid}>✓ Formato válido</Text>
-                  <Text style={styles.validationInfo}>
-                    {plateValidation.format === 'current' ? 'Actual (2000+)' : 'Provincial (1971-2000)'}
-                  </Text>
-                  {plateValidation.year && (
-                    <Text style={styles.validationInfo}>Época: {plateValidation.year}</Text>
-                  )}
-                </>
-              ) : (
-                <Text style={styles.validationInvalid}>⚠ Formato no reconocido</Text>
+              <Text style={plateValidation.isValid ? styles.validationValid : styles.validationInvalid}>
+                {plateValidation.isValid ? '✓ Matrícula válida' : '⚠ ' + plateValidation.error}
+              </Text>
+              {plateValidation.info && (
+                <Text style={styles.validationInfo}>{plateValidation.info}</Text>
               )}
             </View>
           )}
-
+          
+          {/* CAMBIADO: Indicador específico para captura de ubicación */}
           {isCapturing && (
             <View style={styles.capturingContainer}>
-              <ActivityIndicator size="small" color="#007AFF" />
-              <Text style={styles.capturingText}>Capturando ubicación y contexto...</Text>
+              <ActivityIndicator size="small" color="#1976d2" />
+              <Text style={styles.capturingText}>📍 Capturando ubicación y contexto...</Text>
             </View>
           )}
         </View>
 
         <View style={styles.buttonRow}>
           <TouchableOpacity 
-            style={[styles.button, styles.buttonSecondary]} 
+            style={[styles.button, styles.buttonSecondary]}
             onPress={() => {
               setPhoto(null);
               setPlate('');
               setPlateValidation(null);
             }}
-            disabled={isCapturing}
+            disabled={isCapturing || isProcessingOCR}
           >
             <Text style={styles.buttonSecondaryText}>← Repetir</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity 
-            style={[styles.button, styles.buttonPrimary, isCapturing && styles.buttonDisabled]} 
+            style={[
+              styles.button, 
+              styles.buttonPrimary,
+              (!plate || plate.length < 4 || isCapturing || isProcessingOCR) && styles.buttonDisabled
+            ]}
             onPress={handleNext}
-            disabled={isCapturing}
+            disabled={!plate || plate.length < 4 || isCapturing || isProcessingOCR}
           >
             {isCapturing ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -562,17 +577,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
   },
+  // NUEVO: Estilos para indicador de OCR
+  ocrLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    padding: 10,
+    backgroundColor: '#e3f2fd',
+    borderRadius: 8,
+  },
+  ocrLoadingText: {
+    marginLeft: 10,
+    color: '#1976d2',
+    fontSize: 14,
+  },
+  // CAMBIADO: Renombrado de capturingContainer
   capturingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     padding: 10,
-    backgroundColor: '#e3f2fd',
+    backgroundColor: '#fff3e0', // Color diferente para diferenciar
     borderRadius: 8,
   },
   capturingText: {
     marginLeft: 10,
-    color: '#1976d2',
+    color: '#e65100', // Color diferente
     fontSize: 14,
   },
   buttonRow: {
