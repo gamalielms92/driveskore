@@ -20,20 +20,23 @@ export default function TabLayout() {
         }}
       />
       
+      {/* ✅ OCULTO EN WEB: Captura de eventos */}
       <Tabs.Screen
         name="capture"
         options={{
           title: 'Evaluar',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
-          href: Platform.OS === 'web' ? null : undefined, // ← OCULTAR EN WEB
+          href: Platform.OS === 'web' ? null : undefined,
         }}
       />
 
+      {/* ✅ OCULTO EN WEB: Eventos pendientes (matching) */}
       <Tabs.Screen
         name="pending"
         options={{
           title: 'Pendientes',
-          tabBarIcon: ({ color }) => (<Text style={{ fontSize: 24 }}>⏰</Text>),
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏰</Text>,
+          href: Platform.OS === 'web' ? null : undefined,
         }}
       />
 

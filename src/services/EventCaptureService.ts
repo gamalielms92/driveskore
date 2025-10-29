@@ -1,12 +1,12 @@
 // src/services/EventCaptureService.ts
 
+import * as Location from 'expo-location';
+import * as Sensors from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import { Audio } from 'expo-av';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
-import * as Sensors from 'expo-sensors';
 import { LogBox, PermissionsAndroid, Platform, Vibration } from 'react-native';
 import DriverMatchingService from './DriverMatchingService';
 
@@ -57,6 +57,13 @@ class EventCaptureService {
    * Inicializa el servicio
    */
   async initialize(userId: string) {
+    // ✅ CRÍTICO: EventCaptureService no funciona en Web
+    if (Platform.OS === 'web') {
+      console.log('ℹ️ EventCaptureService deshabilitado en Web (solo disponible en móvil)');
+      this.currentUserId = userId; // Guardar userId pero no inicializar sensores
+      return;
+    }
+
     console.log('🔄 EventCaptureService.initialize() llamado');
     console.log('📋 userId recibido:', userId);
     console.log('📋 currentUserId anterior:', this.currentUserId);

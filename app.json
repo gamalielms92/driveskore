@@ -25,9 +25,12 @@
         "NSBluetoothAlwaysUsageDescription": "DriveSkore usa Bluetooth para conectar con tu botón de evaluación y detectar dispositivos cercanos para identificar conductores.",
         "NSBluetoothPeripheralUsageDescription": "DriveSkore usa Bluetooth para conectar con tu botón de evaluación.",
         "NSMotionUsageDescription": "DriveSkore usa sensores de movimiento para detectar tu velocidad y dirección al conducir.",
+        
         "UIBackgroundModes": [
           "location",
-          "fetch"
+          "fetch",
+          "bluetooth-central",
+          "remote-notification"
         ]
       },
       "config": {
@@ -49,7 +52,10 @@
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
         "VIBRATE",
-        "CAMERA"
+        "CAMERA",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED"
       ]
       //"config": {
       //  "googleMaps": {
@@ -73,12 +79,28 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."
         }
       ]
     ],
+    /*"notification": { para modificar el icono de notificacion
+      "icon": "./assets/notification-icon.png",
+      "color": "#2196F3",
+      "androidMode": "default",
+      "androidCollapsedTitle": "DriveSkore"
+    },*/
     "extra": {
       "eas": {
         "projectId": "439df021-c142-4d5b-8dad-2a0d5fbf18a5"
