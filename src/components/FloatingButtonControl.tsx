@@ -1,28 +1,141 @@
 // src/components/FloatingButtonControl.tsx
-// Componente UI para controlar el botón flotante
+// Versión segura que muestra mensaje si el módulo nativo no está disponible
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFloatingButton } from '../hooks/useFloatingButton';
+import FloatingButtonNative from '../services/FloatingButtonNative';
 
 export default function FloatingButtonControl() {
-  const {
-    isActive,
-    hasPermission,
-    isChecking,
-    toggleButton,
-    requestPermission,
-  } = useFloatingButton();
+  const [isActive, setIsActive] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  const [isAvailable, setIsAvailable] = useState(false);
+
+  useEffect(() => {
+    checkInitialState();
+  }, []);
+
+  const checkInitialState = async () => {
+    setIsChecking(true);
+    
+    // Verificar si el módulo nativo está disponible
+    const available = FloatingButtonNative.isAvailable();
+    setIsAvailable(available);
+    
+    if (!available) {
+      setIsChecking(false);
+      return;
+    }
+    
+    // Verificar permiso
+    const permission = await FloatingButtonNative.checkPermission();
+    setHasPermission(permission);
+    
+    // Verificar si el servicio está activo
+    if (permission) {
+      const running = await FloatingButtonNative.isRunning();
+      setIsActive(running);
+    }
+    
+    setIsChecking(false);
+  };
+
+  const handleRequestPermission = () => {
+    Alert.alert(
+      '🔐 Permiso Requerido',
+      'DriveSkore necesita permiso para mostrar el botón flotante sobre otras aplicaciones.\n\n' +
+      'Esto te permitirá capturar eventos mientras usas Google Maps u otras apps.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Conceder Permiso', 
+          onPress: () => {
+            FloatingButtonNative.requestPermission();
+            setTimeout(() => checkInitialState(), 2000);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleToggle = async () => {
+    if (!hasPermission) {
+      handleRequestPermission();
+      return;
+    }
+
+    try {
+      if (isActive) {
+        await FloatingButtonNative.stop();
+        setIsActive(false);
+      } else {
+        const started = await FloatingButtonNative.start();
+        if (started) {
+          setIsActive(true);
+          Alert.alert(
+            '✅ Botón Activo',
+            'El botón flotante está activo.\n\n' +
+            'Minimiza la aplicación o abre Google Maps para verlo en acción.',
+            [{ text: 'Entendido' }]
+          );
+        } else {
+          Alert.alert(
+            '❌ Error',
+            'No se pudo iniciar el botón flotante. Verifica los permisos.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    } catch (error) {
+      Alert.alert(
+        '❌ Error',
+        'No se pudo cambiar el estado del botón.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   if (Platform.OS !== 'android') {
     return (
       <View style={styles.container}>
         <View style={styles.unavailableCard}>
           <Text style={styles.unavailableIcon}>⚠️</Text>
-          <Text style={styles.unavailableTitle}>No Disponible</Text>
+          <Text style={styles.unavailableTitle}>Solo Android</Text>
           <Text style={styles.unavailableText}>
             El botón flotante solo está disponible en Android
           </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ⭐ NUEVO: Mostrar mensaje si el módulo nativo no está disponible
+  if (!isAvailable && !isChecking) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.notImplementedCard}>
+          <Text style={styles.notImplementedIcon}>🔧</Text>
+          <Text style={styles.notImplementedTitle}>Función en Desarrollo</Text>
+          <Text style={styles.notImplementedText}>
+            El botón flotante nativo está en desarrollo y estará disponible pronto.
+            {'\n\n'}
+            Por ahora, usa el AB Shutter 3 para captura rápida.
+          </Text>
+          <TouchableOpacity 
+            style={styles.infoButton}
+            onPress={() => {
+              Alert.alert(
+                'ℹ️ Información Técnica',
+                'El botón flotante requiere código nativo Kotlin que aún no está compilado en tu versión de la app.\n\n' +
+                'Estará disponible en una próxima actualización.',
+                [{ text: 'Entendido' }]
+              );
+            }}
+          >
+            <Text style={styles.infoButtonText}>
+              ℹ️ Más información
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -35,45 +148,6 @@ export default function FloatingButtonControl() {
       </View>
     );
   }
-
-  const handleRequestPermission = () => {
-    Alert.alert(
-      '🔐 Permiso Requerido',
-      'DriveSkore necesita permiso para mostrar el botón flotante sobre otras aplicaciones.\n\n' +
-      'Esto te permitirá capturar eventos mientras usas Google Maps u otras apps.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Conceder Permiso', onPress: requestPermission }
-      ]
-    );
-  };
-
-  const handleToggle = async () => {
-    if (!hasPermission) {
-      handleRequestPermission();
-      return;
-    }
-
-    try {
-      await toggleButton();
-      
-      if (!isActive) {
-        // Se acaba de activar
-        Alert.alert(
-          '✅ Botón Activo',
-          'El botón flotante está activo.\n\n' +
-          'Minimiza la aplicación o abre Google Maps para verlo en acción.',
-          [{ text: 'Entendido' }]
-        );
-      }
-    } catch (error) {
-      Alert.alert(
-        '❌ Error',
-        'No se pudo cambiar el estado del botón. Verifica los permisos.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -177,6 +251,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 20,
   },
+  controlSection: {
+    gap: 12,
+  },
+  toggleButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#FF3B30',
+  },
+  toggleButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   permissionSection: {
     backgroundColor: '#FFF3CD',
     padding: 20,
@@ -212,28 +308,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  controlSection: {
-    gap: 15,
-  },
-  toggleButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  toggleButtonActive: {
-    backgroundColor: '#FF3B30',
-  },
-  toggleButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   infoBox: {
     backgroundColor: '#E8F5E9',
@@ -280,5 +354,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  notImplementedCard: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  notImplementedIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  notImplementedTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF9500',
+    marginBottom: 12,
+  },
+  notImplementedText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  infoButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  infoButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -1,108 +1,21 @@
 // app/(tabs)/capture-settings.tsx
-// ✅ Pantalla para elegir método de captura: AB Shutter 3 o Botón Flotante
+// ✅ VERSIÓN FINAL: Botón Flotante Nativo + AB Shutter 3
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
-    Alert,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import FloatingCaptureButton from '../../src/components/FloatingCaptureButton';
-import ABShutter3Service from '../../src/services/ABShutter3Service';
-
-type CaptureMethod = 'ab-shutter' | 'floating-button' | 'none';
+import ABShutter3Control from '../../src/components/ABShutter3Control';
+import FloatingButtonControl from '../../src/components/FloatingButtonControl';
 
 export default function CaptureSettingsScreen() {
   const router = useRouter();
-  const [selectedMethod, setSelectedMethod] = useState<CaptureMethod>('none');
-  const [isABShutterActive, setIsABShutterActive] = useState(false);
-  const [isFloatingActive, setIsFloatingActive] = useState(false);
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('capture_method');
-      if (saved) {
-        const method = saved as CaptureMethod;
-        setSelectedMethod(method);
-        
-        if (method === 'ab-shutter') {
-          setIsABShutterActive(ABShutter3Service.isActive());
-        } else if (method === 'floating-button') {
-          setIsFloatingActive(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error cargando configuración:', error);
-    }
-  };
-
-  const saveSettings = async (method: CaptureMethod) => {
-    try {
-      await AsyncStorage.setItem('capture_method', method);
-    } catch (error) {
-      console.error('Error guardando configuración:', error);
-    }
-  };
-
-  const handleSelectABShutter = async () => {
-    // Desactivar flotante si estaba activo
-    if (isFloatingActive) {
-      setIsFloatingActive(false);
-    }
-
-    // Activar AB Shutter 3
-    if (!isABShutterActive) {
-      ABShutter3Service.startListening();
-      setIsABShutterActive(true);
-      setSelectedMethod('ab-shutter');
-      await saveSettings('ab-shutter');
-      
-      Alert.alert(
-        '✅ AB Shutter 3 Activado',
-        'Asegúrate de emparejar tu botón en Ajustes → Bluetooth de Android'
-      );
-    } else {
-      ABShutter3Service.stopListening();
-      setIsABShutterActive(false);
-      setSelectedMethod('none');
-      await saveSettings('none');
-    }
-  };
-
-  const handleSelectFloating = async () => {
-    // Desactivar AB Shutter si estaba activo
-    if (isABShutterActive) {
-      ABShutter3Service.stopListening();
-      setIsABShutterActive(false);
-    }
-
-    // Activar botón flotante
-    if (!isFloatingActive) {
-      setIsFloatingActive(true);
-      setSelectedMethod('floating-button');
-      await saveSettings('floating-button');
-      
-      Alert.alert(
-        '✅ Botón Flotante Activado',
-        'Verás un botón que puedes arrastrar. Presiónalo para capturar eventos.'
-      );
-    } else {
-      setIsFloatingActive(false);
-      setSelectedMethod('none');
-      await saveSettings('none');
-    }
-  };
 
   if (Platform.OS === 'web') {
     return (
@@ -115,107 +28,176 @@ export default function CaptureSettingsScreen() {
   }
 
   return (
-    <>
-      <ScrollView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backButton}>← Volver</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Método de Captura</Text>
+    <ScrollView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backButton}>← Volver</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Métodos de Captura</Text>
+      </View>
+
+      {/* Info General */}
+      <View style={styles.infoBox}>
+        <Text style={styles.infoIcon}>ℹ️</Text>
+        <Text style={styles.infoText}>
+          Elige cómo capturar eventos mientras conduces. Puedes usar ambos métodos simultáneamente.
+        </Text>
+      </View>
+
+      {/* Método 1: Botón Flotante Nativo */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🎯</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>Botón Flotante</Text>
+            <Text style={styles.sectionSubtitle}>Aparece sobre todas las apps</Text>
+          </View>
         </View>
+        <FloatingButtonControl />
+      </View>
 
-        {/* Info */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-          <Text style={styles.infoText}>
-            Elige cómo quieres capturar eventos mientras conduces. Solo puedes
-            tener uno activo a la vez.
-          </Text>
+      {/* Método 2: AB Shutter 3 */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🎮</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>AB Shutter 3</Text>
+            <Text style={styles.sectionSubtitle}>Mando Bluetooth (~5€)</Text>
+          </View>
         </View>
+        <ABShutter3Control />
+      </View>
 
-        {/* Opción 1: AB Shutter 3 */}
-        <View style={styles.section}>
-          <View style={styles.optionCard}>
-            <View style={styles.optionHeader}>
-              <Text style={styles.optionIcon}>🎮</Text>
-              <View style={styles.optionInfo}>
-                <Text style={styles.optionTitle}>AB Shutter 3</Text>
-                <Text style={styles.optionSubtitle}>
-                  Botón Bluetooth externo ($5-10)
-                </Text>
-              </View>
-              <Switch
-                value={isABShutterActive}
-                onValueChange={handleSelectABShutter}
-                trackColor={{ false: '#ccc', true: '#34C759' }}
-              />
-            </View>
+      {/* Comparación */}
+      <View style={styles.comparisonSection}>
+        <Text style={styles.comparisonTitle}>📊 Comparación Rápida</Text>
+        
+        <View style={styles.comparisonTable}>
+          <View style={styles.comparisonHeader}>
+            <Text style={styles.comparisonHeaderCell}>Característica</Text>
+            <Text style={styles.comparisonHeaderCell}>🎯 Flotante</Text>
+            <Text style={styles.comparisonHeaderCell}>🎮 AB Shutter</Text>
+          </View>
 
-            <View style={styles.optionDetails}>
-              <Text style={styles.detailTitle}>Ventajas:</Text>
-              <Text style={styles.detailItem}>✅ Sin tocar el teléfono</Text>
-              <Text style={styles.detailItem}>✅ 100% legal mientras conduces</Text>
-              <Text style={styles.detailItem}>✅ Muy económico</Text>
-              
-              <Text style={styles.detailTitle}>Requisitos:</Text>
-              <Text style={styles.detailItem}>
-                • Comprar AB Shutter 3 (Amazon/AliExpress)
-              </Text>
-              <Text style={styles.detailItem}>
-                • Emparejar en Ajustes → Bluetooth
-              </Text>
-            </View>
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Costo</Text>
+            <Text style={styles.comparisonValue}>Gratis</Text>
+            <Text style={styles.comparisonValue}>~5€</Text>
+          </View>
+
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Hardware extra</Text>
+            <Text style={styles.comparisonValue}>❌ No</Text>
+            <Text style={styles.comparisonValue}>✅ Sí</Text>
+          </View>
+
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Tocar pantalla</Text>
+            <Text style={styles.comparisonValue}>Sí</Text>
+            <Text style={styles.comparisonValue}>No</Text>
+          </View>
+
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Funciona sobre Maps</Text>
+            <Text style={styles.comparisonValue}>✅ Sí</Text>
+            <Text style={styles.comparisonValue}>✅ Sí</Text>
+          </View>
+
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Con guantes</Text>
+            <Text style={styles.comparisonValue}>❌ No</Text>
+            <Text style={styles.comparisonValue}>✅ Sí</Text>
+          </View>
+
+          <View style={styles.comparisonRow}>
+            <Text style={styles.comparisonLabel}>Setup</Text>
+            <Text style={styles.comparisonValue}>1 min</Text>
+            <Text style={styles.comparisonValue}>2 min</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Recomendaciones */}
+      <View style={styles.recommendationsSection}>
+        <Text style={styles.recommendationsTitle}>💡 ¿Cuál usar?</Text>
+
+        <View style={styles.recommendationCard}>
+          <Text style={styles.recommendationIcon}>🎯</Text>
+          <View style={styles.recommendationContent}>
+            <Text style={styles.recommendationTitle}>Botón Flotante</Text>
+            <Text style={styles.recommendationText}>
+              Ideal si quieres empezar rápido sin comprar nada. Perfecto para probar DriveSkore.
+            </Text>
+            <Text style={styles.recommendationBest}>
+              ✨ Mejor para: Principiantes, uso ocasional
+            </Text>
           </View>
         </View>
 
-        {/* Opción 2: Botón Flotante */}
-        <View style={styles.section}>
-          <View style={styles.optionCard}>
-            <View style={styles.optionHeader}>
-              <Text style={styles.optionIcon}>🎯</Text>
-              <View style={styles.optionInfo}>
-                <Text style={styles.optionTitle}>Botón Flotante</Text>
-                <Text style={styles.optionSubtitle}>
-                  Botón en pantalla (gratis)
-                </Text>
-              </View>
-              <Switch
-                value={isFloatingActive}
-                onValueChange={handleSelectFloating}
-                trackColor={{ false: '#ccc', true: '#34C759' }}
-              />
-            </View>
-
-            <View style={styles.optionDetails}>
-              <Text style={styles.detailTitle}>Ventajas:</Text>
-              <Text style={styles.detailItem}>✅ No requiere hardware adicional</Text>
-              <Text style={styles.detailItem}>✅ Gratis</Text>
-              <Text style={styles.detailItem}>✅ Se puede mover en pantalla</Text>
-              
-              <Text style={styles.detailTitle}>Requisitos:</Text>
-              <Text style={styles.detailItem}>• Ninguno</Text>
-            </View>
+        <View style={styles.recommendationCard}>
+          <Text style={styles.recommendationIcon}>🎮</Text>
+          <View style={styles.recommendationContent}>
+            <Text style={styles.recommendationTitle}>AB Shutter 3</Text>
+            <Text style={styles.recommendationText}>
+              Más seguro y cómodo. No necesitas tocar el teléfono mientras conduces.
+            </Text>
+            <Text style={styles.recommendationBest}>
+              ✨ Mejor para: Conductores frecuentes, máxima seguridad
+            </Text>
           </View>
         </View>
 
-        {/* Estado actual */}
-        <View style={styles.statusBox}>
-          <Text style={styles.statusTitle}>Estado Actual:</Text>
-          <Text style={styles.statusText}>
-            {selectedMethod === 'ab-shutter' && '🎮 AB Shutter 3 Activo'}
-            {selectedMethod === 'floating-button' && '🎯 Botón Flotante Activo'}
-            {selectedMethod === 'none' && '⏸️ Ningún método activo'}
+        <View style={styles.recommendationCard}>
+          <Text style={styles.recommendationIcon}>⭐</Text>
+          <View style={styles.recommendationContent}>
+            <Text style={styles.recommendationTitle}>Usa Ambos</Text>
+            <Text style={styles.recommendationText}>
+              Activa los dos. Usa el flotante cuando no tengas el mando a mano.
+            </Text>
+            <Text style={styles.recommendationBest}>
+              ✨ Mejor para: Máxima flexibilidad
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Consejos */}
+      <View style={styles.tipsSection}>
+        <Text style={styles.tipsTitle}>🎓 Consejos de Uso</Text>
+        
+        <View style={styles.tipItem}>
+          <Text style={styles.tipIcon}>🚗</Text>
+          <Text style={styles.tipText}>
+            Activa el método antes de empezar a conducir
           </Text>
         </View>
-      </ScrollView>
 
-      {/* Botón flotante (si está activo) */}
-      <FloatingCaptureButton
-        isActive={isFloatingActive}
-        onToggle={() => setIsFloatingActive(!isFloatingActive)}
-      />
-    </>
+        <View style={styles.tipItem}>
+          <Text style={styles.tipIcon}>🗺️</Text>
+          <Text style={styles.tipText}>
+            Ambos funcionan sobre Google Maps y Waze
+          </Text>
+        </View>
+
+        <View style={styles.tipItem}>
+          <Text style={styles.tipIcon}>🔋</Text>
+          <Text style={styles.tipText}>
+            El flotante consume menos batería que el AB Shutter
+          </Text>
+        </View>
+
+        <View style={styles.tipItem}>
+          <Text style={styles.tipIcon}>⚖️</Text>
+          <Text style={styles.tipText}>
+            Ambos son 100% legales mientras conduces (no tocas pantalla)
+          </Text>
+        </View>
+      </View>
+
+      {/* Footer espaciador */}
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 }
 
@@ -247,7 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F2FD',
     padding: 16,
     margin: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'flex-start',
   },
   infoIcon: {
@@ -262,75 +244,156 @@ const styles = StyleSheet.create({
   },
   section: {
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  optionCard: {
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  sectionTitleContainer: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  comparisonSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
     backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 16,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
-  optionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  optionIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  optionInfo: {
-    flex: 1,
-  },
-  optionTitle: {
+  comparisonTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 16,
   },
-  optionSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
+  comparisonTable: {
+    gap: 8,
   },
-  optionDetails: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  detailTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  detailItem: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 4,
-    paddingLeft: 8,
-  },
-  statusBox: {
-    backgroundColor: '#FFF3E0',
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  statusTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F57C00',
+  comparisonHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 2,
+    borderBottomColor: '#e0e0e0',
+    paddingBottom: 8,
     marginBottom: 8,
   },
-  statusText: {
+  comparisonHeaderCell: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  comparisonLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: '#333',
+  },
+  comparisonValue: {
+    flex: 1,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  recommendationsSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+  },
+  recommendationsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  recommendationCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  recommendationIcon: {
+    fontSize: 36,
+    marginRight: 12,
+  },
+  recommendationContent: {
+    flex: 1,
+  },
+  recommendationTitle: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  recommendationText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  recommendationBest: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  tipsSection: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    backgroundColor: '#FFF3E0',
+    padding: 16,
+    borderRadius: 12,
+  },
+  tipsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#E65100',
+    marginBottom: 12,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  tipIcon: {
+    fontSize: 20,
+    marginRight: 10,
+    marginTop: 2,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 18,
   },
   webMessage: {
     textAlign: 'center',

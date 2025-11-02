@@ -1,6 +1,7 @@
 // src/services/FloatingButtonNative.ts
+// Versión segura que no crashea si el módulo nativo no está compilado
 
-import { NativeModules, NativeEventEmitter, DeviceEventEmitter, Platform } from 'react-native';
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
 
 const { FloatingButton } = NativeModules;
 
@@ -11,16 +12,24 @@ export interface FloatingButtonManager {
   stop(): Promise<boolean>;
   isRunning(): Promise<boolean>;
   onCaptureEvent(callback: () => void): () => void;
+  isAvailable(): boolean;
 }
 
 class FloatingButtonNativeManager implements FloatingButtonManager {
   
   /**
+   * Verifica si el módulo nativo está disponible
+   */
+  isAvailable(): boolean {
+    return Platform.OS === 'android' && FloatingButton !== null && FloatingButton !== undefined;
+  }
+
+  /**
    * Verificar si tenemos permiso para dibujar sobre otras apps
    */
   async checkPermission(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
-      console.warn('FloatingButton solo está disponible en Android');
+    if (!this.isAvailable()) {
+      console.warn('⚠️ FloatingButton módulo nativo no disponible');
       return false;
     }
     
@@ -35,11 +44,10 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
 
   /**
    * Solicitar permiso para dibujar sobre otras apps
-   * Abre la configuración del sistema para que el usuario conceda el permiso
    */
   requestPermission(): void {
-    if (Platform.OS !== 'android') {
-      console.warn('FloatingButton solo está disponible en Android');
+    if (!this.isAvailable()) {
+      console.warn('⚠️ FloatingButton módulo nativo no disponible');
       return;
     }
     
@@ -52,16 +60,14 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
 
   /**
    * Iniciar el servicio del botón flotante
-   * @returns Promise que resuelve true si se inició correctamente
    */
   async start(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
-      console.warn('FloatingButton solo está disponible en Android');
+    if (!this.isAvailable()) {
+      console.warn('⚠️ FloatingButton módulo nativo no disponible');
       return false;
     }
     
     try {
-      // Verificar permiso primero
       const hasPermission = await this.checkPermission();
       if (!hasPermission) {
         console.warn('No hay permiso para mostrar el botón flotante');
@@ -79,11 +85,9 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
 
   /**
    * Detener el servicio del botón flotante
-   * @returns Promise que resuelve true si se detuvo correctamente
    */
   async stop(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
-      console.warn('FloatingButton solo está disponible en Android');
+    if (!this.isAvailable()) {
       return false;
     }
     
@@ -99,10 +103,9 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
 
   /**
    * Verificar si el servicio está actualmente en ejecución
-   * @returns Promise que resuelve true si el servicio está activo
    */
   async isRunning(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
+    if (!this.isAvailable()) {
       return false;
     }
     
@@ -117,11 +120,9 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
 
   /**
    * Escuchar eventos de captura desde el botón flotante nativo
-   * @param callback Función que se ejecuta cuando el usuario toca el botón
-   * @returns Función para desuscribirse del evento
    */
   onCaptureEvent(callback: () => void): () => void {
-    if (Platform.OS !== 'android') {
+    if (!this.isAvailable()) {
       return () => {};
     }
     
