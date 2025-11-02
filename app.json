@@ -75,6 +75,7 @@
         }
       ],
       "expo-notifications",
+      ["./plugin/withFloatingButton.js"],
       [
         "expo-camera",
         {
