@@ -122,7 +122,17 @@ class FloatingButtonModule(private val reactContext: ReactApplicationContext) :
         }
         
         val filter = IntentFilter("com.driveskore.app.CAPTURE_EVENT")
-        reactContext.registerReceiver(captureEventReceiver, filter)
+        
+        // ✅ CORRECCIÓN: Especificar RECEIVER_NOT_EXPORTED para Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            reactContext.registerReceiver(
+                captureEventReceiver, 
+                filter, 
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            reactContext.registerReceiver(captureEventReceiver, filter)
+        }
     }
 
     override fun onCatalystInstanceDestroy() {
