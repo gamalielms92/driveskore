@@ -1,10 +1,11 @@
 // app/_layout.tsx
-// EJEMPLO COMPLETO: Inicialización de EventCaptureService con sesión persistente
+// ✅ ACTUALIZADO: Con VolumeButtonService para AB Shutter 3
 
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { supabase } from '../src/config/supabase';
+import ABShutter3Service from '../src/services/ABShutter3Service';
 import EventCaptureService from '../src/services/EventCaptureService';
 
 export default function RootLayout() {
@@ -47,6 +48,10 @@ export default function RootLayout() {
         await EventCaptureService.initialize(session.user.id);
         console.log('✅ EventCaptureService inicializado al arranque');
         
+        // Inicializar ABShutter3Service
+        await ABShutter3Service.initialize(session.user.id);
+        console.log('✅ ABShutter3Service inicializado');
+        
         setIsAuthenticated(true);
       } else {
         console.log('ℹ️ No hay sesión persistente');
@@ -66,6 +71,10 @@ export default function RootLayout() {
             await EventCaptureService.initialize(session.user.id);
             console.log('✅ EventCaptureService inicializado');
             
+            // Inicializar ABShutter3Service
+            await ABShutter3Service.initialize(session.user.id);
+            console.log('✅ ABShutter3Service listo');
+            
             setIsAuthenticated(true);
           }
           
@@ -75,6 +84,10 @@ export default function RootLayout() {
             // Limpiar EventCaptureService
             EventCaptureService.cleanup();
             console.log('🧹 EventCaptureService limpiado');
+            
+            // Limpiar ABShutter3Service
+            ABShutter3Service.cleanup();
+            console.log('🧹 ABShutter3Service limpiado');
             
             setIsAuthenticated(false);
           }

@@ -55,6 +55,16 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👤</Text>,
         }}
       />
+
+      <Tabs.Screen
+        name="capture-settings"
+        options={{
+          title: 'Captura',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
+          href: Platform.OS === 'web' ? null : undefined,
+        }}
+      />
+
     </Tabs>
   );
 }
