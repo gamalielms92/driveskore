@@ -56,7 +56,8 @@
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
-        "SYSTEM_ALERT_WINDOW"
+        "SYSTEM_ALERT_WINDOW",
+        "FOREGROUND_SERVICE_SPECIAL_USE"
       ]
     },
     "web": {

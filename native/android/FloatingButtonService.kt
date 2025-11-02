@@ -42,11 +42,21 @@ class FloatingButtonService : Service() {
         private const val CLICK_THRESHOLD = 10f
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        createNotificationChannel()
+override fun onCreate() {
+    super.onCreate()
+    createNotificationChannel()
+    
+    // ✅ CORRECCIÓN: Especificar tipo de servicio para Android 14+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        startForeground(
+            NOTIFICATION_ID, 
+            createNotification(),
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
+    } else {
         startForeground(NOTIFICATION_ID, createNotification())
     }
+}
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (floatingView == null) {

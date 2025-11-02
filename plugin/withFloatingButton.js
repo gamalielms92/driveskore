@@ -14,7 +14,8 @@ module.exports = function withFloatingButton(config) {
     
     const permissions = [
       'android.permission.SYSTEM_ALERT_WINDOW',
-      'android.permission.FOREGROUND_SERVICE'
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_SPECIAL_USE'  // ← AÑADIDO
     ];
 
     permissions.forEach(permission => {
@@ -29,7 +30,7 @@ module.exports = function withFloatingButton(config) {
       }
     });
 
-    // Añadir servicio
+    // Añadir servicio con foregroundServiceType
     if (!manifest.application[0].service) {
       manifest.application[0].service = [];
     }
@@ -43,7 +44,8 @@ module.exports = function withFloatingButton(config) {
         $: {
           'android:name': '.FloatingButtonService',
           'android:enabled': 'true',
-          'android:exported': 'false'
+          'android:exported': 'false',
+          'android:foregroundServiceType': 'specialUse'  // ← AÑADIDO
         }
       });
       console.log('✅ Servicio FloatingButtonService añadido al manifest');
@@ -60,7 +62,6 @@ module.exports = function withFloatingButton(config) {
       
       console.log('\n🔍 Configurando botón flotante...');
       
-      // Ruta donde copiar los archivos Kotlin
       const androidPath = path.join(
         projectRoot, 
         'android', 
@@ -73,12 +74,10 @@ module.exports = function withFloatingButton(config) {
         'app'
       );
 
-      // Crear directorio si no existe
       if (!fs.existsSync(androidPath)) {
         fs.mkdirSync(androidPath, { recursive: true });
       }
 
-      // Copiar archivos Kotlin
       const nativeFilesPath = path.join(projectRoot, 'native', 'android');
       const files = [
         'FloatingButtonModule.kt',
@@ -98,16 +97,13 @@ module.exports = function withFloatingButton(config) {
         }
       });
 
-      // Modificar MainApplication.kt
       const mainAppPath = path.join(androidPath, 'MainApplication.kt');
       
       if (fs.existsSync(mainAppPath)) {
         let content = fs.readFileSync(mainAppPath, 'utf8');
         let modified = false;
         
-        // Añadir import si no existe
         if (!content.includes('FloatingButtonPackage')) {
-          // Añadir después de los imports de expo
           content = content.replace(
             'import expo.modules.ReactNativeHostWrapper',
             'import expo.modules.ReactNativeHostWrapper\nimport com.driveskore.app.FloatingButtonPackage'
@@ -116,21 +112,12 @@ module.exports = function withFloatingButton(config) {
           console.log('✅ Import añadido');
         }
 
-        // Añadir package dentro del .apply { }
         if (!content.includes('add(FloatingButtonPackage())')) {
-          // Buscar el bloque .apply y añadir antes del cierre
-          content = content.replace(
-            /PackageList\(this\)\.packages\.apply \{\s*\/\/ Packages that cannot be autolinked/,
-            `PackageList(this).packages.apply {
-              // Packages that cannot be autolinked`
-          );
-          
           content = content.replace(
             /\/\/ add\(MyReactNativePackage\(\)\)/,
             `// add(MyReactNativePackage())
               add(FloatingButtonPackage())`
           );
-          
           modified = true;
           console.log('✅ Package añadido');
         }
