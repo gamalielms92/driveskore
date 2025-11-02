@@ -234,11 +234,15 @@ override fun onCreate() {
     private fun handleCaptureClick() {
         android.util.Log.e("FLOATING_SERVICE", "========== HANDLE CAPTURE CLICK ==========")
         
-        // Enviar broadcast a React Native
-        val intent = Intent("com.driveskore.app.CAPTURE_EVENT")
-        sendBroadcast(intent)
-        
-        android.util.Log.e("FLOATING_SERVICE", "========== BROADCAST ENVIADO ==========")
+            
+    // ✅ BROADCAST EXPLÍCITO (con package y component)
+    val intent = Intent("com.driveskore.app.CAPTURE_EVENT").apply {
+        setPackage(packageName)  // Especificar el package de la app
+    }
+    
+    sendBroadcast(intent)
+    
+    android.util.Log.e("FLOATING_SERVICE", "========== BROADCAST ENVIADO (paquete: $packageName) ==========")
         
         // Feedback visual...
         buttonImage?.let { button ->
