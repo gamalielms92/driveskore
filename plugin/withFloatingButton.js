@@ -1,4 +1,4 @@
-const { withAndroidManifest, withMainApplication } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -9,7 +9,7 @@ module.exports = function withFloatingButton(config) {
     const { manifest } = androidManifest;
 
     // Añadir permisos
-    if (!manifest.$ ) manifest.$ = {};
+    if (!manifest.$) manifest.$ = {};
     if (!manifest['uses-permission']) manifest['uses-permission'] = [];
     
     const permissions = [
@@ -25,6 +25,7 @@ module.exports = function withFloatingButton(config) {
         manifest['uses-permission'].push({
           $: { 'android:name': permission }
         });
+        console.log(`✅ Permiso añadido: ${permission}`);
       }
     });
 
@@ -45,67 +46,108 @@ module.exports = function withFloatingButton(config) {
           'android:exported': 'false'
         }
       });
+      console.log('✅ Servicio FloatingButtonService añadido al manifest');
     }
 
     return config;
   });
 
-  // 2. Copiar archivos Kotlin
-  config = withMainApplication(config, async (config) => {
-    const projectRoot = config.modRequest.projectRoot;
-    const androidPath = path.join(projectRoot, 'android', 'app', 'src', 'main', 'java', 'com', 'driveskore');
-
-    // Crear directorio si no existe
-    if (!fs.existsSync(androidPath)) {
-      fs.mkdirSync(androidPath, { recursive: true });
-    }
-
-    // Copiar archivos Kotlin desde la carpeta native/
-    const nativeFilesPath = path.join(projectRoot, 'native', 'android');
-    const files = [
-      'FloatingButtonModule.kt',
-      'FloatingButtonPackage.kt', 
-      'FloatingButtonService.kt'
-    ];
-
-    files.forEach(file => {
-      const source = path.join(nativeFilesPath, file);
-      const dest = path.join(androidPath, file);
+  // 2. Copiar archivos Kotlin y modificar MainApplication
+  config = withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const projectRoot = config.modRequest.projectRoot;
       
-      if (fs.existsSync(source)) {
-        fs.copyFileSync(source, dest);
-        console.log(`✅ Copiado: ${file}`);
-      }
-    });
-
-    // Modificar MainApplication para registrar el package
-    const mainAppPath = path.join(androidPath, 'MainApplication.kt');
-    
-    if (fs.existsSync(mainAppPath)) {
-      let content = fs.readFileSync(mainAppPath, 'utf8');
+      console.log('\n🔍 Configurando botón flotante...');
       
-      // Añadir import si no existe
-      if (!content.includes('import com.driveskore.FloatingButtonPackage')) {
-        content = content.replace(
-          'import expo.modules.ApplicationLifecycleDispatcher',
-          'import expo.modules.ApplicationLifecycleDispatcher\nimport com.driveskore.FloatingButtonPackage'
-        );
+      // Ruta donde copiar los archivos Kotlin
+      const androidPath = path.join(
+        projectRoot, 
+        'android', 
+        'app', 
+        'src', 
+        'main', 
+        'java', 
+        'com', 
+        'driveskore',
+        'app'
+      );
+
+      // Crear directorio si no existe
+      if (!fs.existsSync(androidPath)) {
+        fs.mkdirSync(androidPath, { recursive: true });
       }
 
-      // Añadir package a la lista si no existe
-      if (!content.includes('packages.add(FloatingButtonPackage())')) {
-        content = content.replace(
-          'return packages',
-          'packages.add(FloatingButtonPackage())\n      return packages'
-        );
+      // Copiar archivos Kotlin
+      const nativeFilesPath = path.join(projectRoot, 'native', 'android');
+      const files = [
+        'FloatingButtonModule.kt',
+        'FloatingButtonPackage.kt', 
+        'FloatingButtonService.kt'
+      ];
+
+      files.forEach(file => {
+        const source = path.join(nativeFilesPath, file);
+        const dest = path.join(androidPath, file);
+        
+        if (fs.existsSync(source)) {
+          fs.copyFileSync(source, dest);
+          console.log(`✅ Copiado: ${file}`);
+        } else {
+          console.warn(`⚠️ No encontrado: ${source}`);
+        }
+      });
+
+      // Modificar MainApplication.kt
+      const mainAppPath = path.join(androidPath, 'MainApplication.kt');
+      
+      if (fs.existsSync(mainAppPath)) {
+        let content = fs.readFileSync(mainAppPath, 'utf8');
+        let modified = false;
+        
+        // Añadir import si no existe
+        if (!content.includes('FloatingButtonPackage')) {
+          // Añadir después de los imports de expo
+          content = content.replace(
+            'import expo.modules.ReactNativeHostWrapper',
+            'import expo.modules.ReactNativeHostWrapper\nimport com.driveskore.app.FloatingButtonPackage'
+          );
+          modified = true;
+          console.log('✅ Import añadido');
+        }
+
+        // Añadir package dentro del .apply { }
+        if (!content.includes('add(FloatingButtonPackage())')) {
+          // Buscar el bloque .apply y añadir antes del cierre
+          content = content.replace(
+            /PackageList\(this\)\.packages\.apply \{\s*\/\/ Packages that cannot be autolinked/,
+            `PackageList(this).packages.apply {
+              // Packages that cannot be autolinked`
+          );
+          
+          content = content.replace(
+            /\/\/ add\(MyReactNativePackage\(\)\)/,
+            `// add(MyReactNativePackage())
+              add(FloatingButtonPackage())`
+          );
+          
+          modified = true;
+          console.log('✅ Package añadido');
+        }
+
+        if (modified) {
+          fs.writeFileSync(mainAppPath, content);
+          console.log('✅ MainApplication.kt modificado\n');
+        } else {
+          console.log('ℹ️ MainApplication.kt ya está configurado\n');
+        }
+      } else {
+        console.error(`❌ MainApplication.kt no encontrado\n`);
       }
 
-      fs.writeFileSync(mainAppPath, content);
-      console.log('✅ MainApplication.kt modificado');
-    }
-
-    return config;
-  });
+      return config;
+    },
+  ]);
 
   return config;
 };
