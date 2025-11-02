@@ -118,21 +118,32 @@ class FloatingButtonNativeManager implements FloatingButtonManager {
     }
   }
 
-  /**
-   * Escuchar eventos de captura desde el botón flotante nativo
-   */
-  onCaptureEvent(callback: () => void): () => void {
-    if (!this.isAvailable()) {
-      return () => {};
-    }
-    
-    const subscription = DeviceEventEmitter.addListener(
-      'onFloatingButtonCapture',
-      callback
-    );
-    
-    return () => subscription.remove();
+/**
+ * Escuchar eventos de captura desde el botón flotante nativo
+ */
+onCaptureEvent(callback: () => void): () => void {
+  if (!this.isAvailable()) {
+    console.warn('⚠️ No se puede escuchar eventos: módulo no disponible');
+    return () => {};
   }
+  
+  console.log('👂 Registrando listener para: onFloatingButtonCapture');
+  
+  const subscription = DeviceEventEmitter.addListener(
+    'onFloatingButtonCapture',
+    () => {
+      console.log('📡 ============ EVENTO RECIBIDO EN JAVASCRIPT ============');
+      callback();
+    }
+  );
+  
+  console.log('✅ Listener registrado correctamente');
+  
+  return () => {
+    console.log('🛑 Removiendo listener de onFloatingButtonCapture');
+    subscription.remove();
+  };
+}
 }
 
 export default new FloatingButtonNativeManager();

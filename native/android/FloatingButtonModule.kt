@@ -113,17 +113,29 @@ class FloatingButtonModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun registerCaptureEventReceiver() {
+        android.util.Log.e("FLOATING_MODULE", "===== REGISTRANDO RECEIVER =====")
+        
         captureEventReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("onFloatingButtonCapture", null)
+                android.util.Log.e("FLOATING_MODULE", "========== BROADCAST RECIBIDO ==========")
+                
+                try {
+                    reactContext
+                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                        .emit("onFloatingButtonCapture", null)
+                    
+                    android.util.Log.e("FLOATING_MODULE", "========== EVENTO EMITIDO A JS ==========")
+                } catch (e: Exception) {
+                    android.util.Log.e("FLOATING_MODULE", "ERROR al emitir evento: ${e.message}")
+                    e.printStackTrace()
+                }
             }
         }
         
         val filter = IntentFilter("com.driveskore.app.CAPTURE_EVENT")
         
-        // ✅ CORRECCIÓN: Especificar RECEIVER_NOT_EXPORTED para Android 13+
+        android.util.Log.e("FLOATING_MODULE", "Filter action: ${filter.getAction(0)}")
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             reactContext.registerReceiver(
                 captureEventReceiver, 
@@ -133,6 +145,8 @@ class FloatingButtonModule(private val reactContext: ReactApplicationContext) :
         } else {
             reactContext.registerReceiver(captureEventReceiver, filter)
         }
+        
+        android.util.Log.e("FLOATING_MODULE", "===== RECEIVER REGISTRADO =====")
     }
 
     override fun onCatalystInstanceDestroy() {

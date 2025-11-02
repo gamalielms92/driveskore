@@ -28,18 +28,72 @@ export function useFloatingButton(): UseFloatingButtonResult {
     checkInitialState();
   }, []);
 
+  // ✅ CORRECCIÓN: Usar useCallback para mantener referencia estable
+  const handleCaptureFromNative = useCallback(async () => {
+    try {
+      console.log('🎯 Captura activada desde botón flotante nativo');
+      console.log('🔍 EventCaptureService disponible:', !!EventCaptureService);
+      
+      // Notificación de inicio
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📸 Capturando Evento...',
+          body: 'Procesando información del incidente',
+          sound: true,
+        },
+        trigger: null,
+      });
+
+      // Capturar evento
+      console.log('⏳ Llamando a EventCaptureService.captureEvent...');
+      const event = await EventCaptureService.captureEvent('car');
+      console.log('✅ Evento capturado:', event.id);
+
+      // Notificación de éxito
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '✅ Evento Capturado',
+          body: `ID: ${event.id.slice(0, 8)}... - Revísalo en Eventos Pendientes`,
+          data: { eventId: event.id },
+          sound: true,
+        },
+        trigger: null,
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error capturando desde botón flotante:', error);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error stack:', error?.stack);
+      
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '❌ Error al Capturar',
+          body: `No se pudo guardar: ${error?.message || 'Error desconocido'}`,
+          sound: true,
+        },
+        trigger: null,
+      });
+    }
+  }, []); // Sin dependencias porque EventCaptureService es singleton
+
   // Escuchar eventos de captura del botón nativo
   useEffect(() => {
     if (Platform.OS !== 'android') {
       return;
     }
 
+    console.log('👂 Registrando listener de eventos del botón flotante');
+    
     const unsubscribe = FloatingButtonNative.onCaptureEvent(() => {
+      console.log('📡 Evento recibido desde módulo nativo');
       handleCaptureFromNative();
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      console.log('🛑 Desregistrando listener del botón flotante');
+      unsubscribe();
+    };
+  }, [handleCaptureFromNative]); // ✅ Añadir como dependencia
 
   const checkInitialState = async () => {
     setIsChecking(true);
@@ -125,49 +179,6 @@ export function useFloatingButton(): UseFloatingButtonResult {
       await stopButton();
     } else {
       await startButton();
-    }
-  };
-
-  const handleCaptureFromNative = async () => {
-    try {
-      console.log('🎯 Captura activada desde botón flotante nativo');
-      
-      // Notificación de inicio
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '📸 Capturando Evento...',
-          body: 'Procesando información del incidente',
-          sound: true,
-        },
-        trigger: null,
-      });
-
-      // Capturar evento
-      const event = await EventCaptureService.captureEvent('car');
-      console.log('✅ Evento capturado:', event.id);
-
-      // Notificación de éxito
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '✅ Evento Capturado',
-          body: `ID: ${event.id.slice(0, 8)}... - Revísalo en Eventos Pendientes`,
-          data: { eventId: event.id },
-          sound: true,
-        },
-        trigger: null,
-      });
-
-    } catch (error) {
-      console.error('❌ Error capturando desde botón flotante:', error);
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: '❌ Error al Capturar',
-          body: 'No se pudo guardar el evento. Intenta de nuevo.',
-          sound: true,
-        },
-        trigger: null,
-      });
     }
   };
 

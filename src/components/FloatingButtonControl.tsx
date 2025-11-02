@@ -1,141 +1,29 @@
 // src/components/FloatingButtonControl.tsx
-// Versión segura que muestra mensaje si el módulo nativo no está disponible
+// Componente UI para controlar el botón flotante
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import FloatingButtonNative from '../services/FloatingButtonNative';
+import { useFloatingButton } from '../hooks/useFloatingButton'; // ✅ IMPORTAR EL HOOK
 
 export default function FloatingButtonControl() {
-  const [isActive, setIsActive] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAvailable, setIsAvailable] = useState(false);
-
-  useEffect(() => {
-    checkInitialState();
-  }, []);
-
-  const checkInitialState = async () => {
-    setIsChecking(true);
-    
-    // Verificar si el módulo nativo está disponible
-    const available = FloatingButtonNative.isAvailable();
-    setIsAvailable(available);
-    
-    if (!available) {
-      setIsChecking(false);
-      return;
-    }
-    
-    // Verificar permiso
-    const permission = await FloatingButtonNative.checkPermission();
-    setHasPermission(permission);
-    
-    // Verificar si el servicio está activo
-    if (permission) {
-      const running = await FloatingButtonNative.isRunning();
-      setIsActive(running);
-    }
-    
-    setIsChecking(false);
-  };
-
-  const handleRequestPermission = () => {
-    Alert.alert(
-      '🔐 Permiso Requerido',
-      'DriveSkore necesita permiso para mostrar el botón flotante sobre otras aplicaciones.\n\n' +
-      'Esto te permitirá capturar eventos mientras usas Google Maps u otras apps.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Conceder Permiso', 
-          onPress: () => {
-            FloatingButtonNative.requestPermission();
-            setTimeout(() => checkInitialState(), 2000);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleToggle = async () => {
-    if (!hasPermission) {
-      handleRequestPermission();
-      return;
-    }
-
-    try {
-      if (isActive) {
-        await FloatingButtonNative.stop();
-        setIsActive(false);
-      } else {
-        const started = await FloatingButtonNative.start();
-        if (started) {
-          setIsActive(true);
-          Alert.alert(
-            '✅ Botón Activo',
-            'El botón flotante está activo.\n\n' +
-            'Minimiza la aplicación o abre Google Maps para verlo en acción.',
-            [{ text: 'Entendido' }]
-          );
-        } else {
-          Alert.alert(
-            '❌ Error',
-            'No se pudo iniciar el botón flotante. Verifica los permisos.',
-            [{ text: 'OK' }]
-          );
-        }
-      }
-    } catch (error) {
-      Alert.alert(
-        '❌ Error',
-        'No se pudo cambiar el estado del botón.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
+  // ✅ USAR EL HOOK EN LUGAR DE ESTADO LOCAL
+  const {
+    isActive,
+    hasPermission,
+    isChecking,
+    toggleButton,
+    requestPermission,
+  } = useFloatingButton();
 
   if (Platform.OS !== 'android') {
     return (
       <View style={styles.container}>
         <View style={styles.unavailableCard}>
           <Text style={styles.unavailableIcon}>⚠️</Text>
-          <Text style={styles.unavailableTitle}>Solo Android</Text>
+          <Text style={styles.unavailableTitle}>No Disponible</Text>
           <Text style={styles.unavailableText}>
             El botón flotante solo está disponible en Android
           </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // ⭐ NUEVO: Mostrar mensaje si el módulo nativo no está disponible
-  if (!isAvailable && !isChecking) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.notImplementedCard}>
-          <Text style={styles.notImplementedIcon}>🔧</Text>
-          <Text style={styles.notImplementedTitle}>Función en Desarrollo</Text>
-          <Text style={styles.notImplementedText}>
-            El botón flotante nativo está en desarrollo y estará disponible pronto.
-            {'\n\n'}
-            Por ahora, usa el AB Shutter 3 para captura rápida.
-          </Text>
-          <TouchableOpacity 
-            style={styles.infoButton}
-            onPress={() => {
-              Alert.alert(
-                'ℹ️ Información Técnica',
-                'El botón flotante requiere código nativo Kotlin que aún no está compilado en tu versión de la app.\n\n' +
-                'Estará disponible en una próxima actualización.',
-                [{ text: 'Entendido' }]
-              );
-            }}
-          >
-            <Text style={styles.infoButtonText}>
-              ℹ️ Más información
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -148,6 +36,45 @@ export default function FloatingButtonControl() {
       </View>
     );
   }
+
+  const handleRequestPermission = () => {
+    Alert.alert(
+      '🔐 Permiso Requerido',
+      'DriveSkore necesita permiso para mostrar el botón flotante sobre otras aplicaciones.\n\n' +
+      'Esto te permitirá capturar eventos mientras usas Google Maps u otras apps.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Conceder Permiso', onPress: requestPermission }
+      ]
+    );
+  };
+
+  const handleToggle = async () => {
+    if (!hasPermission) {
+      handleRequestPermission();
+      return;
+    }
+
+    try {
+      await toggleButton();
+      
+      if (!isActive) {
+        // Se acaba de activar
+        Alert.alert(
+          '✅ Botón Activo',
+          'El botón flotante está activo.\n\n' +
+          'Minimiza la aplicación o abre Google Maps para verlo en acción.',
+          [{ text: 'Entendido' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        '❌ Error',
+        'No se pudo cambiar el estado del botón. Verifica los permisos.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -207,6 +134,8 @@ export default function FloatingButtonControl() {
     </View>
   );
 }
+
+// ... (mantén todos los estilos sin cambios)
 
 const styles = StyleSheet.create({
   container: {

@@ -232,11 +232,15 @@ override fun onCreate() {
     }
 
     private fun handleCaptureClick() {
+        android.util.Log.e("FLOATING_SERVICE", "========== HANDLE CAPTURE CLICK ==========")
+        
         // Enviar broadcast a React Native
         val intent = Intent("com.driveskore.app.CAPTURE_EVENT")
         sendBroadcast(intent)
         
-        // Feedback visual - animación de pulso
+        android.util.Log.e("FLOATING_SERVICE", "========== BROADCAST ENVIADO ==========")
+        
+        // Feedback visual...
         buttonImage?.let { button ->
             button.animate()
                 .scaleX(1.3f)
