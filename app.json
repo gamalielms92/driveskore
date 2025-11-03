@@ -76,13 +76,16 @@
         }
       ],
       "expo-notifications",
-      ["./plugin/withFloatingButton.js"],
+      [
+        "./plugin/withFloatingButton.js"
+      ],
       [
         "expo-camera",
         {
           "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."
         }
-      ]
+      ],
+      "expo-router"
     ],
     "extra": {
       "eas": {
