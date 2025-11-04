@@ -1,27 +1,118 @@
+// app/rate.tsx
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import UserCard from '../src/components/UserCard';
 import { supabase } from '../src/config/supabase';
-import { DRIVING_ATTRIBUTES } from '../src/utils/gamification';
-import { formatPlate, validateSpanishPlate } from '../src/utils/plateValidator';
+import type { Vehicle } from '../src/types/vehicle';
+import { validateSpanishPlate } from '../src/utils/plateValidator';
 
+interface Attribute {
+  id: string;
+  label: string;
+  icon: string;
+  positive: string;
+  negative: string;
+}
 
-// Tipo para los atributos
-type AttributeVotes = {
-  [key: string]: boolean | null;
-};
+const DRIVING_ATTRIBUTES: Attribute[] = [
+  { id: 'respect_distance', label: 'Distancia de seguridad', icon: '📏', positive: 'Mantiene distancia', negative: 'Muy pegado' },
+  { id: 'use_turn_signals', label: 'Uso de intermitentes', icon: '💡', positive: 'Señaliza correctamente', negative: 'No señaliza' },
+  { id: 'respect_speed_limits', label: 'Límites de velocidad', icon: '🚦', positive: 'Respeta límites', negative: 'Exceso de velocidad' },
+  { id: 'smooth_driving', label: 'Conducción suave', icon: '🌊', positive: 'Conducción fluida', negative: 'Brusco/agresivo' },
+  { id: 'respect_pedestrians', label: 'Respeto a peatones', icon: '🚶', positive: 'Cede el paso', negative: 'No cede el paso' },
+  { id: 'parking_courtesy', label: 'Cortesía al aparcar', icon: '🅿️', positive: 'Aparca correctamente', negative: 'Aparca mal' },
+  { id: 'lane_discipline', label: 'Disciplina de carril', icon: '🛣️', positive: 'Mantiene carril', negative: 'Invade carriles' },
+  { id: 'general_courtesy', label: 'Cortesía general', icon: '🤝', positive: 'Conductor cortés', negative: 'Conductor descortés' },
+];
 
 export default function RateScreen() {
-  const params = useLocalSearchParams<{ plate: string; photoUri: string }>();
   const router = useRouter();
-  const [attributes, setAttributes] = useState<AttributeVotes>({});
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
+  const params = useLocalSearchParams<{
+    userId?: string;
+    plate?: string;
+    photoUri?: string;
+    matchScore?: string;
+    fromMatching?: string;
+  }>();
 
-  const plateValidation = validateSpanishPlate(params.plate || '');
-  const displayPlate = plateValidation.isValid 
-    ? formatPlate(params.plate || '') 
-    : params.plate;
+  const [loading, setLoading] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [attributes, setAttributes] = useState<{ [key: string]: boolean | null }>({});
+  const [comment, setComment] = useState('');
+  
+  // Datos del conductor
+  const [driverProfile, setDriverProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [currentVehicle, setCurrentVehicle] = useState<Vehicle | null>(null);
+
+  const displayPlate = params.plate || 'Desconocida';
+  const plateValidation = validateSpanishPlate(displayPlate);
+
+  useEffect(() => {
+    loadDriverData();
+  }, [params.plate, params.userId]);
+
+  const loadDriverData = async () => {
+    try {
+      setLoadingProfile(true);
+      
+      if (!params.plate) {
+        setLoadingProfile(false);
+        return;
+      }
+
+      // 1. Buscar el perfil del conductor por matrícula
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('plate', params.plate)
+        .maybeSingle();
+
+      setDriverProfile(profile);
+
+      // 2. Si tiene user_id, cargar perfil de usuario y vehículos
+      if (profile?.user_id) {
+        // Cargar perfil de usuario
+        const { data: userProf } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', profile.user_id)
+          .maybeSingle();
+
+        setUserProfile(userProf);
+
+        // Cargar vehículos del usuario
+        const { data: userVehicles } = await supabase
+          .from('user_vehicles')
+          .select('*')
+          .eq('user_id', profile.user_id);
+
+        setVehicles(userVehicles || []);
+
+        // Encontrar el vehículo actual (el que coincide con la matrícula)
+        const current = userVehicles?.find(v => v.plate === params.plate);
+        setCurrentVehicle(current || null);
+      }
+
+    } catch (error: any) {
+      console.error('Error cargando datos del conductor:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
 
   const toggleAttribute = (attrId: string, value: boolean) => {
     setAttributes(prev => ({
@@ -31,184 +122,102 @@ export default function RateScreen() {
   };
 
   const getVoteSummary = () => {
-    const votes = Object.values(attributes).filter(v => v !== null);
-    const positive = votes.filter(v => v === true).length;
-    const negative = votes.filter(v => v === false).length;
-    return { total: votes.length, positive, negative };
+    const values = Object.values(attributes);
+    return {
+      total: values.filter(v => v !== null).length,
+      positive: values.filter(v => v === true).length,
+      negative: values.filter(v => v === false).length,
+    };
   };
 
   const calculateScore = () => {
-    const { total, positive } = getVoteSummary();
+    const { positive, negative } = getVoteSummary();
+    const total = positive + negative;
     if (total === 0) return 0;
-    return (positive / total) * 5;
+    return ((positive / total) * 5);
   };
 
   const handleSubmit = async () => {
-    const { total } = getVoteSummary();
-    
-    if (total === 0) {
-      Alert.alert(
-        '⚠️ Sin evaluación',
-        'Selecciona al menos un comportamiento observado (positivo o negativo)',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    // NUEVO: Validar que existe matrícula antes de continuar
-    if (!params.plate || params.plate.trim().length === 0) {
-      Alert.alert(
-        '⚠️ Sin matrícula',
-        'No se puede enviar la evaluación sin matrícula del vehículo',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-      return;
-    }
-  
-    setLoading(true);
-  
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-  
-      if (!user) {
-        throw new Error('No hay usuario autenticado');
-      }
-  
-      // Normalizar matrícula (importante para que coincida)
-      const normalizedPlate = params.plate.replace(/\s+/g, ' ').trim().toUpperCase();
+      const { total } = getVoteSummary();
       
-      console.log('🔍 Evaluando matrícula:', normalizedPlate);
-  
-      // 1. Buscar conductor activo para esta matrícula
-      const { data: activeDriver, error: driverError } = await supabase
-        .from('user_vehicles')
-        .select('user_id, nickname')
-        .eq('plate', normalizedPlate)
-        .eq('online', true)
-        .maybeSingle();
-  
-      console.log('👤 Conductor activo encontrado:', activeDriver);
-      console.log('❌ Error búsqueda:', driverError);
-  
-      const driverUserId = activeDriver?.user_id || null;
-  
-      console.log('✅ Driver User ID final:', driverUserId);
-  
-      // ⚠️ VALIDACIÓN: No puede votarse a sí mismo
-      if (driverUserId && driverUserId === user.id) {
-        Alert.alert(
-          '🚫 No permitido',
-          'No puedes evaluarte a ti mismo. Esta valoración iría a tu propio perfil como conductor activo de este vehículo.',
-          [{ text: 'OK' }]
-        );
-        setLoading(false);
+      if (total === 0) {
+        Alert.alert('Atención', 'Por favor evalúa al menos un comportamiento');
         return;
       }
-  
-      // 2. Preparar datos de atributos
-      const attributeData: { [key: string]: boolean | null } = {};
-      DRIVING_ATTRIBUTES.forEach(attr => {
-        attributeData[attr.id] = attributes[attr.id] === true ? true : 
-                                 attributes[attr.id] === false ? false : null;
-      });
-  
-      // 3. Calcular puntuación basada en votos
+
+      setLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No hay usuario autenticado');
+
       const score = calculateScore();
-  
-      console.log('⭐ Puntuación calculada:', score);
-  
-      // 4. Guardar valoración con driver_user_id
+      
+      const positiveAttrs: { [key: string]: number } = {};
+      Object.entries(attributes).forEach(([key, value]) => {
+        if (value === true) {
+          positiveAttrs[key] = 1;
+        }
+      });
+
+      // Insertar valoración
       const { error: ratingError } = await supabase
         .from('ratings')
         .insert({
-          plate: normalizedPlate,
-          score: Math.round(score),
-          comment: comment,
-          photo_url: params.photoUri || '',
           rater_id: user.id,
-          driver_user_id: driverUserId, // ← ESTE ES EL CAMPO CLAVE
-          ...attributeData,
+          plate: displayPlate,
+          score: score,
+          comment: comment.trim() || null,
         });
-  
-      if (ratingError) {
-        console.error('❌ Error guardando rating:', ratingError);
-        throw ratingError;
-      }
-  
-      console.log('✅ Valoración guardada correctamente');
-  
-      // 5. Actualizar o crear perfil correspondiente
+
+      if (ratingError) throw ratingError;
+
+      // Actualizar o crear perfil del conductor
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
-        .eq('plate', normalizedPlate)
-        .eq('user_id', driverUserId)
+        .eq('plate', displayPlate)
         .maybeSingle();
-  
-      console.log('📊 Perfil existente:', existingProfile);
-  
-      // Calcular atributos positivos acumulados
-      const positiveAttributes: { [key: string]: number } = existingProfile?.positive_attributes || {};
-      DRIVING_ATTRIBUTES.forEach(attr => {
-        if (attributes[attr.id] === true) {
-          positiveAttributes[attr.id] = (positiveAttributes[attr.id] || 0) + 1;
-        }
-      });
-  
-      const totalVotes = (existingProfile?.total_votes || 0) + 1;
-  
+
       if (existingProfile) {
-        const newTotal = existingProfile.total_score + score;
-        const newCount = existingProfile.num_ratings + 1;
-        
-        const { error: updateError } = await supabase
+        // Actualizar perfil existente
+        const newTotalScore = existingProfile.total_score + score;
+        const newNumRatings = existingProfile.num_ratings + 1;
+        const newTotalVotes = existingProfile.total_votes + total;
+
+        const updatedAttributes = { ...existingProfile.positive_attributes };
+        Object.entries(positiveAttrs).forEach(([key, value]) => {
+          updatedAttributes[key] = (updatedAttributes[key] || 0) + value;
+        });
+
+        await supabase
           .from('profiles')
           .update({
-            total_score: newTotal,
-            num_ratings: newCount,
-            positive_attributes: positiveAttributes,
-            total_votes: totalVotes,
+            total_score: newTotalScore,
+            num_ratings: newNumRatings,
+            positive_attributes: updatedAttributes,
+            total_votes: newTotalVotes,
           })
-          .eq('plate', normalizedPlate)
-          .eq('user_id', driverUserId);
-  
-        if (updateError) {
-          console.error('❌ Error actualizando perfil:', updateError);
-        } else {
-          console.log('✅ Perfil actualizado correctamente');
-        }
+          .eq('plate', displayPlate);
       } else {
-        const { error: insertError } = await supabase
+        // Crear nuevo perfil
+        await supabase
           .from('profiles')
           .insert({
-            plate: normalizedPlate,
-            user_id: driverUserId,
+            plate: displayPlate,
             total_score: score,
             num_ratings: 1,
-            positive_attributes: positiveAttributes,
-            total_votes: totalVotes,
+            positive_attributes: positiveAttrs,
+            total_votes: total,
+            user_id: params.userId || null,
           });
-  
-        if (insertError) {
-          console.error('❌ Error creando perfil:', insertError);
-        } else {
-          console.log('✅ Perfil creado correctamente');
-        }
       }
-  
+
       const { positive, negative } = getVoteSummary();
-      
-      let successMessage = `Gracias por contribuir a una conducción más segura.\n\n✅ ${positive} positivos\n❌ ${negative} negativos\n⭐ Puntuación: ${score.toFixed(1)}/5.0`;
-      
-      if (driverUserId) {
-        const driverName = activeDriver?.nickname || 'Conductor';
-        successMessage += `\n\n👤 Valoración registrada en el perfil de: ${driverName}`;
-      } else {
-        successMessage += '\n\n🚗 Valoración registrada en el perfil del vehículo';
-      }
-      
+      const successMessage = `Evaluación registrada:\n\n⭐ Puntuación: ${score.toFixed(1)}/5.0\n✅ Positivos: ${positive}\n❌ Negativos: ${negative}`;
+
       Alert.alert(
-        '¡Evaluación Enviada! 🎉', 
+        '🎉 ¡Gracias por contribuir!', 
         successMessage,
         [{ 
           text: 'OK', 
@@ -216,13 +225,12 @@ export default function RateScreen() {
         }]
       );
     } catch (error: any) {
-      console.error('💥 ERROR COMPLETO:', error);
+      console.error('💥 ERROR:', error);
       Alert.alert('Error', error.message || 'No se pudo guardar la evaluación');
     } finally {
       setLoading(false);
     }
   };
-
 
   const { total, positive, negative } = getVoteSummary();
   const estimatedScore = calculateScore();
@@ -234,16 +242,60 @@ export default function RateScreen() {
           <Image source={{ uri: params.photoUri }} style={styles.photo} />
         )}
 
-        <Text style={styles.plateLabel}>Evaluando a:</Text>
-        <Text style={styles.plate}>{displayPlate || 'Sin matrícula'}</Text>
-        
-        {plateValidation.isValid && (
-          <View style={styles.plateInfo}>
-            <Text style={styles.plateInfoText}>
-              📋 {plateValidation.format === 'current' 
-                ? 'Formato actual' 
-                : 'Formato provincial'}
-            </Text>
+        {/* UserCard del conductor si tiene perfil */}
+        {loadingProfile ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Cargando perfil del conductor...</Text>
+          </View>
+        ) : userProfile ? (
+          <View style={styles.driverSection}>
+            <Text style={styles.sectionTitle}>👤 Evaluando a:</Text>
+            <UserCard
+              userId={driverProfile?.user_id || ''}
+              fullName={userProfile.full_name}
+              avatarUrl={userProfile.avatar_url}
+              rating={driverProfile ? driverProfile.total_score / driverProfile.num_ratings : 0}
+              numRatings={driverProfile?.num_ratings || 0}
+              vehicles={vehicles}
+              size="medium"
+              showVehicles={true}
+              showBadges={true}
+            />
+            
+            {currentVehicle && (
+              <View style={styles.currentVehicleInfo}>
+                <Text style={styles.currentVehicleText}>
+                  🚗 Conduciendo: {currentVehicle.brand} {currentVehicle.model}
+                </Text>
+                <Text style={styles.currentVehiclePlate}>
+                  Matrícula: {currentVehicle.plate}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.unknownDriverSection}>
+            <Text style={styles.plateLabel}>Evaluando a:</Text>
+            <Text style={styles.plate}>{displayPlate}</Text>
+            
+            {plateValidation.isValid && (
+              <View style={styles.plateInfo}>
+                <Text style={styles.plateInfoText}>
+                  📋 {plateValidation.format === 'current' 
+                    ? 'Formato actual' 
+                    : 'Formato provincial'}
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.unknownDriverInfo}>
+              <Text style={styles.unknownDriverIcon}>👤</Text>
+              <Text style={styles.unknownDriverText}>
+                Este conductor no tiene perfil en DriveSkore.{'\n'}
+                Tu evaluación ayudará a crear su reputación.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -336,13 +388,14 @@ export default function RateScreen() {
           disabled={loading}
         >
           <Text style={styles.submitButtonText}>
-            {loading ? 'Enviando...' : '✅ Enviar Evaluación'}
+            {loading ? 'Guardando...' : '✅ Enviar Evaluación'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.cancelButton} 
+          style={styles.cancelButton}
           onPress={() => router.back()}
+          disabled={loading}
         >
           <Text style={styles.cancelButtonText}>Cancelar</Text>
         </TouchableOpacity>
@@ -365,30 +418,90 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginBottom: 20,
   },
+  loadingCard: {
+    backgroundColor: 'white',
+    padding: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+  },
+  driverSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000',
+  },
+  currentVehicleInfo: {
+    backgroundColor: '#E3F2FD',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  currentVehicleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1565C0',
+    marginBottom: 4,
+  },
+  currentVehiclePlate: {
+    fontSize: 13,
+    color: '#1976D2',
+  },
+  unknownDriverSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   plateLabel: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   plate: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#007AFF',
-    textAlign: 'center',
     marginBottom: 10,
-    letterSpacing: 3,
   },
   plateInfo: {
     backgroundColor: '#E3F2FD',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 15,
   },
   plateInfoText: {
-    fontSize: 12,
-    color: '#1976D2',
-    textAlign: 'center',
+    fontSize: 13,
+    color: '#1565C0',
+    fontWeight: '600',
+  },
+  unknownDriverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  unknownDriverIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  unknownDriverText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 18,
   },
   summaryCard: {
     backgroundColor: 'white',
@@ -396,11 +509,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginBottom: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   summaryTitle: {
     fontSize: 16,
@@ -408,7 +516,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   summaryScore: {
-    fontSize: 48,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#34C759',
     marginBottom: 15,
@@ -427,42 +535,39 @@ const styles = StyleSheet.create({
   },
   summaryStatLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#999',
   },
   instructionsCard: {
-    backgroundColor: '#FFF3CD',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
     flexDirection: 'row',
+    backgroundColor: '#E3F2FD',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 20,
     alignItems: 'center',
   },
   instructionsIcon: {
     fontSize: 24,
-    marginRight: 10,
+    marginRight: 12,
   },
   instructionsText: {
     flex: 1,
     fontSize: 14,
-    color: '#856404',
+    color: '#1565C0',
     lineHeight: 20,
   },
   attributesSection: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
     marginBottom: 20,
   },
   attributeRow: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   attributeInfo: {
     flexDirection: 'row',
@@ -470,94 +575,87 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   attributeIcon: {
-    fontSize: 28,
+    fontSize: 24,
     marginRight: 12,
   },
   attributeLabel: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#333',
-    fontWeight: '500',
+    flex: 1,
   },
   attributeVoteButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   voteButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
   },
   voteButtonPositive: {
     borderColor: '#34C759',
-    backgroundColor: '#fff',
+    backgroundColor: '#F1F8F4',
   },
   voteButtonNegative: {
     borderColor: '#FF3B30',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFF1F0',
   },
   voteButtonActive: {
-    transform: [{ scale: 1.1 }],
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   voteButtonIcon: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#ccc',
   },
   voteButtonIconActive: {
-    color: '#fff',
+    color: 'white',
   },
   commentSection: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
     marginBottom: 20,
   },
   commentLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
   },
   textarea: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    fontSize: 15,
     borderWidth: 1,
     borderColor: '#ddd',
-    height: 80,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   submitButton: {
-    backgroundColor: '#34C759',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  submitButtonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  cancelButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#007AFF',
     padding: 18,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#ddd',
-  },
-  cancelButtonText: {
-    color: '#666',
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '600',
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 15,
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    padding: 15,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
   },
 });

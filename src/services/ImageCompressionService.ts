@@ -81,14 +81,14 @@ export class ImageCompressionService {
       
       if (source === 'camera') {
         result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ['images'],
           allowsEditing: true,
           aspect: [4, 3],
           quality: 1,
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ['images'],
           allowsEditing: true,
           aspect: [4, 3],
           quality: 1,
@@ -201,14 +201,17 @@ export class ImageCompressionService {
       
       console.log('📁 Nombre de archivo:', fileName);
       
-      // Convertir URI a blob
+      // Leer archivo como ArrayBuffer (compatible con React Native)
       const response = await fetch(compressedUri);
-      const blob = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Convertir ArrayBuffer a Uint8Array
+      const fileData = new Uint8Array(arrayBuffer);
       
       // Subir a Supabase
       const { data, error } = await supabase.storage
         .from(bucket)
-        .upload(fileName, blob, {
+        .upload(fileName, fileData, {
           contentType: 'image/jpeg',
           upsert: false,
           cacheControl: '3600'

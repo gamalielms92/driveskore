@@ -98,7 +98,6 @@ export default function DriverModeScreen() {
                 onPress: () => {
                   // TODO: Navegar a select-vehicle
                   // router.push('/select-vehicle');
-                  router.push('/add-vehicle');
                 }
               }
             ]

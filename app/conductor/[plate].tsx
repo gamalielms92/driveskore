@@ -1,6 +1,8 @@
+// app/conductor/[plate].tsx
+
 import { Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import {
   calculateAttributeStats,
@@ -8,7 +10,7 @@ import {
   getDriverRank,
   getEarnedBadges,
   getTopAttributes,
-  type AttributeStat, // ← Renombrar import
+  type AttributeStat,
   type AttributeStats,
   type Profile as GamificationProfile
 } from '../../src/utils/gamification';
@@ -18,115 +20,176 @@ interface Rating {
   score: number;
   comment: string;
   created_at: string;
+  plate: string; // ← Añadido para saber de qué vehículo es
 }
 
-interface ConductorProfile { // ← Renombrado
+interface UserProfile {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  phone: string | null;
+}
+
+interface Vehicle {
+  id: string;
+  plate: string;
+  nickname: string | null;
+  online: boolean;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  color: string | null;
+  vehicle_type: string | null;
+  vehicle_photo_url: string | null;
+  is_primary: boolean; // ← AÑADIDO
+}
+
+interface VehicleProfile {
   plate: string;
   total_score: number;
   num_ratings: number;
   positive_attributes: { [key: string]: number };
   total_votes: number;
-  user_id?: string | null;
-}
-
-interface DriverProfile {
-  total_score: number;
-  num_ratings: number;
-  positive_attributes: { [key: string]: number };
-  total_votes: number;
-}
-
-interface Driver {
-  user_id: string;
-  nickname: string | null;
-  online: boolean;
-  profile?: DriverProfile;
 }
 
 export default function ConductorProfileScreen() {
   const { plate } = useLocalSearchParams<{ plate: string }>();
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<ConductorProfile | null>(null); // ← Usar ConductorProfile
-  const [ratings, setRatings] = useState<Rating[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleProfiles, setVehicleProfiles] = useState<VehicleProfile[]>([]);
+  const [allRatings, setAllRatings] = useState<Rating[]>([]);
+  const [aggregatedProfile, setAggregatedProfile] = useState<VehicleProfile | null>(null);
 
   useEffect(() => {
-    loadConductorData();
+    loadPersonData();
   }, [plate]);
 
-  const loadConductorData = async () => {
+  const loadPersonData = async () => {
     try {
-      // 1. Cargar perfil genérico del vehículo
-      const { data: vehicleProfile, error: vehicleError } = await supabase
+      // 1. Buscar el dueño del vehículo por la matrícula
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('user_vehicles')
+        .select('user_id')
+        .eq('plate', plate)
+        .maybeSingle();
+
+      if (vehicleError) throw vehicleError;
+
+      if (!vehicleData) {
+        // Si no hay dueño registrado, mostrar perfil genérico del vehículo
+        await loadGenericVehicleProfile();
+        return;
+      }
+
+      const userId = vehicleData.user_id;
+
+      // 2. Cargar perfil del usuario
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      setUserProfile(profile || {
+        user_id: userId,
+        full_name: 'Usuario sin nombre',
+        avatar_url: null,
+        bio: null,
+        phone: null
+      });
+
+      // 3. Cargar TODOS los vehículos de esta persona
+      const { data: userVehicles, error: vehiclesError } = await supabase
+        .from('user_vehicles')
+        .select('*')
+        .eq('user_id', userId)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (vehiclesError) throw vehiclesError;
+
+      setVehicles(userVehicles || []);
+
+      // 4. Cargar perfiles de valoraciones de cada vehículo
+      const profiles: VehicleProfile[] = [];
+      let allUserRatings: Rating[] = [];
+
+      for (const vehicle of userVehicles || []) {
+        // Cargar perfil del vehículo
+        const { data: vProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('plate', vehicle.plate)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (vProfile) {
+          profiles.push({
+            plate: vProfile.plate,
+            total_score: vProfile.total_score,
+            num_ratings: vProfile.num_ratings,
+            positive_attributes: vProfile.positive_attributes || {},
+            total_votes: vProfile.total_votes || 0
+          });
+        }
+
+        // Cargar valoraciones del vehículo
+        const { data: ratings } = await supabase
+          .from('ratings')
+          .select('*')
+          .eq('plate', vehicle.plate)
+          .order('created_at', { ascending: false });
+
+        if (ratings) {
+          allUserRatings = [...allUserRatings, ...ratings];
+        }
+      }
+
+      setVehicleProfiles(profiles);
+      setAllRatings(allUserRatings.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ));
+
+      // 5. Agregar todas las valoraciones de todos los vehículos
+      const aggregated = aggregateProfiles(profiles);
+      setAggregatedProfile(aggregated);
+
+    } catch (error: any) {
+      console.error('Error loading person data:', error);
+      Alert.alert('Error', 'No se pudo cargar el perfil del conductor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadGenericVehicleProfile = async () => {
+    try {
+      // Cargar perfil genérico del vehículo (sin dueño)
+      const { data: vProfile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('plate', plate)
         .is('user_id', null)
         .maybeSingle();
 
-      // 2. Cargar conductores registrados con esta matrícula
-      const { data: driversData, error: driversError } = await supabase
-        .from('user_vehicles')
-        .select('user_id, nickname, online')
-        .eq('plate', plate);
+      if (profileError) throw profileError;
 
-// 3. Para cada conductor, obtener su perfil específico
-const driversWithProfiles: Driver[] = await Promise.all(
-  (driversData || []).map(async (driver) => {
-    const { data: driverProfile } = await supabase
-      .from('profiles')
-      .select('total_score, num_ratings, positive_attributes, total_votes')
-      .eq('plate', plate)
-      .eq('user_id', driver.user_id)
-      .maybeSingle();
-
-    // Construir el objeto Driver con tipado correcto
-    const driverObj: Driver = {
-      user_id: driver.user_id,
-      nickname: driver.nickname,
-      online: driver.online
-    };
-
-    // Solo añadir profile si existe
-    if (driverProfile) {
-      driverObj.profile = {
-        total_score: driverProfile.total_score,
-        num_ratings: driverProfile.num_ratings,
-        positive_attributes: driverProfile.positive_attributes || {},
-        total_votes: driverProfile.total_votes || 0
-      };
-    }
-
-    return driverObj;
-  })
-);
-
-      setDrivers(driversWithProfiles);
-
-      // Si no hay perfil genérico pero hay conductores, usar el del conductor con más valoraciones
-      if (!vehicleProfile && driversWithProfiles.length > 0) {
-        const bestDriver = driversWithProfiles.reduce((best, current) => {
-          const currentRatings = current.profile?.num_ratings || 0;
-          const bestRatings = best.profile?.num_ratings || 0;
-          return currentRatings > bestRatings ? current : best;
+      if (vProfile) {
+        setAggregatedProfile({
+          plate: vProfile.plate,
+          total_score: vProfile.total_score,
+          num_ratings: vProfile.num_ratings,
+          positive_attributes: vProfile.positive_attributes || {},
+          total_votes: vProfile.total_votes || 0
         });
-
-        if (bestDriver.profile) {
-          setProfile({
-            plate,
-            user_id: bestDriver.user_id,
-            total_score: bestDriver.profile.total_score,
-            num_ratings: bestDriver.profile.num_ratings,
-            positive_attributes: bestDriver.profile.positive_attributes || {},
-            total_votes: bestDriver.profile.total_votes || 0
-          });
-        }
-      } else if (vehicleProfile) {
-        setProfile(vehicleProfile);
       }
 
-      // 4. Cargar valoraciones
-      const { data: ratingsData, error: ratingsError } = await supabase
+      // Cargar valoraciones
+      const { data: ratings, error: ratingsError } = await supabase
         .from('ratings')
         .select('*')
         .eq('plate', plate)
@@ -134,21 +197,49 @@ const driversWithProfiles: Driver[] = await Promise.all(
 
       if (ratingsError) throw ratingsError;
 
-      setRatings(ratingsData || []);
+      setAllRatings(ratings || []);
+
     } catch (error: any) {
-      Alert.alert('Error', 'No se pudo cargar el perfil del conductor');
+      console.error('Error loading generic vehicle:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const aggregateProfiles = (profiles: VehicleProfile[]): VehicleProfile | null => {
+    if (profiles.length === 0) return null;
+
+    let totalScore = 0;
+    let totalRatings = 0;
+    let totalVotes = 0;
+    const combinedAttributes: { [key: string]: number } = {};
+
+    profiles.forEach(profile => {
+      totalScore += profile.total_score;
+      totalRatings += profile.num_ratings;
+      totalVotes += profile.total_votes;
+
+      Object.entries(profile.positive_attributes).forEach(([key, value]) => {
+        combinedAttributes[key] = (combinedAttributes[key] || 0) + value;
+      });
+    });
+
+    return {
+      plate: 'AGGREGATED',
+      total_score: totalScore,
+      num_ratings: totalRatings,
+      positive_attributes: combinedAttributes,
+      total_votes: totalVotes
+    };
+  };
+
   const calculateAverage = () => {
-    if (!profile || profile.num_ratings === 0) return 0;
-    return profile.total_score / profile.num_ratings;
+    if (!aggregatedProfile || aggregatedProfile.num_ratings === 0) return 0;
+    return aggregatedProfile.total_score / aggregatedProfile.num_ratings;
   };
 
   const renderStars = (score: number) => {
-    return '⭐'.repeat(score) + '☆'.repeat(5 - score);
+    return '⭐'.repeat(Math.round(score)) + '☆'.repeat(5 - Math.round(score));
   };
 
   const formatDate = (dateString: string) => {
@@ -166,12 +257,21 @@ const driversWithProfiles: Driver[] = await Promise.all(
 
   const getScoreDistribution = () => {
     const distribution = [0, 0, 0, 0, 0];
-    ratings.forEach(r => {
+    allRatings.forEach(r => {
       if (r.score >= 1 && r.score <= 5) {
         distribution[r.score - 1]++;
       }
     });
     return distribution;
+  };
+
+  const getVehicleIcon = (type: string | null) => {
+    switch (type) {
+      case 'car': return '🚗';
+      case 'bike': return '🏍️';
+      case 'scooter': return '🛴';
+      default: return '🚗';
+    }
   };
 
   if (loading) {
@@ -184,12 +284,12 @@ const driversWithProfiles: Driver[] = await Promise.all(
     );
   }
 
-  if (!profile) {
+  if (!aggregatedProfile) {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ title: 'No encontrado' }} />
         <Text style={styles.emptyText}>❌</Text>
-        <Text style={styles.emptyMessage}>No se encontró este conductor</Text>
+        <Text style={styles.emptyMessage}>No se encontró información de este conductor</Text>
       </View>
     );
   }
@@ -198,94 +298,150 @@ const driversWithProfiles: Driver[] = await Promise.all(
   const distribution = getScoreDistribution();
   const driverRank = getDriverRank(average);
 
-  // Convertir ConductorProfile a GamificationProfile
-  const gamificationProfile: GamificationProfile = profile ? {
-    plate: profile.plate,
-    total_score: profile.total_score,
-    num_ratings: profile.num_ratings,
-    positive_attributes: profile.positive_attributes,
-    total_votes: profile.total_votes
-  } : {
-    plate: plate || '',
-    total_score: 0,
-    num_ratings: 0,
-    positive_attributes: {},
-    total_votes: 0
+  const gamificationProfile: GamificationProfile = {
+    plate: aggregatedProfile.plate,
+    total_score: aggregatedProfile.total_score,
+    num_ratings: aggregatedProfile.num_ratings,
+    positive_attributes: aggregatedProfile.positive_attributes,
+    total_votes: aggregatedProfile.total_votes
   };
 
   const earnedBadges = getEarnedBadges(gamificationProfile);
   const attributeStats: AttributeStats = calculateAttributeStats(
-    profile?.positive_attributes || {},
-    profile?.total_votes || 0
+    aggregatedProfile.positive_attributes,
+    aggregatedProfile.total_votes
   );
   const topAttributes: AttributeStat[] = getTopAttributes(attributeStats);
 
+  // Renderizado
   return (
     <ScrollView style={styles.container}>
       <Stack.Screen 
         options={{ 
-          title: plate || 'Conductor',
+          title: userProfile ? userProfile.full_name : plate || 'Conductor',
           headerStyle: { backgroundColor: '#007AFF' },
           headerTintColor: '#fff',
         }} 
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.plateIcon}>🚗</Text>
-        <Text style={styles.plate}>{plate}</Text>
-      </View>
+      {/* 🆕 HEADER CENTRADO EN PERSONA */}
+      {userProfile ? (
+        <View style={styles.personHeader}>
+          {/* Foto de perfil */}
+          {userProfile.avatar_url ? (
+            <Image
+              source={{ uri: userProfile.avatar_url }}
+              style={styles.avatarLarge}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarPlaceholderText}>
+                {userProfile.full_name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
 
-      {/* Conductores registrados */}
-      {drivers.length > 0 && (
-        <View style={styles.driversSection}>
-          <Text style={styles.driversSectionTitle}>
-            👥 Conductores de este vehículo
+          {/* Nombre */}
+          <Text style={styles.personName}>{userProfile.full_name}</Text>
+
+          {/* Bio */}
+          {userProfile.bio && (
+            <Text style={styles.personBio}>{userProfile.bio}</Text>
+          )}
+
+          {/* Stats rápidos */}
+          <View style={styles.quickStats}>
+            <View style={styles.quickStatItem}>
+              <Text style={styles.quickStatValue}>{vehicles.length}</Text>
+              <Text style={styles.quickStatLabel}>Vehículo{vehicles.length !== 1 ? 's' : ''}</Text>
+            </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatItem}>
+              <Text style={styles.quickStatValue}>{aggregatedProfile.num_ratings}</Text>
+              <Text style={styles.quickStatLabel}>Valoraciones</Text>
+            </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatItem}>
+              <Text style={styles.quickStatValue}>{average.toFixed(1)}</Text>
+              <Text style={styles.quickStatLabel}>Promedio</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        // Fallback: Header genérico para vehículo sin dueño
+        <View style={styles.header}>
+          <Text style={styles.plateIcon}>🚗</Text>
+          <Text style={styles.plate}>{plate}</Text>
+          <Text style={styles.genericLabel}>Vehículo sin conductor registrado</Text>
+        </View>
+      )}
+
+      {/* 🆕 VEHÍCULOS DE LA PERSONA */}
+      {vehicles.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            🚗 Vehículos de {userProfile?.full_name || 'este conductor'}
           </Text>
-          {drivers.map((driver) => {
-            const driverAvg = driver.profile 
-              ? driver.profile.total_score / driver.profile.num_ratings 
+          {vehicles.map((vehicle) => {
+            const vProfile = vehicleProfiles.find(p => p.plate === vehicle.plate);
+            const vAvg = vProfile && vProfile.num_ratings > 0 
+              ? vProfile.total_score / vProfile.num_ratings 
               : 0;
-            const driverRankLocal = getDriverRank(driverAvg);
-            
+
             return (
-              <View key={driver.user_id} style={styles.driverCard}>
-                <View style={styles.driverHeader}>
-                  <View style={styles.driverInfo}>
-                    <Text style={styles.driverIcon}>
-                      {driver.online ? '🟢' : '⚪'}
-                    </Text>
-                    <View style={styles.driverDetails}>
-                      <Text style={styles.driverName}>
-                        {driver.nickname || 'Conductor'}
-                      </Text>
-                      {driver.online && (
-                        <Text style={styles.driverStatus}>Activo ahora</Text>
-                      )}
-                    </View>
-                  </View>
-                  {driver.profile && driver.profile.num_ratings > 0 && (
-                    <View style={styles.driverStats}>
-                      <Text style={styles.driverScore}>{driverAvg.toFixed(1)}</Text>
-                      <Text style={styles.driverStars}>
-                        {renderStars(Math.round(driverAvg))}
-                      </Text>
-                      <Text style={styles.driverRatings}>
-                        {driver.profile.num_ratings} val.
+              <View key={vehicle.id} style={styles.vehicleCard}>
+                <View style={styles.vehicleCardHeader}>
+                  {vehicle.vehicle_photo_url ? (
+                    <Image
+                      source={{ uri: vehicle.vehicle_photo_url }}
+                      style={styles.vehiclePhoto}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.vehiclePhotoPlaceholder}>
+                      <Text style={styles.vehiclePhotoIcon}>
+                        {getVehicleIcon(vehicle.vehicle_type)}
                       </Text>
                     </View>
                   )}
-                </View>
-                {driver.profile && driver.profile.num_ratings > 0 && (
-                  <View style={[styles.driverRankBadge, { backgroundColor: driverRankLocal.color + '15' }]}>
-                    <Text style={styles.driverRankIcon}>{driverRankLocal.icon}</Text>
-                    <Text style={[styles.driverRankText, { color: driverRankLocal.color }]}>
-                      {driverRankLocal.name}
-                    </Text>
+
+                  <View style={styles.vehicleInfo}>
+                    <View style={styles.vehicleTitleRow}>
+                      <Text style={styles.vehiclePlate}>
+                        {vehicle.plate}
+                        {vehicle.online && ' 🟢'}
+                        {vehicle.is_primary && ' ⭐'}
+                      </Text>
+                    </View>
+                    
+                    {(vehicle.brand || vehicle.model) && (
+                      <Text style={styles.vehicleDetails}>
+                        {[vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(' ')}
+                      </Text>
+                    )}
+                    
+                    {vehicle.color && (
+                      <Text style={styles.vehicleColor}>• {vehicle.color}</Text>
+                    )}
+
+                    {vehicle.nickname && (
+                      <Text style={styles.vehicleNickname}>"{vehicle.nickname}"</Text>
+                    )}
                   </View>
-                )}
-                {(!driver.profile || driver.profile.num_ratings === 0) && (
-                  <Text style={styles.noRatingsText}>Sin valoraciones aún</Text>
+
+                  {vProfile && vProfile.num_ratings > 0 && (
+                    <View style={styles.vehicleStats}>
+                      <Text style={styles.vehicleScore}>{vAvg.toFixed(1)}</Text>
+                      <Text style={styles.vehicleRatings}>{vProfile.num_ratings} val.</Text>
+                    </View>
+                  )}
+                </View>
+
+                {vehicle.plate === plate && (
+                  <View style={styles.currentVehicleBadge}>
+                    <Text style={styles.currentVehicleText}>👁️ Viendo ahora</Text>
+                  </View>
                 )}
               </View>
             );
@@ -309,7 +465,8 @@ const driversWithProfiles: Driver[] = await Promise.all(
         <Text style={styles.scoreValue}>{average.toFixed(1)}</Text>
         <Text style={styles.scoreStars}>{renderStars(Math.round(average))}</Text>
         <Text style={styles.scoreLabel}>
-          Basado en {profile.num_ratings} valoración{profile.num_ratings !== 1 ? 'es' : ''}
+          Basado en {aggregatedProfile.num_ratings} valoración{aggregatedProfile.num_ratings !== 1 ? 'es' : ''}
+          {vehicles.length > 1 && ` en ${vehicles.length} vehículos`}
         </Text>
       </View>
 
@@ -330,7 +487,7 @@ const driversWithProfiles: Driver[] = await Promise.all(
       )}
 
       {/* Top 3 Atributos */}
-      {topAttributes.length > 0 && (profile.total_votes || 0) > 0 && (
+      {topAttributes.length > 0 && aggregatedProfile.total_votes > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>✨ Mejores Cualidades</Text>
           {topAttributes.map((attr, index) => (
@@ -354,7 +511,7 @@ const driversWithProfiles: Driver[] = await Promise.all(
                 <Text style={styles.topAttributePercentage}>{attr.percentage}%</Text>
               </View>
               <Text style={styles.topAttributeVotes}>
-                {attr.votes} de {profile.total_votes} evaluaciones
+                {attr.votes} de {aggregatedProfile.total_votes} evaluaciones
               </Text>
             </View>
           ))}
@@ -362,30 +519,26 @@ const driversWithProfiles: Driver[] = await Promise.all(
       )}
 
       {/* Todos los atributos */}
-      {(profile.total_votes || 0) > 0 && (
+      {aggregatedProfile.total_votes > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Estadísticas Detalladas</Text>
           {DRIVING_ATTRIBUTES.map(attr => {
             const stat = attributeStats[attr.id];
             if (!stat) return null;
             
-            // Calcular votos negativos
-            const negativeVotes = profile.total_votes - stat.votes;
-            const negativePercentage = profile.total_votes > 0 
-              ? Math.round((negativeVotes / profile.total_votes) * 100) 
+            const negativeVotes = aggregatedProfile.total_votes - stat.votes;
+            const negativePercentage = aggregatedProfile.total_votes > 0 
+              ? Math.round((negativeVotes / aggregatedProfile.total_votes) * 100) 
               : 0;
             
             return (
               <View key={attr.id} style={styles.attributeBidirectionalRow}>
-                {/* Etiqueta del atributo */}
                 <View style={styles.attributeLabelContainer}>
                   <Text style={styles.attributeIcon}>{attr.icon}</Text>
                   <Text style={styles.attributeLabel}>{attr.label}</Text>
                 </View>
 
-                {/* Barra bidireccional */}
                 <View style={styles.bidirectionalBarContainer}>
-                  {/* Lado negativo (rojo) */}
                   <View style={styles.negativeBarSection}>
                     <Text style={styles.negativePercentageText}>{negativePercentage}%</Text>
                     <View style={styles.negativeBarWrapper}>
@@ -398,10 +551,8 @@ const driversWithProfiles: Driver[] = await Promise.all(
                     </View>
                   </View>
 
-                  {/* Divisor central */}
                   <View style={styles.centerDivider} />
 
-                  {/* Lado positivo (verde) */}
                   <View style={styles.positiveBarSection}>
                     <View style={styles.positiveBarWrapper}>
                       <View 
@@ -415,7 +566,6 @@ const driversWithProfiles: Driver[] = await Promise.all(
                   </View>
                 </View>
 
-                {/* Contadores */}
                 <View style={styles.votesCounter}>
                   <Text style={styles.votesText}>
                     {negativeVotes} ❌ | ✅ {stat.votes}
@@ -432,8 +582,8 @@ const driversWithProfiles: Driver[] = await Promise.all(
         <Text style={styles.sectionTitle}>📈 Distribución de Valoraciones</Text>
         {[5, 4, 3, 2, 1].map((stars) => {
           const count = distribution[stars - 1];
-          const percentage = profile.num_ratings > 0 
-            ? (count / profile.num_ratings) * 100 
+          const percentage = aggregatedProfile.num_ratings > 0 
+            ? (count / aggregatedProfile.num_ratings) * 100 
             : 0;
 
           return (
@@ -455,21 +605,26 @@ const driversWithProfiles: Driver[] = await Promise.all(
 
       {/* Comentarios */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💬 Comentarios ({ratings.filter(r => r.comment).length})</Text>
+        <Text style={styles.sectionTitle}>💬 Comentarios ({allRatings.filter(r => r.comment).length})</Text>
         
-        {ratings.filter(r => r.comment).length === 0 ? (
+        {allRatings.filter(r => r.comment).length === 0 ? (
           <View style={styles.emptyComments}>
             <Text style={styles.emptyCommentsText}>Sin comentarios aún</Text>
           </View>
         ) : (
-          ratings
+          allRatings
             .filter(r => r.comment)
             .map((rating) => (
               <View key={rating.id} style={styles.commentCard}>
                 <View style={styles.commentHeader}>
-                  <Text style={styles.commentStars}>
-                    {renderStars(rating.score)}
-                  </Text>
+                  <View>
+                    <Text style={styles.commentStars}>
+                      {renderStars(rating.score)}
+                    </Text>
+                    {vehicles.length > 1 && (
+                      <Text style={styles.commentPlate}>Sobre {rating.plate}</Text>
+                    )}
+                  </View>
                   <Text style={styles.commentDate}>
                     {formatDate(rating.created_at)}
                   </Text>
@@ -483,6 +638,7 @@ const driversWithProfiles: Driver[] = await Promise.all(
       <View style={styles.footer}>
         <Text style={styles.footerText}>
           Los datos reflejan la opinión de la comunidad DriveSkore
+          {vehicles.length > 1 && `\nAgregado de ${vehicles.length} vehículos`}
         </Text>
       </View>
     </ScrollView>
@@ -505,6 +661,75 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  
+  // 🆕 HEADER CENTRADO EN PERSONA
+  personHeader: {
+    backgroundColor: 'white',
+    padding: 30,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  avatarLarge: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 15,
+    borderWidth: 4,
+    borderColor: '#007AFF',
+  },
+  avatarPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  avatarPlaceholderText: {
+    fontSize: 48,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  personName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  personBio: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  quickStats: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  quickStatItem: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  quickStatValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  quickStatDivider: {
+    width: 1,
+    backgroundColor: '#ddd',
+  },
+
+  // Header genérico (fallback)
   header: {
     backgroundColor: '#007AFF',
     padding: 30,
@@ -520,93 +745,110 @@ const styles = StyleSheet.create({
     color: 'white',
     letterSpacing: 3,
   },
-  driversSection: {
-    backgroundColor: 'white',
-    marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 20,
-    padding: 20,
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  genericLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 10,
   },
-  driversSectionTitle: {
+
+  // 🆕 CARDS DE VEHÍCULOS
+  vehicleCard: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  vehicleCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vehiclePhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  vehiclePhotoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  vehiclePhotoIcon: {
+    fontSize: 40,
+  },
+  vehicleInfo: {
+    flex: 1,
+  },
+  vehicleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  vehiclePlate: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
     color: '#000',
   },
-  driverCard: {
-    backgroundColor: '#f9f9f9',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  driverHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  driverInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  driverIcon: {
-    fontSize: 24,
-    marginRight: 10,
-  },
-  driverDetails: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  driverStatus: {
-    fontSize: 12,
-    color: '#34C759',
-    fontWeight: '600',
-  },
-  driverStats: {
-    alignItems: 'flex-end',
-  },
-  driverScore: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#34C759',
-  },
-  driverStars: {
+  vehicleDetails: {
     fontSize: 14,
-    marginVertical: 2,
+    color: '#666',
+    marginBottom: 2,
   },
-  driverRatings: {
+  vehicleColor: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 2,
+  },
+  vehicleNickname: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontStyle: 'italic',
+  },
+  vehicleStats: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  vehicleScore: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#34C759',
+  },
+  vehicleRatings: {
     fontSize: 11,
     color: '#999',
   },
-  driverRankBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
+  currentVehicleBadge: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
-  driverRankIcon: {
+  currentVehicleText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  section: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  sectionTitle: {
     fontSize: 20,
-    marginRight: 8,
-  },
-  driverRankText: {
-    fontSize: 14,
     fontWeight: 'bold',
-  },
-  noRatingsText: {
-    fontSize: 14,
-    color: '#999',
-    fontStyle: 'italic',
+    marginBottom: 15,
+    marginTop: 20,
+    color: '#000',
   },
   rankCard: {
     margin: 20,
@@ -662,16 +904,7 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: 14,
     color: '#666',
-  },
-  section: {
-    padding: 20,
-    paddingTop: 0,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#000',
+    textAlign: 'center',
   },
   badgesContainer: {
     flexDirection: 'row',
@@ -763,38 +996,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
-  attributeStatRow: {
-    marginBottom: 15,
-  },
-  attributeStatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  attributeStatIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  attributeStatLabel: {
-    fontSize: 14,
-    color: '#333',
-    flex: 1,
-  },
-  attributeStatBarContainer: {
-    height: 8,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 4,
-    marginBottom: 3,
-    overflow: 'hidden',
-  },
-  attributeStatBar: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-  },
-  attributeStatText: {
-    fontSize: 12,
-    color: '#666',
-  },
   distributionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -836,11 +1037,16 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   commentStars: {
     fontSize: 20,
+  },
+  commentPlate: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
   },
   commentDate: {
     fontSize: 12,

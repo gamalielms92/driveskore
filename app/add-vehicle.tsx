@@ -15,16 +15,18 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { supabase } from '../src/config/supabase';
 import ImageCompressionService from '../src/services/ImageCompressionService';
 import VehicleValidationService from '../src/services/VehicleValidationService';
-import { VEHICLE_BRANDS, VEHICLE_COLORS, type VehicleFormData, type VehicleType } from '../src/types/vehicle';
+import { detectPlateFromImage } from '../src/services/ocrService';
+import { VEHICLE_BRANDS, VEHICLE_COLORS, type VehicleFormData } from '../src/types/vehicle';
+import { isBlacklisted, validateSpanishPlate } from '../src/utils/plateValidator';
 
 export default function AddVehicleScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [plateValidation, setPlateValidation] = useState<any>(null);
   
   // Form data
   const [formData, setFormData] = useState<VehicleFormData>({
@@ -51,23 +53,81 @@ export default function AddVehicleScreen() {
         return;
       }
       
-      const result = await ImageCompressionService.selectCompressAndUpload(
-        source,
+      // Seleccionar imagen
+      const selectedUri = await ImageCompressionService.pickImage(source);
+      
+      if (!selectedUri) {
+        setUploadingPhoto(false);
+        return;
+      }
+      
+      // Comprimir imagen
+      const compressed = await ImageCompressionService.compressImage(selectedUri);
+      
+      // Si es coche o moto, intentar OCR ANTES de subir
+      if ((formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && !formData.plate) {
+        Alert.alert(
+          '🔍 Detectando matrícula...',
+          'Analizando la imagen para detectar la matrícula automáticamente'
+        );
+        
+        try {
+          const detectedPlate = await detectPlateFromImage(compressed.uri);
+          
+          if (detectedPlate && detectedPlate !== 'ERROR') {
+            const validation = validateSpanishPlate(detectedPlate);
+            
+            if (validation.isValid && !isBlacklisted(detectedPlate)) {
+              setFormData(prev => ({ ...prev, plate: detectedPlate }));
+              setPlateValidation(validation);
+              
+              Alert.alert(
+                '✅ ¡Matrícula detectada!',
+                `Se detectó: ${detectedPlate}\n\nPuedes editarla si es incorrecta antes de guardar.`
+              );
+            }
+          }
+        } catch (ocrError) {
+          console.log('ℹ️ No se pudo detectar matrícula automáticamente:', ocrError);
+          // No mostrar error, el usuario puede introducirla manualmente
+        }
+      }
+      
+      // Subir imagen
+      const uploaded = await ImageCompressionService.uploadImage(
+        compressed.uri,
         'vehicle-photos',
         user.id,
         'vehicles/'
       );
       
-      if (result) {
-        setFormData(prev => ({ ...prev, vehicle_photo_url: result.publicUrl }));
-        Alert.alert('✅ Foto añadida', 'La foto se ha subido correctamente');
-      }
+      setFormData(prev => ({ ...prev, vehicle_photo_url: uploaded.publicUrl }));
+      
+      Alert.alert(
+        '✅ Foto añadida', 
+        formData.plate 
+          ? 'La foto se ha subido correctamente'
+          : 'Foto subida. Recuerda introducir la matrícula manualmente si no se detectó.'
+      );
       
     } catch (error: any) {
       console.error('Error subiendo foto:', error);
       Alert.alert('Error', 'No se pudo subir la foto');
     } finally {
       setUploadingPhoto(false);
+    }
+  };
+
+  const handlePlateChange = (text: string) => {
+    const cleanText = text.toUpperCase().replace(/[^A-Z0-9\s-]/g, '');
+    setFormData(prev => ({ ...prev, plate: cleanText }));
+    
+    // Validar en tiempo real
+    if (cleanText.length >= 4) {
+      const validation = validateSpanishPlate(cleanText);
+      setPlateValidation(validation);
+    } else {
+      setPlateValidation(null);
     }
   };
 
@@ -222,18 +282,92 @@ export default function AddVehicleScreen() {
             <Text style={styles.label}>
               🚦 Tipo de vehículo <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.vehicle_type}
-                onValueChange={(value: VehicleType) =>
-                  setFormData(prev => ({ ...prev, vehicle_type: value }))
-                }
-                style={styles.picker}
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  formData.vehicle_type === 'car' && styles.typeButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  vehicle_type: 'car',
+                  brand: '', // Reset marca al cambiar tipo
+                }))}
               >
-                <Picker.Item label="🚗 Coche" value="car" />
-                <Picker.Item label="🚲 Bicicleta" value="bike" />
-                <Picker.Item label="🛴 Patinete" value="scooter" />
-              </Picker>
+                <Text style={[
+                  styles.typeButtonIcon,
+                  formData.vehicle_type === 'car' && styles.typeButtonIconActive
+                ]}>🚗</Text>
+                <Text style={[
+                  styles.typeButtonText,
+                  formData.vehicle_type === 'car' && styles.typeButtonTextActive
+                ]}>Coche</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  formData.vehicle_type === 'motorcycle' && styles.typeButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  vehicle_type: 'motorcycle',
+                  brand: '',
+                }))}
+              >
+                <Text style={[
+                  styles.typeButtonIcon,
+                  formData.vehicle_type === 'motorcycle' && styles.typeButtonIconActive
+                ]}>🏍️</Text>
+                <Text style={[
+                  styles.typeButtonText,
+                  formData.vehicle_type === 'motorcycle' && styles.typeButtonTextActive
+                ]}>Moto</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  formData.vehicle_type === 'bike' && styles.typeButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  vehicle_type: 'bike',
+                  brand: '',
+                }))}
+              >
+                <Text style={[
+                  styles.typeButtonIcon,
+                  formData.vehicle_type === 'bike' && styles.typeButtonIconActive
+                ]}>🚲</Text>
+                <Text style={[
+                  styles.typeButtonText,
+                  formData.vehicle_type === 'bike' && styles.typeButtonTextActive
+                ]}>Bicicleta</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  formData.vehicle_type === 'scooter' && styles.typeButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  vehicle_type: 'scooter',
+                  brand: '',
+                }))}
+              >
+                <Text style={[
+                  styles.typeButtonIcon,
+                  formData.vehicle_type === 'scooter' && styles.typeButtonIconActive
+                ]}>🛴</Text>
+                <Text style={[
+                  styles.typeButtonText,
+                  formData.vehicle_type === 'scooter' && styles.typeButtonTextActive
+                ]}>Patinete</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -242,20 +376,30 @@ export default function AddVehicleScreen() {
             <Text style={styles.label}>
               🏭 Marca <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.brand}
-                onValueChange={(value) =>
-                  setFormData(prev => ({ ...prev, brand: value }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Selecciona una marca..." value="" />
-                {currentBrands.map(brand => (
-                  <Picker.Item key={brand} label={brand} value={brand} />
-                ))}
-              </Picker>
+            <View style={styles.brandGrid}>
+              {currentBrands.map(brand => (
+                <TouchableOpacity
+                  key={brand}
+                  style={[
+                    styles.brandButton,
+                    formData.brand === brand && styles.brandButtonActive
+                  ]}
+                  onPress={() => setFormData(prev => ({ ...prev, brand }))}
+                >
+                  <Text style={[
+                    styles.brandButtonText,
+                    formData.brand === brand && styles.brandButtonTextActive
+                  ]}>
+                    {brand}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+            {formData.brand && (
+              <View style={styles.selectedBadge}>
+                <Text style={styles.selectedBadgeText}>✓ Seleccionado: {formData.brand}</Text>
+              </View>
+            )}
           </View>
 
           {/* Modelo */}
@@ -294,37 +438,96 @@ export default function AddVehicleScreen() {
             <Text style={styles.label}>
               🎨 Color <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.color}
-                onValueChange={(value) =>
-                  setFormData(prev => ({ ...prev, color: value }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Selecciona un color..." value="" />
-                {VEHICLE_COLORS.map(color => (
-                  <Picker.Item key={color} label={color} value={color} />
-                ))}
-              </Picker>
+            <View style={styles.colorGrid}>
+              {VEHICLE_COLORS.map(color => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorButton,
+                    formData.color === color && styles.colorButtonActive
+                  ]}
+                  onPress={() => setFormData(prev => ({ ...prev, color }))}
+                >
+                  <Text style={[
+                    styles.colorButtonText,
+                    formData.color === color && styles.colorButtonTextActive
+                  ]}>
+                    {color}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+            {formData.color && (
+              <View style={styles.selectedBadge}>
+                <Text style={styles.selectedBadgeText}>✓ Seleccionado: {formData.color}</Text>
+              </View>
+            )}
           </View>
 
           {/* Matrícula (condicional) */}
-          {(formData.vehicle_type === 'car' || formData.plate) && (
+          {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle' || formData.plate) && (
             <View style={styles.section}>
               <Text style={styles.label}>
-                🚙 Matrícula {formData.vehicle_type === 'car' && <Text style={styles.required}>*</Text>}
+                🚙 Matrícula {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && <Text style={styles.required}>*</Text>}
               </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="1234ABC"
-                value={formData.plate}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, plate: text.toUpperCase() }))}
-                autoCapitalize="characters"
-                maxLength={10}
-              />
-              <Text style={styles.hint}>Formato: 1234ABC o 1234-ABC</Text>
+              
+              {/* Info sobre detección automática */}
+              {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && !formData.plate && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoIcon}>💡</Text>
+                  <Text style={styles.infoText}>
+                    La matrícula se detectará automáticamente al subir la foto del vehículo
+                  </Text>
+                </View>
+              )}
+              
+              {/* Input con validación visual */}
+              <View style={styles.plateInputContainer}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    plateValidation && (plateValidation.isValid && !isBlacklisted(formData.plate || '')
+                      ? styles.inputValid
+                      : styles.inputInvalid
+                    )
+                  ]}
+                  placeholder="1234ABC (se detecta automáticamente)"
+                  value={formData.plate}
+                  onChangeText={handlePlateChange}
+                  autoCapitalize="characters"
+                  maxLength={10}
+                />
+                {plateValidation && formData.plate && (
+                  <View style={styles.validationIcon}>
+                    <Text style={styles.validationIconText}>
+                      {plateValidation.isValid && !isBlacklisted(formData.plate) ? '✅' : '❌'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Feedback de validación */}
+              {plateValidation && formData.plate && (
+                <>
+                  {plateValidation.isValid && !isBlacklisted(formData.plate) ? (
+                    <View style={styles.validationSuccess}>
+                      <Text style={styles.validationSuccessText}>
+                        ✓ Matrícula válida ({plateValidation.format === 'current' ? 'Formato actual' : 'Formato provincial'})
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.validationError}>
+                      <Text style={styles.validationErrorText}>
+                        {isBlacklisted(formData.plate) 
+                          ? `✗ La combinación "${plateValidation.letters}" no es válida según la DGT`
+                          : '✗ Formato de matrícula no válido'}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+              
+              <Text style={styles.hint}>Formato válido: 1234ABC o M-1234-BC</Text>
             </View>
           )}
 
@@ -439,20 +642,169 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 16,
   },
-  pickerContainer: {
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  typeButton: {
+    flex: 1,
     backgroundColor: 'white',
-    borderWidth: 1,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 15,
+    alignItems: 'center',
+  },
+  typeButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  typeButtonIcon: {
+    fontSize: 32,
+    marginBottom: 6,
+  },
+  typeButtonIconActive: {
+    // Mantener mismo tamaño
+  },
+  typeButtonText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+  },
+  typeButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  brandGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  brandButton: {
+    backgroundColor: 'white',
+    borderWidth: 2,
     borderColor: '#ddd',
     borderRadius: 10,
-    overflow: 'hidden',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minWidth: '30%',
   },
-  picker: {
-    height: 50,
+  brandButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  brandButtonText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  brandButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  colorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  colorButton: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    minWidth: '28%',
+  },
+  colorButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  colorButtonText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  colorButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  selectedBadge: {
+    marginTop: 10,
+    backgroundColor: '#E8F5E9',
+    padding: 10,
+    borderRadius: 8,
+  },
+  selectedBadgeText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
   },
   hint: {
     fontSize: 12,
     color: '#999',
     marginTop: 5,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  infoIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1565C0',
+    lineHeight: 18,
+  },
+  plateInputContainer: {
+    position: 'relative',
+  },
+  inputValid: {
+    borderColor: '#34C759',
+    borderWidth: 2,
+  },
+  inputInvalid: {
+    borderColor: '#FF3B30',
+    borderWidth: 2,
+  },
+  validationIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 15,
+  },
+  validationIconText: {
+    fontSize: 24,
+  },
+  validationSuccess: {
+    backgroundColor: '#E8F5E9',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  validationSuccessText: {
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  validationError: {
+    backgroundColor: '#FFEBEE',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  validationErrorText: {
+    fontSize: 13,
+    color: '#C62828',
+    fontWeight: '600',
   },
   photoButtons: {
     flexDirection: 'row',

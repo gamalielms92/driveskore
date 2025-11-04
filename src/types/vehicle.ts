@@ -4,7 +4,7 @@
  * Tipos para el sistema de vehículos
  */
 
-export type VehicleType = 'car' | 'bike' | 'scooter';
+export type VehicleType = 'car' | 'motorcycle' | 'bike' | 'scooter';
 
 export interface Vehicle {
   id: string;
@@ -69,6 +69,12 @@ export const VEHICLE_BRANDS = {
     'Seat', 'Volkswagen', 'Ford', 'Renault', 'Peugeot', 'Citroën',
     'Opel', 'BMW', 'Mercedes-Benz', 'Audi', 'Toyota', 'Honda',
     'Nissan', 'Mazda', 'Hyundai', 'Kia', 'Fiat', 'Otro'
+  ],
+  motorcycle: [
+    'Honda', 'Yamaha', 'Suzuki', 'Kawasaki', 'Harley-Davidson',
+    'BMW', 'Ducati', 'KTM', 'Triumph', 'Aprilia', 'MV Agusta',
+    'Royal Enfield', 'Indian', 'Vespa', 'Piaggio', 'Benelli',
+    'Husqvarna', 'Derbi', 'Gas Gas', 'Rieju', 'Otro'
   ],
   bike: [
     'Trek', 'Giant', 'Specialized', 'Cannondale', 'Scott', 'Orbea',

@@ -37,52 +37,68 @@ class DriverMatchingService {
     SPEED_MATCH: 10,
   };
 
-  /**
-   * Encuentra candidatos potenciales para un evento capturado
-   */
-  async findCandidates(event: CapturedEvent): Promise<DriverCandidate[]> {
-    console.log('🔍 Buscando candidatos para evento:', event.id);
+// FIX PARA: src/services/DriverMatchingService.ts
+// Reemplaza el método findCandidates completo con esta versión
 
-    try {
-      // 1. Obtener conductores activos en la zona
-      const activeDrivers = await this.getActiveDriversInArea(
-        event.location.latitude,
-        event.location.longitude,
-        this.MAX_SEARCH_RADIUS,
-        event.timestamp
-      );
+/**
+ * Encuentra candidatos potenciales para un evento capturado
+ */
+async findCandidates(event: CapturedEvent): Promise<DriverCandidate[]> {
+  console.log('🔍 Buscando candidatos para evento:', event.id);
 
-      console.log(`📊 Encontrados ${activeDrivers.length} conductores activos en área`);
+  try {
+    // 1. Obtener conductores activos en la zona
+    const activeDrivers = await this.getActiveDriversInArea(
+      event.location.latitude,
+      event.location.longitude,
+      this.MAX_SEARCH_RADIUS,
+      event.timestamp
+    );
 
-      if (activeDrivers.length === 0) {
-        return [];
-      }
+    console.log(`📊 Encontrados ${activeDrivers.length} conductores activos en área`);
 
-      // 2. Calcular score para cada conductor
-      const candidates: DriverCandidate[] = activeDrivers.map((driver) =>
-        this.calculateMatchScore(event, driver)
-      );
-
-      // 3. Ordenar por score descendente
-      candidates.sort((a, b) => b.match_score - a.match_score);
-
-      // 4. Filtrar candidatos con score mínimo
-      const viableCandidates = candidates.filter((c) => c.match_score >= 40);
-
-      // 5. Añadir metadatos útiles
-      viableCandidates.forEach((candidate) => {
-        candidate.confidence = this.getConfidenceLevel(candidate.match_score);
-        candidate.explanation = this.generateMatchExplanation(candidate);
-      });
-
-      console.log(`✅ ${viableCandidates.length} candidatos viables encontrados`);
-
-      return viableCandidates;
-    } catch (error) {
-      console.error('❌ Error buscando candidatos:', error);
-      throw error;
+    if (activeDrivers.length === 0) {
+      return [];
     }
+
+    // 2. Calcular score para cada conductor
+    const candidates: DriverCandidate[] = activeDrivers.map((driver) =>
+      this.calculateMatchScore(event, driver)
+    );
+
+    // 3. ✅ DEDUPLICAR por user_id (mantener solo el mejor match de cada usuario)
+    const uniqueCandidates = new Map<string, DriverCandidate>();
+    candidates.forEach(candidate => {
+      const existing = uniqueCandidates.get(candidate.user_id);
+      // Si no existe o el nuevo tiene mejor score, reemplazar
+      if (!existing || candidate.match_score > existing.match_score) {
+        uniqueCandidates.set(candidate.user_id, candidate);
+      }
+    });
+
+    const deduplicatedCandidates = Array.from(uniqueCandidates.values());
+    console.log(`🔄 Deduplicados: ${candidates.length} → ${deduplicatedCandidates.length} candidatos únicos`);
+
+    // 4. Ordenar por score descendente
+    deduplicatedCandidates.sort((a, b) => b.match_score - a.match_score);
+
+    // 5. Filtrar candidatos con score mínimo
+    const viableCandidates = deduplicatedCandidates.filter((c) => c.match_score >= 40);
+
+    // 6. Añadir metadatos útiles
+    viableCandidates.forEach((candidate) => {
+      candidate.confidence = this.getConfidenceLevel(candidate.match_score);
+      candidate.explanation = this.generateMatchExplanation(candidate);
+    });
+
+    console.log(`✅ ${viableCandidates.length} candidatos viables encontrados`);
+
+    return viableCandidates;
+  } catch (error) {
+    console.error('❌ Error buscando candidatos:', error);
+    throw error;
   }
+}
 
   /**
    * Obtiene conductores activos en un área geográfica

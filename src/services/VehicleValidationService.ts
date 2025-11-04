@@ -44,8 +44,8 @@ export class VehicleValidationService {
     }
     
     // 6. Validar según tipo de vehículo
-    if (data.vehicle_type === 'car') {
-      // Los coches DEBEN tener matrícula
+    if (data.vehicle_type === 'car' || data.vehicle_type === 'motorcycle') {
+      // Los vehículos motorizados DEBEN tener matrícula
       if (!data.plate || data.plate.trim() === '') {
         errors.push('🚙 Los vehículos motorizados requieren matrícula');
       } else {

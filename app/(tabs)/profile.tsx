@@ -1,15 +1,14 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// app/(tabs)/profile.tsx
+
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import EventCaptureService from '../../src/services/EventCaptureService';
 import {
   calculateAttributeStats,
   getDriverRank,
-  getEarnedBadges,
-  getTopAttributes,
-  type AttributeStat,
-  type AttributeStats
+  getEarnedBadges
 } from '../../src/utils/gamification';
 
 interface UserRating {
@@ -35,11 +34,19 @@ interface DriverProfile {
   total_votes: number;
 }
 
+interface UserProfile {
+  full_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  phone: string | null;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [userId, setUserId] = useState('');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userRatings, setUserRatings] = useState<UserRating[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [driverProfiles, setDriverProfiles] = useState<DriverProfile[]>([]);
@@ -48,10 +55,6 @@ export default function ProfileScreen() {
     averageScore: 0,
     memberSince: '',
   });
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
 
   const loadUserData = async () => {
     try {
@@ -63,6 +66,15 @@ export default function ProfileScreen() {
 
       setEmail(user.email || 'Sin email');
       setUserId(user.id);
+
+      // ✨ NUEVO: Cargar perfil de usuario
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setUserProfile(profile);
 
       // Cargar valoraciones HECHAS por el usuario (a otros)
       const { data: ratings, error: ratingsError } = await supabase
@@ -136,6 +148,14 @@ export default function ProfileScreen() {
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
+
+
   const handleLogout = async () => {
     Alert.alert(
       'Cerrar Sesión',
@@ -146,19 +166,9 @@ export default function ProfileScreen() {
           text: 'Salir',
           style: 'destructive',
           onPress: async () => {
-            try {
-              // ✅ NUEVO: Limpiar EventCaptureService ANTES de cerrar sesión
-              console.log('🧹 Limpiando EventCaptureService antes de logout...');
-              EventCaptureService.cleanup();
-              
-              // Cerrar sesión en Supabase
-              const { error } = await supabase.auth.signOut();
-              if (error) throw error;
-              
-              console.log('✅ Sesión cerrada correctamente');
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
+            await EventCaptureService.cleanup();
+            await supabase.auth.signOut();
+            router.replace('/(auth)/login');
           }
         }
       ]
@@ -166,36 +176,27 @@ export default function ProfileScreen() {
   };
 
   const renderStars = (score: number) => {
-    return '⭐'.repeat(score) + '☆'.repeat(5 - score);
+    return '⭐'.repeat(Math.round(score)) + '☆'.repeat(5 - Math.round(score));
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Hoy';
-    if (diffDays === 1) return 'Ayer';
-    if (diffDays < 7) return `Hace ${diffDays} días`;
-    if (diffDays < 30) return `Hace ${Math.floor(diffDays / 7)} semanas`;
     return date.toLocaleDateString('es-ES');
   };
 
-  // Calcular estadísticas combinadas como conductor
   const calculateDriverStats = () => {
     let totalScore = 0;
     let totalRatings = 0;
-    let combinedAttributes: { [key: string]: number } = {};
     let totalVotes = 0;
+    const combinedAttributes: { [key: string]: number } = {};
 
     driverProfiles.forEach(profile => {
       totalScore += profile.total_score;
       totalRatings += profile.num_ratings;
       totalVotes += profile.total_votes;
 
-      Object.keys(profile.positive_attributes || {}).forEach(key => {
-        combinedAttributes[key] = (combinedAttributes[key] || 0) + profile.positive_attributes[key];
+      Object.entries(profile.positive_attributes).forEach(([key, value]) => {
+        combinedAttributes[key] = (combinedAttributes[key] || 0) + value;
       });
     });
 
@@ -231,28 +232,70 @@ export default function ProfileScreen() {
 
   const earnedBadges = combinedProfile ? getEarnedBadges(combinedProfile) : [];
   
-  const attributeStats: AttributeStats = calculateAttributeStats(
-    driverStats.attributes,
-    driverStats.totalVotes
-  );
-  const topAttributes: AttributeStat[] = getTopAttributes(attributeStats);
+  // Calcular estadísticas de atributos correctamente
+  const attributeStats = combinedProfile 
+    ? calculateAttributeStats(combinedProfile.positive_attributes, combinedProfile.total_votes)
+    : {};
+  
+  // Obtener top 3 atributos desde las estadísticas calculadas
+  const topAttributes = Object.keys(attributeStats).length > 0
+    ? Object.values(attributeStats)
+        .sort((a, b) => b.percentage - a.percentage)
+        .slice(0, 3)
+    : [];
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        {/* Header del usuario */}
+        {/* Header con foto y nombre */}
         <View style={styles.header}>
-          <Text style={styles.avatar}>👤</Text>
+          {userProfile?.avatar_url ? (
+            <Image
+              source={{ uri: userProfile.avatar_url }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.avatar}>
+              {userProfile?.full_name ? userProfile.full_name.charAt(0).toUpperCase() : '👤'}
+            </Text>
+          )}
+          
+          <Text style={styles.fullName}>
+            {userProfile?.full_name || 'Usuario sin nombre'}
+          </Text>
+          
+          {!userProfile && (
+            <View style={styles.incompleteProfileBadge}>
+              <Text style={styles.incompleteProfileText}>⚠️ Perfil incompleto</Text>
+            </View>
+          )}
+          
           <Text style={styles.email}>{email}</Text>
           <Text style={styles.memberSince}>Miembro desde {stats.memberSince}</Text>
+          
+          {userProfile?.bio && (
+            <Text style={styles.bio}>{userProfile.bio}</Text>
+          )}
         </View>
 
-        {/* Mi reputación como conductor */}
+        {/* ✨ NUEVO: Botón editar perfil */}
+        <TouchableOpacity
+          style={styles.editProfileButton}
+          onPress={() => router.push('/edit-profile')}
+        >
+          <Text style={styles.editProfileButtonText}>
+            {userProfile ? '✏️ Editar Perfil' : '➕ Completar Perfil'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Reputación como conductor */}
         {driverStats.totalRatings > 0 && driverRank && (
           <>
             <View style={styles.driverReputationCard}>
-              <Text style={styles.sectionTitle}>🏆 Mi Reputación como Conductor</Text>
+              <Text style={styles.sectionTitle}>🚗 Mi Reputación como Conductor</Text>
               
+              {/* Rango */}
               <View style={[styles.rankBadge, { backgroundColor: driverRank.color + '15' }]}>
                 <Text style={styles.rankIcon}>{driverRank.icon}</Text>
                 <View style={styles.rankInfo}>
@@ -263,22 +306,27 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
+              {/* Puntuación */}
               <View style={styles.driverScoreContainer}>
                 <View style={styles.driverScoreItem}>
-                  <Text style={styles.driverScoreValue}>{driverStats.average.toFixed(1)}</Text>
-                  <Text style={styles.driverScoreLabel}>Puntuación</Text>
+                  <Text style={styles.driverScoreValue}>
+                    {driverStats.average.toFixed(1)}
+                  </Text>
+                  <Text style={styles.driverScoreLabel}>Promedio</Text>
                 </View>
                 <View style={styles.driverScoreDivider} />
                 <View style={styles.driverScoreItem}>
-                  <Text style={styles.driverScoreValue}>{driverStats.totalRatings}</Text>
-                  <Text style={styles.driverScoreLabel}>Valoraciones recibidas</Text>
+                  <Text style={styles.driverScoreValue}>
+                    {driverStats.totalRatings}
+                  </Text>
+                  <Text style={styles.driverScoreLabel}>Valoraciones{'\n'}recibidas</Text>
                 </View>
               </View>
 
-              {/* Top 3 atributos */}
+              {/* Top 3 Atributos */}
               {topAttributes.length > 0 && (
                 <View style={styles.topAttributesSection}>
-                  <Text style={styles.subsectionTitle}>✨ Mis mejores cualidades</Text>
+                  <Text style={styles.subsectionTitle}>✨ Mejores Cualidades</Text>
                   {topAttributes.slice(0, 3).map((attr, index) => (
                     <View key={attr.id} style={styles.topAttributeRow}>
                       <Text style={styles.topAttributeRank}>
@@ -440,19 +488,68 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 15,
+    borderWidth: 3,
+    borderColor: '#007AFF',
+  },
   avatar: {
     fontSize: 60,
     marginBottom: 15,
   },
-  email: {
-    fontSize: 18,
+  fullName: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000',
+    marginBottom: 5,
+  },
+  incompleteProfileBadge: {
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  incompleteProfileText: {
+    fontSize: 12,
+    color: '#856404',
+    fontWeight: '600',
+  },
+  email: {
+    fontSize: 16,
+    color: '#666',
     marginBottom: 5,
   },
   memberSince: {
     fontSize: 14,
+    color: '#999',
+  },
+  bio: {
+    fontSize: 14,
     color: '#666',
+    textAlign: 'center',
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  editProfileButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editProfileButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   driverReputationCard: {
     backgroundColor: 'white',
@@ -541,9 +638,9 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   topAttributePercentage: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#34C759',
+    color: '#007AFF',
   },
   badgesSection: {
     marginBottom: 15,
@@ -551,36 +648,41 @@ const styles = StyleSheet.create({
   badgesList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   badgeMini: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 15,
+    gap: 6,
   },
   badgeMiniIcon: {
     fontSize: 16,
-    marginRight: 5,
   },
   badgeMiniName: {
-    fontSize: 11,
-    color: '#1976D2',
+    fontSize: 12,
     fontWeight: '600',
+    color: '#333',
   },
   viewDetailsButton: {
     backgroundColor: '#007AFF',
     padding: 12,
-    borderRadius: 10,
-    marginTop: 10,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   viewDetailsButtonText: {
     color: 'white',
-    textAlign: 'center',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000',
   },
   statsCard: {
     backgroundColor: 'white',
@@ -593,15 +695,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#000',
-  },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
   },
   statItem: {
     flex: 1,
@@ -609,7 +704,6 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    height: 40,
     backgroundColor: '#ddd',
   },
   statValue: {
@@ -619,8 +713,9 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+    textAlign: 'center',
   },
   vehiclesCard: {
     backgroundColor: 'white',
@@ -643,85 +738,81 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   vehicleItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
   vehiclePlate: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
   vehicleNickname: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
   },
   vehiclesMore: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#007AFF',
-    marginTop: 8,
     fontStyle: 'italic',
+    marginTop: 8,
   },
   vehiclesButton: {
     backgroundColor: '#007AFF',
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   vehiclesButtonText: {
     color: 'white',
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   ratingCard: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   ratingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   ratingPlate: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#007AFF',
   },
   ratingDate: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#999',
   },
   ratingStars: {
-    fontSize: 20,
+    fontSize: 16,
   },
   logoutButton: {
     backgroundColor: '#FF3B30',
     padding: 18,
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   logoutButtonText: {
     color: 'white',
-    textAlign: 'center',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

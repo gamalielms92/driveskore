@@ -1,24 +1,40 @@
+// app/select-vehicle.tsx
+
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { supabase } from '../src/config/supabase';
-import { formatPlate, validateSpanishPlate } from '../src/utils/plateValidator';
 
 interface Vehicle {
   id: string;
-  plate: string;
+  plate: string | null;
   nickname: string | null;
   online: boolean;
   created_at: string;
+  // Nuevos campos
+  vehicle_photo_url: string | null;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  color: string | null;
+  vehicle_type: 'car' | 'bike' | 'scooter';
+  serial_number: string | null;
+  is_primary: boolean;
 }
 
 export default function SelectVehicleScreen() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingNew, setAddingNew] = useState(false);
-  const [newPlate, setNewPlate] = useState('');
-  const [newNickname, setNewNickname] = useState('');
   const [userId, setUserId] = useState('');
 
   useEffect(() => {
@@ -52,54 +68,7 @@ export default function SelectVehicleScreen() {
     }
   };
 
-  const handleAddVehicle = async () => {
-    if (!newPlate.trim()) {
-      Alert.alert('Error', 'Introduce una matrícula');
-      return;
-    }
-
-    const validation = validateSpanishPlate(newPlate);
-
-    if (!validation.isValid) {
-      Alert.alert('Matrícula inválida', validation.error || 'Formato incorrecto');
-      return;
-    }
-
-    const formattedPlate = formatPlate(newPlate);
-
-    try {
-      // Verificar si ya existe
-      const existing = vehicles.find(v => v.plate === formattedPlate);
-      
-      if (existing) {
-        Alert.alert('Ya existe', 'Ya tienes este vehículo registrado');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('user_vehicles')
-        .insert({
-          user_id: userId,
-          plate: formattedPlate,
-          nickname: newNickname.trim() || null,
-          online: false, // Por defecto inactivo
-        });
-
-      if (error) throw error;
-
-      Alert.alert('✅ Vehículo añadido', `${formattedPlate} registrado correctamente`);
-      
-      setNewPlate('');
-      setNewNickname('');
-      setAddingNew(false);
-      
-      await loadVehicles();
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
-  };
-
-  const handleToggleOnline = async (vehicleId: string, currentState: boolean, plate: string) => {
+  const handleToggleOnline = async (vehicleId: string, currentState: boolean, vehicleName: string) => {
     try {
       if (!currentState) {
         // Si vamos a activar este vehículo, desactivar todos los demás del usuario
@@ -119,25 +88,43 @@ export default function SelectVehicleScreen() {
 
       if (error) throw error;
 
-      console.log(`✅ Vehículo ${plate} ${!currentState ? 'activado' : 'desactivado'}`);
+      console.log(`✅ Vehículo ${vehicleName} ${!currentState ? 'activado' : 'desactivado'}`);
 
-      // Recargar datos
-      await loadVehicles();
+      // Actualizar estado local de forma segura manteniendo todos los datos
+      setVehicles(prevVehicles => {
+        const updatedVehicles = prevVehicles.map(vehicle => {
+          if (vehicle.id === vehicleId) {
+            // Este es el vehículo que cambiamos
+            console.log('🔄 Actualizando vehículo:', vehicle.brand, vehicle.model, '- Online:', !currentState);
+            console.log('📷 Foto URL:', vehicle.vehicle_photo_url);
+            return { ...vehicle, online: !currentState };
+          } else if (!currentState && vehicle.online) {
+            // Si estamos activando otro, desactivar los demás que estaban activos
+            return { ...vehicle, online: false };
+          }
+          return vehicle;
+        });
+        
+        console.log('✅ Estado actualizado. Total vehículos:', updatedVehicles.length);
+        return updatedVehicles;
+      });
 
       Alert.alert(
         '✅ Estado actualizado',
-        `${plate} está ahora ${!currentState ? 'activo 🟢' : 'inactivo ⚪'}\n\n${!currentState ? 'Las valoraciones que recibas irán a tu perfil de conductor.' : 'Este vehículo ya no recibe valoraciones en tu perfil.'}`
+        `${vehicleName} está ahora ${!currentState ? 'activo 🟢' : 'inactivo ⚪'}\n\n${!currentState ? 'Las valoraciones que recibas irán a tu perfil de conductor.' : 'Este vehículo ya no recibe valoraciones en tu perfil.'}`
       );
     } catch (error: any) {
       console.error('Error:', error);
       Alert.alert('Error', 'No se pudo actualizar el estado del vehículo');
+      // Recargar en caso de error para volver al estado real
+      await loadVehicles();
     }
   };
 
-  const handleDeleteVehicle = async (vehicleId: string, plate: string) => {
+  const handleDeleteVehicle = async (vehicleId: string, vehicleName: string) => {
     Alert.alert(
       '¿Eliminar vehículo?',
-      `Se eliminará ${plate} de tu lista`,
+      `Se eliminará ${vehicleName} de tu lista`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -152,7 +139,7 @@ export default function SelectVehicleScreen() {
 
               if (error) throw error;
 
-              Alert.alert('✅ Eliminado', `${plate} ha sido eliminado`);
+              Alert.alert('✅ Eliminado', `${vehicleName} ha sido eliminado`);
               await loadVehicles();
             } catch (error: any) {
               Alert.alert('Error', error.message);
@@ -180,6 +167,32 @@ export default function SelectVehicleScreen() {
     }
   };
 
+  const getVehicleIcon = (type: string) => {
+    switch (type) {
+      case 'car': return '🚗';
+      case 'motorcycle': return '🏍️';
+      case 'bike': return '🚲';
+      case 'scooter': return '🛴';
+      default: return '🚗';
+    }
+  };
+
+  const getVehicleName = (vehicle: Vehicle) => {
+    if (vehicle.brand && vehicle.model) {
+      return `${vehicle.brand} ${vehicle.model}`;
+    }
+    if (vehicle.nickname) {
+      return vehicle.nickname;
+    }
+    return vehicle.plate || vehicle.serial_number || 'Vehículo sin nombre';
+  };
+
+  const getVehicleIdentifier = (vehicle: Vehicle) => {
+    if (vehicle.plate) return vehicle.plate;
+    if (vehicle.serial_number) return `Serie: ${vehicle.serial_number}`;
+    return '';
+  };
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -203,100 +216,118 @@ export default function SelectVehicleScreen() {
             <Text style={styles.emptyIcon}>🚗</Text>
             <Text style={styles.emptyText}>No tienes vehículos registrados</Text>
             <Text style={styles.emptySubtext}>
-              Añade tu matrícula para recibir valoraciones en tu perfil de conductor
+              Añade tu vehículo para recibir valoraciones en tu perfil de conductor
             </Text>
           </View>
         ) : (
           <View style={styles.vehiclesList}>
             {vehicles.map((vehicle) => (
-              <View key={vehicle.id} style={styles.vehicleCard}>
-                <View style={styles.vehicleHeader}>
-                  <View style={styles.vehicleInfo}>
-                    <Text style={styles.vehiclePlate}>
-                      {vehicle.online ? '🟢' : '⚪'} {vehicle.plate}
-                    </Text>
-                    {vehicle.nickname && (
-                      <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
-                    )}
-                  </View>
+              <View 
+                key={`${vehicle.id}-${vehicle.online}-${vehicle.vehicle_photo_url}`}
+                style={[
+                  styles.vehicleCard,
+                  vehicle.online && styles.vehicleCardActive
+                ]}
+              >
+                {/* Foto del vehículo */}
+                <View style={styles.vehiclePhotoContainer}>
+                  {vehicle.vehicle_photo_url ? (
+                    <Image
+                      source={{ uri: vehicle.vehicle_photo_url }}
+                      style={styles.vehiclePhoto}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.vehiclePhotoPlaceholder}>
+                      <Text style={styles.vehiclePhotoPlaceholderIcon}>
+                        {getVehicleIcon(vehicle.vehicle_type)}
+                      </Text>
+                    </View>
+                  )}
                   
+                  {vehicle.online && (
+                    <View style={styles.activeBadge}>
+                      <Text style={styles.activeBadgeText}>ACTIVO</Text>
+                    </View>
+                  )}
+                  
+                  {vehicle.is_primary && (
+                    <View style={styles.primaryBadge}>
+                      <Text style={styles.primaryBadgeText}>⭐</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Info del vehículo */}
+                <View style={styles.vehicleInfo}>
+                  <View style={styles.vehicleHeader}>
+                    <Text style={styles.vehicleIcon}>
+                      {getVehicleIcon(vehicle.vehicle_type)}
+                    </Text>
+                    <View style={styles.vehicleNameContainer}>
+                      <Text style={styles.vehicleName}>
+                        {getVehicleName(vehicle)}
+                      </Text>
+                      {vehicle.year && (
+                        <Text style={styles.vehicleYear}>({vehicle.year})</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {vehicle.color && (
+                    <Text style={styles.vehicleColor}>🎨 {vehicle.color}</Text>
+                  )}
+
+                  <Text style={styles.vehicleIdentifier}>
+                    {getVehicleIdentifier(vehicle)}
+                  </Text>
+
+                  {vehicle.nickname && vehicle.brand && (
+                    <Text style={styles.vehicleNickname}>"{vehicle.nickname}"</Text>
+                  )}
+                </View>
+
+                {/* Botones de acción */}
+                <View style={styles.vehicleActions}>
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
                       vehicle.online && styles.toggleButtonActive
                     ]}
-                    onPress={() => handleToggleOnline(vehicle.id, vehicle.online, vehicle.plate)}
+                    onPress={() => handleToggleOnline(
+                      vehicle.id, 
+                      vehicle.online, 
+                      getVehicleName(vehicle)
+                    )}
                   >
                     <Text style={[
                       styles.toggleButtonText,
                       vehicle.online && styles.toggleButtonTextActive
                     ]}>
-                      {vehicle.online ? 'Activo' : 'Activar'}
+                      {vehicle.online ? '🟢 Activo' : '⚪ Activar'}
                     </Text>
                   </TouchableOpacity>
-                </View>
 
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteVehicle(vehicle.id, vehicle.plate)}
-                >
-                  <Text style={styles.deleteButtonText}>🗑️ Eliminar</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteVehicle(vehicle.id, getVehicleName(vehicle))}
+                  >
+                    <Text style={styles.deleteButtonText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
         )}
 
-        {/* Añadir nuevo vehículo */}
-        {!addingNew ? (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setAddingNew(true)}
-          >
-            <Text style={styles.addButtonText}>➕ Añadir vehículo</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.addForm}>
-            <Text style={styles.formTitle}>Nuevo Vehículo</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Matrícula (ej: 1234 ABC)"
-              value={newPlate}
-              onChangeText={setNewPlate}
-              autoCapitalize="characters"
-              maxLength={10}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Apodo (opcional)"
-              value={newNickname}
-              onChangeText={setNewNickname}
-              maxLength={30}
-            />
-
-            <View style={styles.formButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => {
-                  setAddingNew(false);
-                  setNewPlate('');
-                  setNewNickname('');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={handleAddVehicle}
-              >
-                <Text style={styles.saveButtonText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* Botón añadir nuevo vehículo */}
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/add-vehicle')}
+        >
+          <Text style={styles.addButtonIcon}>➕</Text>
+          <Text style={styles.addButtonText}>Añadir Vehículo</Text>
+        </TouchableOpacity>
 
         {/* Botón continuar */}
         <TouchableOpacity
@@ -304,7 +335,7 @@ export default function SelectVehicleScreen() {
           onPress={handleContinue}
         >
           <Text style={styles.continueButtonText}>
-            {vehicles.some(v => v.online) ? 'Continuar →' : 'Saltar este paso →'}
+            {vehicles.length > 0 ? 'Continuar →' : 'Saltar este paso →'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -330,6 +361,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   title: {
     fontSize: 28,
@@ -367,43 +399,126 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   vehiclesList: {
+    gap: 15,
     marginBottom: 20,
   },
   vehicleCard: {
     backgroundColor: 'white',
-    padding: 20,
     borderRadius: 15,
-    marginBottom: 15,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  vehicleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  vehicleCardActive: {
+    borderWidth: 2,
+    borderColor: '#34C759',
+  },
+  vehiclePhotoContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 150,
+  },
+  vehiclePhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  vehiclePhotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E0E0E0',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+  },
+  vehiclePhotoPlaceholderIcon: {
+    fontSize: 60,
+  },
+  activeBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#34C759',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  activeBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  primaryBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#FFD700',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryBadgeText: {
+    fontSize: 16,
   },
   vehicleInfo: {
+    padding: 15,
+  },
+  vehicleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  vehicleIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  vehicleNameContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
-  vehiclePlate: {
-    fontSize: 20,
+  vehicleName: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5,
     color: '#000',
+    marginRight: 6,
   },
-  vehicleNickname: {
+  vehicleYear: {
     fontSize: 14,
     color: '#666',
   },
+  vehicleColor: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  vehicleIdentifier: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  vehicleNickname: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#999',
+  },
+  vehicleActions: {
+    flexDirection: 'row',
+    padding: 15,
+    paddingTop: 0,
+    gap: 10,
+  },
   toggleButton: {
+    flex: 1,
     backgroundColor: '#E0E0E0',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 10,
+    alignItems: 'center',
   },
   toggleButtonActive: {
     backgroundColor: '#34C759',
@@ -417,95 +532,47 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   deleteButton: {
+    width: 50,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    padding: 10,
+    justifyContent: 'center',
   },
   deleteButtonText: {
-    fontSize: 14,
-    color: '#FF3B30',
+    fontSize: 20,
   },
   addButton: {
+    flexDirection: 'row',
     backgroundColor: '#007AFF',
     padding: 18,
     borderRadius: 15,
-    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
+  },
+  addButtonIcon: {
+    fontSize: 24,
+    marginRight: 10,
   },
   addButtonText: {
     color: 'white',
-    textAlign: 'center',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  addForm: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#000',
-  },
-  input: {
-    backgroundColor: '#F5F5F5',
-    padding: 15,
-    borderRadius: 10,
-    fontSize: 16,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  formButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  saveButton: {
-    backgroundColor: '#34C759',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-  },
   continueButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     padding: 18,
     borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    alignItems: 'center',
   },
   continueButtonText: {
     color: 'white',
-    textAlign: 'center',
     fontSize: 18,
     fontWeight: 'bold',
   },

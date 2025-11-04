@@ -1,24 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+// app/matching-results.tsx
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { supabase } from '../src/config/supabase';
 import EventCaptureService from '../src/services/EventCaptureService';
-import { getVerificationBadge } from '../src/utils/verificationBadges';
 import type { DriverCandidate } from '../src/types/events';
+import type { Vehicle } from '../src/types/vehicle';
+
+interface EnrichedCandidate extends DriverCandidate {
+  userProfile?: {
+    full_name: string;
+    avatar_url: string | null;
+  };
+  vehicles?: Vehicle[];
+  driverProfile?: {
+    total_score: number;
+    num_ratings: number;
+  };
+}
 
 export default function MatchingResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  const [candidates, setCandidates] = useState<DriverCandidate[]>([]);
+  const [candidates, setCandidates] = useState<EnrichedCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -27,7 +43,6 @@ export default function MatchingResultsScreen() {
   
   const eventId = params.eventId as string;
   
-  // ✅ NUEVO: Cargar candidates desde AsyncStorage
   useEffect(() => {
     loadCandidates();
   }, []);
@@ -51,21 +66,47 @@ export default function MatchingResultsScreen() {
       
       const parsedCandidates: DriverCandidate[] = JSON.parse(candidatesJson);
       console.log('✅ [MatchingResults] Candidates cargados:', parsedCandidates.length);
-      console.log('📋 [MatchingResults] Primer candidate:', parsedCandidates[0]);
       
-      // Validar estructura
-      const allValid = parsedCandidates.every(c => 
-        c.user_id && c.plate && c.match_score !== undefined && c.match_factors
+      // Enriquecer candidates con perfiles de usuario
+      const enrichedCandidates: EnrichedCandidate[] = await Promise.all(
+        parsedCandidates.map(async (candidate) => {
+          try {
+            // Cargar perfil de usuario
+            const { data: userProfile } = await supabase
+              .from('user_profiles')
+              .select('full_name, avatar_url')
+              .eq('user_id', candidate.user_id)
+              .maybeSingle();
+
+            // Cargar vehículos del usuario
+            const { data: vehicles } = await supabase
+              .from('user_vehicles')
+              .select('*')
+              .eq('user_id', candidate.user_id);
+
+            // Cargar perfil de conductor (ratings)
+            const { data: driverProfile } = await supabase
+              .from('profiles')
+              .select('total_score, num_ratings')
+              .eq('plate', candidate.plate)
+              .maybeSingle();
+
+            return {
+              ...candidate,
+              userProfile: userProfile || undefined,
+              vehicles: vehicles || [],
+              driverProfile: driverProfile || undefined,
+            };
+          } catch (err) {
+            console.error('Error enriqueciendo candidate:', err);
+            return candidate;
+          }
+        })
       );
       
-      if (!allValid) {
-        console.error('❌ [MatchingResults] Estructura de candidates inválida');
-        throw new Error('Estructura de candidates inválida');
-      }
+      setCandidates(enrichedCandidates);
       
-      setCandidates(parsedCandidates);
-      
-      // ✅ Limpiar de AsyncStorage después de cargar
+      // Limpiar de AsyncStorage después de cargar
       await AsyncStorage.removeItem(tempKey);
       console.log('🧹 [MatchingResults] Temp data limpiada de AsyncStorage');
       
@@ -77,12 +118,14 @@ export default function MatchingResultsScreen() {
     }
   };
 
-  const handleSelectCandidate = async (candidate: DriverCandidate) => {
+  const handleSelectCandidate = async (candidate: EnrichedCandidate) => {
     console.log('👆 [MatchingResults] Candidate seleccionado:', candidate.plate);
+    
+    const driverName = candidate.userProfile?.full_name || candidate.plate;
     
     Alert.alert(
       '✅ Confirmar Conductor',
-      `¿Evaluar a este conductor?\n\nMatrícula: ${candidate.plate}\nScore: ${candidate.match_score}/100`,
+      `¿Evaluar a ${driverName}?\n\nMatrícula: ${candidate.plate}\nConfianza: ${candidate.match_score}/100`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -152,153 +195,187 @@ export default function MatchingResultsScreen() {
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 80) return 'Alta Confianza';
-    if (score >= 60) return 'Media Confianza';
-    if (score >= 40) return 'Baja Confianza';
-    return 'Muy Baja';
+    if (score >= 80) return 'Alta confianza';
+    if (score >= 60) return 'Confianza media';
+    if (score >= 40) return 'Baja confianza';
+    return 'Muy baja';
   };
 
-  const renderFactorBar = (label: string, score: number, maxScore: number, emoji: string) => {
-    const percentage = Math.min(100, (score / maxScore) * 100);
+  const renderCandidateCard = ({ item, index }: { item: EnrichedCandidate; index: number }) => {
+    const scoreColor = getScoreColor(item.match_score);
+    const scoreLabel = getScoreLabel(item.match_score);
+    const hasProfile = !!item.userProfile;
+    const rating = item.driverProfile 
+      ? item.driverProfile.total_score / item.driverProfile.num_ratings 
+      : 0;
+    const numRatings = item.driverProfile?.num_ratings || 0;
     
+    // Buscar el vehículo que coincide con la matrícula (el activo en ese momento)
+    const activeVehicle = item.vehicles?.find(v => v.plate === item.plate);
+
     return (
-      <View style={styles.factorRow}>
-        <View style={styles.factorLabel}>
-          <Text style={styles.factorEmoji}>{emoji}</Text>
-          <Text style={styles.factorText}>{label}</Text>
+      <TouchableOpacity
+        style={styles.candidateCard}
+        onPress={() => handleSelectCandidate(item)}
+        activeOpacity={0.7}
+      >
+        {/* Badge de posición */}
+        <View style={[styles.positionBadge, index === 0 && styles.positionBadgeTop]}>
+          <Text style={styles.positionText}>#{index + 1}</Text>
         </View>
-        <View style={styles.factorBar}>
-          <View 
-            style={[
-              styles.factorBarFill, 
-              { width: `${percentage}%`, backgroundColor: getScoreColor(score) }
-            ]} 
-          />
+
+        {/* Score de confianza */}
+        <View style={[styles.scoreIndicator, { backgroundColor: scoreColor }]}>
+          <Text style={styles.scoreText}>{item.match_score}</Text>
+          <Text style={styles.scoreLabel}>{scoreLabel}</Text>
         </View>
-        <Text style={styles.factorScore}>{score}/{maxScore}</Text>
-      </View>
+
+        {/* Foto del vehículo + info del conductor */}
+        {activeVehicle?.vehicle_photo_url ? (
+          <View style={styles.vehicleSection}>
+            <Image
+              source={{ uri: activeVehicle.vehicle_photo_url }}
+              style={styles.vehiclePhoto}
+              resizeMode="cover"
+            />
+            <View style={styles.vehicleOverlay}>
+              <Text style={styles.vehiclePlate}>{item.plate}</Text>
+              {activeVehicle.brand && activeVehicle.model && (
+                <Text style={styles.vehicleInfo}>
+                  {activeVehicle.brand} {activeVehicle.model} ({activeVehicle.year})
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.noVehiclePhoto}>
+            <Text style={styles.noVehiclePhotoIcon}>🚗</Text>
+            <Text style={styles.noVehiclePhotoText}>Sin foto de vehículo</Text>
+          </View>
+        )}
+
+        {/* Info del conductor debajo de la foto */}
+        {hasProfile ? (
+          <View style={styles.driverInfo}>
+            <View style={styles.driverHeader}>
+              {item.userProfile?.avatar_url ? (
+                <Image
+                  source={{ uri: item.userProfile.avatar_url }}
+                  style={styles.driverAvatar}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.driverAvatarPlaceholder}>
+                  <Text style={styles.driverAvatarText}>
+                    {item.userProfile!.full_name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.driverDetails}>
+                <Text style={styles.driverName}>{item.userProfile!.full_name}</Text>
+                {numRatings > 0 && (
+                  <Text style={styles.driverRating}>
+                    ⭐ {rating.toFixed(1)} ({numRatings} valoraciones)
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.unknownDriverInfo}>
+            <Text style={styles.unknownDriverIcon}>👤</Text>
+            <Text style={styles.unknownDriverText}>Conductor sin perfil</Text>
+          </View>
+        )}
+
+        {/* Factores de matching */}
+        <View style={styles.matchFactors}>
+          <Text style={styles.matchFactorsTitle}>🎯 Factores de coincidencia:</Text>
+          
+          {item.match_factors.gps_proximity > 0 && (
+            <View style={styles.factorRow}>
+              <Text style={styles.factorIcon}>📍</Text>
+              <View style={styles.factorBar}>
+                <View style={[styles.factorBarFill, { 
+                  width: `${(item.match_factors.gps_proximity / 40) * 100}%`,
+                  backgroundColor: '#4CAF50'
+                }]} />
+              </View>
+              <Text style={styles.factorValue}>{Math.round(item.match_factors.gps_proximity)} pts</Text>
+            </View>
+          )}
+
+          {item.match_factors.bluetooth_detected && (
+            <View style={styles.factorRow}>
+              <Text style={styles.factorIcon}>📡</Text>
+              <View style={styles.factorBar}>
+                <View style={[styles.factorBarFill, { 
+                  width: '100%',
+                  backgroundColor: '#2196F3'
+                }]} />
+              </View>
+              <Text style={styles.factorValue}>30 pts</Text>
+            </View>
+          )}
+
+          {item.match_factors.direction_match > 0 && (
+            <View style={styles.factorRow}>
+              <Text style={styles.factorIcon}>🧭</Text>
+              <View style={styles.factorBar}>
+                <View style={[styles.factorBarFill, { 
+                  width: `${(item.match_factors.direction_match / 20) * 100}%`,
+                  backgroundColor: '#FF9800'
+                }]} />
+              </View>
+              <Text style={styles.factorValue}>{Math.round(item.match_factors.direction_match)} pts</Text>
+            </View>
+          )}
+
+          {item.match_factors.speed_match > 0 && (
+            <View style={styles.factorRow}>
+              <Text style={styles.factorIcon}>⚡</Text>
+              <View style={styles.factorBar}>
+                <View style={[styles.factorBarFill, { 
+                  width: `${(item.match_factors.speed_match / 10) * 100}%`,
+                  backgroundColor: '#9C27B0'
+                }]} />
+              </View>
+              <Text style={styles.factorValue}>{Math.round(item.match_factors.speed_match)} pts</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.tapHint}>
+          <Text style={styles.tapHintText}>👆 Toca para evaluar a este conductor</Text>
+        </View>
+      </TouchableOpacity>
     );
   };
 
-  const renderCandidateCard = ({ item, index }: { item: DriverCandidate; index: number }) => {
-    console.log(`🎨 [MatchingResults] Renderizando card ${index}:`, item.plate);
-    
-    // ✅ VALIDACIÓN: Verificar que match_factors existe
-    if (!item.match_factors) {
-      console.error('❌ match_factors es undefined para:', item.plate);
-      return (
-        <View style={[styles.card, { borderColor: '#F44336', borderWidth: 2 }]}>
-          <Text style={{ color: '#F44336', padding: 20, textAlign: 'center' }}>
-            ❌ Error: Datos de matching incompletos
-          </Text>
-        </View>
-      );
-    }
-    
-    let badge;
-    try {
-      badge = getVerificationBadge(item.match_score);
-    } catch (error) {
-      console.error('❌ Error obteniendo badge:', error);
-      badge = { badge: '❓', text: 'Error', description: 'Error al verificar' };
-    }
-    
-    return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        index === 0 && styles.topCard,
-      ]}
-      onPress={() => handleSelectCandidate(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.rankContainer}>
-          <Text style={styles.rankEmoji}>
-            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '👤'}
-          </Text>
-          <Text style={styles.rankText}>#{index + 1}</Text>
-        </View>
-        
-        <View style={styles.scoreContainer}>
-          <Text style={[styles.scoreValue, { color: getScoreColor(item.match_score) }]}>
-            {item.match_score}
-          </Text>
-          <Text style={styles.scoreMax}>/100</Text>
-        </View>
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={styles.plateContainer}>
-          <Text style={styles.plateLabel}>Matrícula:</Text>
-          <Text style={styles.plateValue}>{item.plate || 'No disponible'}</Text>
-        </View>
-
-        <View style={styles.verificationBadgeContainer}>
-          <Text style={styles.verificationBadgeEmoji}>{badge.badge}</Text>
-          <View style={styles.verificationBadgeTextContainer}>
-            <Text style={styles.verificationBadgeText}>{badge.text}</Text>
-            <Text style={styles.verificationBadgeDescription}>{badge.description}</Text>
-          </View>
-        </View>
-
-        <View style={[
-          styles.confidenceBadge, 
-          { backgroundColor: getScoreColor(item.match_score) + '20' }
-        ]}>
-          <Text style={[styles.confidenceText, { color: getScoreColor(item.match_score) }]}>
-            {getScoreLabel(item.match_score)}
-          </Text>
-        </View>
-
-        <View style={styles.factorsContainer}>
-          <Text style={styles.factorsTitle}>Factores de Matching:</Text>
-          
-          {renderFactorBar('Proximidad GPS', item.match_factors.gps_proximity || 0, 40, '📍')}
-          {renderFactorBar('Bluetooth', item.match_factors.bluetooth_detected ? 30 : 0, 30, '📡')}
-          {renderFactorBar('Dirección', item.match_factors.direction_match || 0, 20, '🧭')}
-          {renderFactorBar('Velocidad', item.match_factors.speed_match || 0, 10, '🚀')}
-        </View>
-      </View>
-
-      <View style={styles.cardFooter}>
-        <Text style={styles.selectButtonText}>👆 Toca para evaluar este conductor</Text>
-      </View>
-    </TouchableOpacity>
-  );
-  };
-
-  // ✅ Pantalla de loading
+  // Loading
   if (loading) {
-    console.log('🎨 [MatchingResults] Renderizando pantalla de loading');
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={{ marginTop: 16, fontSize: 16, color: '#666' }}>
-            Cargando candidatos...
-          </Text>
+          <Text style={styles.loadingText}>Cargando candidatos...</Text>
         </View>
       </View>
     );
   }
 
-  // ✅ Pantalla de error
+  // Error
   if (error) {
-    console.log('🎨 [MatchingResults] Renderizando pantalla de error');
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>❌</Text>
-          <Text style={styles.emptyTitle}>Error</Text>
-          <Text style={styles.emptyMessage}>{error}</Text>
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorIcon}>❌</Text>
+          <Text style={styles.errorTitle}>Error</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
           
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => {
-              console.log('← [MatchingResults] Volviendo...');
-              router.back();
-            }}
+            onPress={() => router.back()}
           >
             <Text style={styles.backButtonText}>← Volver</Text>
           </TouchableOpacity>
@@ -307,12 +384,11 @@ export default function MatchingResultsScreen() {
     );
   }
 
-  // ✅ Sin candidatos
+  // Sin candidatos
   if (candidates.length === 0) {
-    console.log('🎨 [MatchingResults] Renderizando pantalla sin candidatos');
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
+        <View style={styles.centerContainer}>
           <Text style={styles.emptyIcon}>🤷</Text>
           <Text style={styles.emptyTitle}>No se encontraron candidatos</Text>
           <Text style={styles.emptyMessage}>
@@ -328,10 +404,7 @@ export default function MatchingResultsScreen() {
 
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => {
-              console.log('← [MatchingResults] Volviendo...');
-              router.back();
-            }}
+            onPress={() => router.back()}
           >
             <Text style={styles.backButtonText}>← Volver</Text>
           </TouchableOpacity>
@@ -340,24 +413,20 @@ export default function MatchingResultsScreen() {
     );
   }
 
-  // ✅ Lista de candidatos
-  console.log('🎨 [MatchingResults] Renderizando lista de', candidates.length, 'candidatos');
+  // Lista de candidatos
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.headerBackButton}
-          onPress={() => {
-            console.log('← [MatchingResults] Volviendo...');
-            router.back();
-          }}
+          onPress={() => router.back()}
         >
           <Text style={styles.headerBackText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Candidatos Encontrados</Text>
+          <Text style={styles.headerTitle}>Conductores Encontrados</Text>
           <Text style={styles.headerSubtitle}>
-            {candidates.length} conductor{candidates.length !== 1 ? 'es' : ''} cercano{candidates.length !== 1 ? 's' : ''}
+            {candidates.length} candidato{candidates.length !== 1 ? 's' : ''} cercano{candidates.length !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
@@ -365,7 +434,7 @@ export default function MatchingResultsScreen() {
       <FlatList
         data={candidates}
         renderItem={renderCandidateCard}
-        keyExtractor={(item, index) => `${item.user_id || 'unknown'}-${index}`}
+        keyExtractor={(item, index) => `${item.user_id}-${index}`}
         contentContainerStyle={styles.listContent}
         ListFooterComponent={
           <View style={styles.footer}>
@@ -390,21 +459,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorIcon: {
+    fontSize: 60,
+    marginBottom: 15,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#000',
+  },
+  errorMessage: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  emptyIcon: {
+    fontSize: 60,
+    marginBottom: 15,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#000',
+  },
+  emptyMessage: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 22,
+  },
   header: {
-    backgroundColor: '#fff',
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 15,
     paddingTop: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   headerBackButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 10,
   },
   headerBackText: {
     fontSize: 28,
@@ -414,9 +527,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000',
   },
   headerSubtitle: {
     fontSize: 14,
@@ -424,144 +537,180 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   listContent: {
-    padding: 16,
+    padding: 15,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+  candidateCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'relative',
   },
-  topCard: {
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  positionBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#666',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    zIndex: 10,
   },
-  rankContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  positionBadgeTop: {
+    backgroundColor: '#FFD700',
   },
-  rankEmoji: {
-    fontSize: 32,
-    marginRight: 8,
-  },
-  rankText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-  },
-  scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  scoreMax: {
-    fontSize: 18,
-    color: '#999',
-    marginLeft: 2,
-  },
-  cardBody: {
-    marginBottom: 12,
-  },
-  plateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  plateLabel: {
+  positionText: {
     fontSize: 14,
-    color: '#666',
-    marginRight: 8,
+    fontWeight: 'bold',
+    color: 'white',
   },
-  plateValue: {
+  scoreIndicator: {
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  scoreText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  scoreLabel: {
+    fontSize: 12,
+    color: 'white',
+    marginTop: 2,
+  },
+  vehicleSection: {
+    position: 'relative',
+    marginBottom: 15,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  vehiclePhoto: {
+    width: '100%',
+    height: 180,
+  },
+  vehicleOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 12,
+  },
+  vehiclePlate: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    letterSpacing: 2,
+    color: 'white',
+    marginBottom: 4,
   },
-  verificationBadgeContainer: {
+  vehicleInfo: {
+    fontSize: 14,
+    color: 'white',
+  },
+  noVehiclePhoto: {
+    backgroundColor: '#f0f0f0',
+    height: 180,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  noVehiclePhotoIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  noVehiclePhotoText: {
+    fontSize: 14,
+    color: '#999',
+  },
+  driverInfo: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  driverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
-  verificationBadgeEmoji: {
-    fontSize: 24,
-    marginRight: 10,
+  driverAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
   },
-  verificationBadgeTextContainer: {
+  driverAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverAvatarText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  driverDetails: {
     flex: 1,
   },
-  verificationBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
+  driverName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
   },
-  verificationBadgeDescription: {
-    fontSize: 11,
+  driverRating: {
+    fontSize: 13,
     color: '#666',
   },
-  confidenceBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 16,
+  unknownDriverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
   },
-  confidenceText: {
-    fontSize: 13,
-    fontWeight: '600',
+  unknownDriverIcon: {
+    fontSize: 28,
+    marginRight: 12,
   },
-  factorsContainer: {
-    marginTop: 8,
-  },
-  factorsTitle: {
+  unknownDriverText: {
     fontSize: 14,
+    color: '#E65100',
     fontWeight: '600',
+  },
+  matchFactors: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  matchFactorsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10,
     color: '#666',
-    marginBottom: 12,
   },
   factorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  factorLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 120,
-  },
-  factorEmoji: {
+  factorIcon: {
     fontSize: 16,
-    marginRight: 6,
-  },
-  factorText: {
-    fontSize: 13,
-    color: '#666',
+    width: 24,
   },
   factorBar: {
     flex: 1,
@@ -575,78 +724,52 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-  factorScore: {
+  factorValue: {
     fontSize: 12,
     fontWeight: '600',
     color: '#666',
-    width: 40,
+    width: 45,
     textAlign: 'right',
   },
-  cardFooter: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+  tapHint: {
+    backgroundColor: '#E3F2FD',
+    padding: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  selectButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
+  tapHintText: {
+    fontSize: 13,
+    color: '#1565C0',
     fontWeight: '600',
   },
   footer: {
+    padding: 20,
     alignItems: 'center',
-    paddingVertical: 24,
   },
   footerText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
-    marginBottom: 16,
+    marginBottom: 15,
     textAlign: 'center',
   },
   manualButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    backgroundColor: '#FF9800',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   manualButtonText: {
-    color: '#007AFF',
+    color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   backButton: {
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   backButtonText: {
     color: '#666',
     fontSize: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyIcon: {
-    fontSize: 80,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  emptyMessage: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
   },
 });
