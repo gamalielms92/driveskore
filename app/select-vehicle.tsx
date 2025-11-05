@@ -1,7 +1,7 @@
 // app/select-vehicle.tsx
 
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,12 +37,9 @@ export default function SelectVehicleScreen() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState('');
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
-
   const loadVehicles = async () => {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
@@ -56,17 +53,28 @@ export default function SelectVehicleScreen() {
         .from('user_vehicles')
         .select('*')
         .eq('user_id', user.id)
+        .order('is_primary', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      console.log(`✅ Cargados ${data?.length || 0} vehículos`);
       setVehicles(data || []);
     } catch (error: any) {
+      console.error('Error cargando vehículos:', error);
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  // 🆕 Usar useFocusEffect para recargar automáticamente
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Pantalla enfocada - Recargando vehículos...');
+      loadVehicles();
+    }, [])
+  );
 
   const handleToggleOnline = async (vehicleId: string, currentState: boolean, vehicleName: string) => {
     try {
@@ -343,6 +351,8 @@ export default function SelectVehicleScreen() {
   );
 }
 
+// ... [styles sin cambios]
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -418,8 +428,7 @@ const styles = StyleSheet.create({
   },
   vehiclePhotoContainer: {
     position: 'relative',
-    width: '100%',
-    height: 150,
+    height: 200,
   },
   vehiclePhoto: {
     width: '100%',
@@ -428,12 +437,12 @@ const styles = StyleSheet.create({
   vehiclePhotoPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   vehiclePhotoPlaceholderIcon: {
-    fontSize: 60,
+    fontSize: 80,
   },
   activeBadge: {
     position: 'absolute',
@@ -453,15 +462,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: '#FFD700',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   primaryBadgeText: {
-    fontSize: 16,
+    fontSize: 20,
   },
   vehicleInfo: {
     padding: 15,
@@ -504,8 +511,8 @@ const styles = StyleSheet.create({
   },
   vehicleNickname: {
     fontSize: 13,
-    fontStyle: 'italic',
     color: '#999',
+    fontStyle: 'italic',
   },
   vehicleActions: {
     flexDirection: 'row',
@@ -515,9 +522,9 @@ const styles = StyleSheet.create({
   },
   toggleButton: {
     flex: 1,
-    backgroundColor: '#E0E0E0',
-    paddingVertical: 12,
-    borderRadius: 10,
+    backgroundColor: '#F0F0F0',
+    padding: 12,
+    borderRadius: 8,
     alignItems: 'center',
   },
   toggleButtonActive: {
@@ -532,12 +539,11 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   deleteButton: {
-    width: 50,
     backgroundColor: '#FF3B30',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
+    paddingHorizontal: 15,
+    borderRadius: 8,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   deleteButtonText: {
     fontSize: 20,
@@ -546,7 +552,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#007AFF',
     padding: 18,
-    borderRadius: 15,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 15,
@@ -568,12 +574,17 @@ const styles = StyleSheet.create({
   continueButton: {
     backgroundColor: '#34C759',
     padding: 18,
-    borderRadius: 15,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   continueButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

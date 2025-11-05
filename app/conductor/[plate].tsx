@@ -20,7 +20,7 @@ interface Rating {
   score: number;
   comment: string;
   created_at: string;
-  plate: string; // ← Añadido para saber de qué vehículo es
+  plate: string;
 }
 
 interface UserProfile {
@@ -42,7 +42,7 @@ interface Vehicle {
   color: string | null;
   vehicle_type: string | null;
   vehicle_photo_url: string | null;
-  is_primary: boolean; // ← AÑADIDO
+  is_primary: boolean;
 }
 
 interface VehicleProfile {
@@ -78,8 +78,12 @@ export default function ConductorProfileScreen() {
       if (vehicleError) throw vehicleError;
 
       if (!vehicleData) {
-        // Si no hay dueño registrado, mostrar perfil genérico del vehículo
-        await loadGenericVehicleProfile();
+        // Si no hay dueño registrado, mostrar error
+        Alert.alert(
+          'Conductor no encontrado',
+          'Esta matrícula no está registrada en DriveSkore.'
+        );
+        setLoading(false);
         return;
       }
 
@@ -166,46 +170,6 @@ export default function ConductorProfileScreen() {
     }
   };
 
-  const loadGenericVehicleProfile = async () => {
-    try {
-      // Cargar perfil genérico del vehículo (sin dueño)
-      const { data: vProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('plate', plate)
-        .is('user_id', null)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-
-      if (vProfile) {
-        setAggregatedProfile({
-          plate: vProfile.plate,
-          total_score: vProfile.total_score,
-          num_ratings: vProfile.num_ratings,
-          positive_attributes: vProfile.positive_attributes || {},
-          total_votes: vProfile.total_votes || 0
-        });
-      }
-
-      // Cargar valoraciones
-      const { data: ratings, error: ratingsError } = await supabase
-        .from('ratings')
-        .select('*')
-        .eq('plate', plate)
-        .order('created_at', { ascending: false });
-
-      if (ratingsError) throw ratingsError;
-
-      setAllRatings(ratings || []);
-
-    } catch (error: any) {
-      console.error('Error loading generic vehicle:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const aggregateProfiles = (profiles: VehicleProfile[]): VehicleProfile | null => {
     if (profiles.length === 0) return null;
 
@@ -284,12 +248,17 @@ export default function ConductorProfileScreen() {
     );
   }
 
-  if (!aggregatedProfile) {
+  if (!userProfile || !aggregatedProfile) {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ title: 'No encontrado' }} />
         <Text style={styles.emptyText}>❌</Text>
-        <Text style={styles.emptyMessage}>No se encontró información de este conductor</Text>
+        <Text style={styles.emptyMessage}>
+          Esta matrícula no está registrada en DriveSkore
+        </Text>
+        <Text style={styles.emptySubtext}>
+          Solo los conductores registrados tienen perfil
+        </Text>
       </View>
     );
   }
@@ -318,70 +287,61 @@ export default function ConductorProfileScreen() {
     <ScrollView style={styles.container}>
       <Stack.Screen 
         options={{ 
-          title: userProfile ? userProfile.full_name : plate || 'Conductor',
+          title: userProfile.full_name,
           headerStyle: { backgroundColor: '#007AFF' },
           headerTintColor: '#fff',
         }} 
       />
 
-      {/* 🆕 HEADER CENTRADO EN PERSONA */}
-      {userProfile ? (
-        <View style={styles.personHeader}>
-          {/* Foto de perfil */}
-          {userProfile.avatar_url ? (
-            <Image
-              source={{ uri: userProfile.avatar_url }}
-              style={styles.avatarLarge}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarPlaceholderText}>
-                {userProfile.full_name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+      {/* HEADER CENTRADO EN PERSONA */}
+      <View style={styles.personHeader}>
+        {/* Foto de perfil */}
+        {userProfile.avatar_url ? (
+          <Image
+            source={{ uri: userProfile.avatar_url }}
+            style={styles.avatarLarge}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarPlaceholderText}>
+              {userProfile.full_name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
 
-          {/* Nombre */}
-          <Text style={styles.personName}>{userProfile.full_name}</Text>
+        {/* Nombre */}
+        <Text style={styles.personName}>{userProfile.full_name}</Text>
 
-          {/* Bio */}
-          {userProfile.bio && (
-            <Text style={styles.personBio}>{userProfile.bio}</Text>
-          )}
+        {/* Bio */}
+        {userProfile.bio && (
+          <Text style={styles.personBio}>{userProfile.bio}</Text>
+        )}
 
-          {/* Stats rápidos */}
-          <View style={styles.quickStats}>
-            <View style={styles.quickStatItem}>
-              <Text style={styles.quickStatValue}>{vehicles.length}</Text>
-              <Text style={styles.quickStatLabel}>Vehículo{vehicles.length !== 1 ? 's' : ''}</Text>
-            </View>
-            <View style={styles.quickStatDivider} />
-            <View style={styles.quickStatItem}>
-              <Text style={styles.quickStatValue}>{aggregatedProfile.num_ratings}</Text>
-              <Text style={styles.quickStatLabel}>Valoraciones</Text>
-            </View>
-            <View style={styles.quickStatDivider} />
-            <View style={styles.quickStatItem}>
-              <Text style={styles.quickStatValue}>{average.toFixed(1)}</Text>
-              <Text style={styles.quickStatLabel}>Promedio</Text>
-            </View>
+        {/* Stats rápidos */}
+        <View style={styles.quickStats}>
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatValue}>{vehicles.length}</Text>
+            <Text style={styles.quickStatLabel}>Vehículo{vehicles.length !== 1 ? 's' : ''}</Text>
+          </View>
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatValue}>{aggregatedProfile.num_ratings}</Text>
+            <Text style={styles.quickStatLabel}>Valoraciones</Text>
+          </View>
+          <View style={styles.quickStatDivider} />
+          <View style={styles.quickStatItem}>
+            <Text style={styles.quickStatValue}>{average.toFixed(1)}</Text>
+            <Text style={styles.quickStatLabel}>Promedio</Text>
           </View>
         </View>
-      ) : (
-        // Fallback: Header genérico para vehículo sin dueño
-        <View style={styles.header}>
-          <Text style={styles.plateIcon}>🚗</Text>
-          <Text style={styles.plate}>{plate}</Text>
-          <Text style={styles.genericLabel}>Vehículo sin conductor registrado</Text>
-        </View>
-      )}
+      </View>
 
-      {/* 🆕 VEHÍCULOS DE LA PERSONA */}
+      {/* VEHÍCULOS DE LA PERSONA */}
       {vehicles.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            🚗 Vehículos de {userProfile?.full_name || 'este conductor'}
+            🚗 Vehículos de {userProfile.full_name}
           </Text>
           {vehicles.map((vehicle) => {
             const vProfile = vehicleProfiles.find(p => p.plate === vehicle.plate);
@@ -1069,6 +1029,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 80,
     marginBottom: 20,
+  },
+  emptySubtext: { 
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   emptyMessage: {
     fontSize: 18,

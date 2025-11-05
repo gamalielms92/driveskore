@@ -67,7 +67,7 @@ export const VEHICLE_COLORS = [
 export const VEHICLE_BRANDS = {
   car: [
     'Seat', 'Volkswagen', 'Ford', 'Renault', 'Peugeot', 'Citroën',
-    'Opel', 'BMW', 'Mercedes-Benz', 'Audi', 'Toyota', 'Honda',
+    'Opel', 'Vauxhall','BMW', 'Mercedes-Benz', 'Audi', 'Toyota', 'Honda',
     'Nissan', 'Mazda', 'Hyundai', 'Kia', 'Fiat', 'Otro'
   ],
   motorcycle: [

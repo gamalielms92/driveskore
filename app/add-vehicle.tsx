@@ -20,7 +20,7 @@ import ImageCompressionService from '../src/services/ImageCompressionService';
 import VehicleValidationService from '../src/services/VehicleValidationService';
 import { detectPlateFromImage } from '../src/services/ocrService';
 import { VEHICLE_BRANDS, VEHICLE_COLORS, type VehicleFormData } from '../src/types/vehicle';
-import { isBlacklisted, validateSpanishPlate } from '../src/utils/plateValidator';
+import { isBlacklisted, normalizePlate, validateSpanishPlate } from '../src/utils/plateValidator';
 
 export default function AddVehicleScreen() {
   const router = useRouter();
@@ -143,6 +143,7 @@ export default function AddVehicleScreen() {
           'Datos incompletos',
           validation.errors.join('\n')
         );
+        setLoading(false);
         return;
       }
       
@@ -150,12 +151,13 @@ export default function AddVehicleScreen() {
       
       if (!user) {
         Alert.alert('Error', 'No hay usuario autenticado');
+        setLoading(false);
         return;
       }
       
-      // Formatear matrícula si existe
-      const plateFormatted = formData.plate 
-        ? VehicleValidationService.formatPlate(formData.plate)
+      // ✅ NORMALIZAR matrícula (sin espacios ni guiones)
+      const plateNormalized = formData.plate 
+        ? normalizePlate(formData.plate)
         : null;
       
       // Si es el primer vehículo, marcarlo como primary y online
@@ -179,7 +181,7 @@ export default function AddVehicleScreen() {
         .from('user_vehicles')
         .insert({
           user_id: user.id,
-          plate: plateFormatted,
+          plate: plateNormalized, // ✅ SIN espacios ni guiones
           nickname: formData.nickname?.trim() || null,
           online: isFirstVehicle, // Primer vehículo activo por defecto
           vehicle_photo_url: formData.vehicle_photo_url,
@@ -237,14 +239,14 @@ export default function AddVehicleScreen() {
               <View style={styles.photoPreview}>
                 <Image
                   source={{ uri: formData.vehicle_photo_url }}
-                  style={styles.photoImage}
+                  style={styles.previewImage}
                   resizeMode="cover"
                 />
                 <TouchableOpacity
-                  style={styles.photoChangeButton}
-                  onPress={() => handlePhotoSelect('gallery')}
+                  style={styles.changePhotoButton}
+                  onPress={() => setFormData(prev => ({ ...prev, vehicle_photo_url: '' }))}
                 >
-                  <Text style={styles.photoChangeButtonText}>Cambiar foto</Text>
+                  <Text style={styles.changePhotoText}>Cambiar foto</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -254,25 +256,30 @@ export default function AddVehicleScreen() {
                   onPress={() => handlePhotoSelect('camera')}
                   disabled={uploadingPhoto}
                 >
-                  <Text style={styles.photoButtonIcon}>📸</Text>
-                  <Text style={styles.photoButtonText}>Tomar foto</Text>
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color="#007AFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.photoButtonIcon}>📷</Text>
+                      <Text style={styles.photoButtonText}>Tomar foto</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={styles.photoButton}
                   onPress={() => handlePhotoSelect('gallery')}
                   disabled={uploadingPhoto}
                 >
-                  <Text style={styles.photoButtonIcon}>🖼️</Text>
-                  <Text style={styles.photoButtonText}>Desde galería</Text>
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color="#007AFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.photoButtonIcon}>🖼️</Text>
+                      <Text style={styles.photoButtonText}>Galería</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
-              </View>
-            )}
-            
-            {uploadingPhoto && (
-              <View style={styles.uploadingIndicator}>
-                <ActivityIndicator size="small" color="#007AFF" />
-                <Text style={styles.uploadingText}>Subiendo foto...</Text>
               </View>
             )}
           </View>
@@ -280,94 +287,35 @@ export default function AddVehicleScreen() {
           {/* Tipo de vehículo */}
           <View style={styles.section}>
             <Text style={styles.label}>
-              🚦 Tipo de vehículo <Text style={styles.required}>*</Text>
+              🚗 Tipo de vehículo <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  formData.vehicle_type === 'car' && styles.typeButtonActive
-                ]}
-                onPress={() => setFormData(prev => ({ 
-                  ...prev, 
-                  vehicle_type: 'car',
-                  brand: '', // Reset marca al cambiar tipo
-                }))}
-              >
-                <Text style={[
-                  styles.typeButtonIcon,
-                  formData.vehicle_type === 'car' && styles.typeButtonIconActive
-                ]}>🚗</Text>
-                <Text style={[
-                  styles.typeButtonText,
-                  formData.vehicle_type === 'car' && styles.typeButtonTextActive
-                ]}>Coche</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  formData.vehicle_type === 'motorcycle' && styles.typeButtonActive
-                ]}
-                onPress={() => setFormData(prev => ({ 
-                  ...prev, 
-                  vehicle_type: 'motorcycle',
-                  brand: '',
-                }))}
-              >
-                <Text style={[
-                  styles.typeButtonIcon,
-                  formData.vehicle_type === 'motorcycle' && styles.typeButtonIconActive
-                ]}>🏍️</Text>
-                <Text style={[
-                  styles.typeButtonText,
-                  formData.vehicle_type === 'motorcycle' && styles.typeButtonTextActive
-                ]}>Moto</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  formData.vehicle_type === 'bike' && styles.typeButtonActive
-                ]}
-                onPress={() => setFormData(prev => ({ 
-                  ...prev, 
-                  vehicle_type: 'bike',
-                  brand: '',
-                }))}
-              >
-                <Text style={[
-                  styles.typeButtonIcon,
-                  formData.vehicle_type === 'bike' && styles.typeButtonIconActive
-                ]}>🚲</Text>
-                <Text style={[
-                  styles.typeButtonText,
-                  formData.vehicle_type === 'bike' && styles.typeButtonTextActive
-                ]}>Bicicleta</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  formData.vehicle_type === 'scooter' && styles.typeButtonActive
-                ]}
-                onPress={() => setFormData(prev => ({ 
-                  ...prev, 
-                  vehicle_type: 'scooter',
-                  brand: '',
-                }))}
-              >
-                <Text style={[
-                  styles.typeButtonIcon,
-                  formData.vehicle_type === 'scooter' && styles.typeButtonIconActive
-                ]}>🛴</Text>
-                <Text style={[
-                  styles.typeButtonText,
-                  formData.vehicle_type === 'scooter' && styles.typeButtonTextActive
-                ]}>Patinete</Text>
-              </TouchableOpacity>
+            <View style={styles.typeButtons}>
+              {(['car', 'motorcycle', 'bike', 'scooter'] as const).map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.typeButton,
+                    formData.vehicle_type === type && styles.typeButtonActive
+                  ]}
+                  onPress={() => setFormData(prev => ({ ...prev, vehicle_type: type }))}
+                >
+                  <Text style={styles.typeButtonIcon}>
+                    {type === 'car' && '🚗'}
+                    {type === 'motorcycle' && '🏍️'}
+                    {type === 'bike' && '🚲'}
+                    {type === 'scooter' && '🛴'}
+                  </Text>
+                  <Text style={[
+                    styles.typeButtonText,
+                    formData.vehicle_type === type && styles.typeButtonTextActive
+                  ]}>
+                    {type === 'car' && 'Coche'}
+                    {type === 'motorcycle' && 'Moto'}
+                    {type === 'bike' && 'Bici'}
+                    {type === 'scooter' && 'Patinete'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
@@ -376,8 +324,12 @@ export default function AddVehicleScreen() {
             <Text style={styles.label}>
               🏭 Marca <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.brandGrid}>
-              {currentBrands.map(brand => (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.brandsScroll}
+            >
+              {currentBrands.map((brand) => (
                 <TouchableOpacity
                   key={brand}
                   style={[
@@ -394,24 +346,20 @@ export default function AddVehicleScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-            {formData.brand && (
-              <View style={styles.selectedBadge}>
-                <Text style={styles.selectedBadgeText}>✓ Seleccionado: {formData.brand}</Text>
-              </View>
-            )}
+            </ScrollView>
           </View>
 
           {/* Modelo */}
           <View style={styles.section}>
             <Text style={styles.label}>
-              🚗 Modelo <Text style={styles.required}>*</Text>
+              🚙 Modelo <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="Ej: Ibiza, FX 3, M365..."
+              placeholder="Ej: Ibiza, Civic, Mountain Bike..."
               value={formData.model}
               onChangeText={(text) => setFormData(prev => ({ ...prev, model: text }))}
+              maxLength={50}
             />
           </View>
 
@@ -422,13 +370,15 @@ export default function AddVehicleScreen() {
             </Text>
             <TextInput
               style={styles.input}
-              placeholder="2020"
-              keyboardType="number-pad"
-              value={formData.year.toString()}
+              placeholder="Ej: 2020"
+              value={formData.year?.toString() || ''}
               onChangeText={(text) => {
-                const year = parseInt(text) || new Date().getFullYear();
-                setFormData(prev => ({ ...prev, year }));
+                const year = parseInt(text);
+                if (!isNaN(year) || text === '') {
+                  setFormData(prev => ({ ...prev, year: year || new Date().getFullYear() }));
+                }
               }}
+              keyboardType="number-pad"
               maxLength={4}
             />
           </View>
@@ -438,8 +388,12 @@ export default function AddVehicleScreen() {
             <Text style={styles.label}>
               🎨 Color <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.colorGrid}>
-              {VEHICLE_COLORS.map(color => (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.colorsScroll}
+            >
+              {VEHICLE_COLORS.map((color) => (
                 <TouchableOpacity
                   key={color}
                   style={[
@@ -456,51 +410,32 @@ export default function AddVehicleScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-            {formData.color && (
-              <View style={styles.selectedBadge}>
-                <Text style={styles.selectedBadgeText}>✓ Seleccionado: {formData.color}</Text>
-              </View>
-            )}
+            </ScrollView>
           </View>
 
-          {/* Matrícula (condicional) */}
-          {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle' || formData.plate) && (
+          {/* Matrícula o Número de Serie */}
+          {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') ? (
             <View style={styles.section}>
               <Text style={styles.label}>
-                🚙 Matrícula {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && <Text style={styles.required}>*</Text>}
+                🚙 Matrícula <Text style={styles.required}>*</Text>
               </Text>
-              
-              {/* Info sobre detección automática */}
-              {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && !formData.plate && (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoIcon}>💡</Text>
-                  <Text style={styles.infoText}>
-                    La matrícula se detectará automáticamente al subir la foto del vehículo
-                  </Text>
-                </View>
-              )}
-              
-              {/* Input con validación visual */}
               <View style={styles.plateInputContainer}>
                 <TextInput
                   style={[
                     styles.input,
-                    plateValidation && (plateValidation.isValid && !isBlacklisted(formData.plate || '')
-                      ? styles.inputValid
-                      : styles.inputInvalid
-                    )
+                    plateValidation?.isValid && !isBlacklisted(formData.plate) && styles.inputValid,
+                    plateValidation && !plateValidation.isValid && styles.inputInvalid
                   ]}
-                  placeholder="1234ABC (se detecta automáticamente)"
+                  placeholder="Ej: 1234ABC"
                   value={formData.plate}
                   onChangeText={handlePlateChange}
                   autoCapitalize="characters"
                   maxLength={10}
                 />
-                {plateValidation && formData.plate && (
-                  <View style={styles.validationIcon}>
-                    <Text style={styles.validationIconText}>
-                      {plateValidation.isValid && !isBlacklisted(formData.plate) ? '✅' : '❌'}
+                {formData.plate && (
+                  <View style={styles.plateValidationIcon}>
+                    <Text style={styles.plateValidationIconText}>
+                      {plateValidation?.isValid && !isBlacklisted(formData.plate) ? '✅' : '❌'}
                     </Text>
                   </View>
                 )}
@@ -519,78 +454,70 @@ export default function AddVehicleScreen() {
                     <View style={styles.validationError}>
                       <Text style={styles.validationErrorText}>
                         {isBlacklisted(formData.plate) 
-                          ? `✗ La combinación "${plateValidation.letters}" no es válida según la DGT`
-                          : '✗ Formato de matrícula no válido'}
+                          ? '✗ Combinación de letras no permitida por la DGT'
+                          : '✗ Formato inválido. Ejemplo: 1234ABC o M1234BC'}
                       </Text>
                     </View>
                   )}
                 </>
               )}
-              
-              <Text style={styles.hint}>Formato válido: 1234ABC o M-1234-BC</Text>
             </View>
+          ) : (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.label}>
+                  🚙 Matrícula (opcional)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Si tiene matrícula"
+                  value={formData.plate}
+                  onChangeText={handlePlateChange}
+                  autoCapitalize="characters"
+                  maxLength={10}
+                />
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>
+                  🔢 Número de Serie (opcional)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ej: WBY12345678"
+                  value={formData.serial_number}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, serial_number: text }))}
+                  maxLength={30}
+                />
+              </View>
+            </>
           )}
 
-          {/* Número de serie (para bicis/patinetes) */}
-          {(formData.vehicle_type === 'bike' || formData.vehicle_type === 'scooter') && (
-            <View style={styles.section}>
-              <Text style={styles.label}>
-                🔢 Número de serie {!formData.plate && <Text style={styles.required}>*</Text>}
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="TK-123456 o similar"
-                value={formData.serial_number}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, serial_number: text }))}
-                autoCapitalize="characters"
-                maxLength={30}
-              />
-              <Text style={styles.hint}>Puedes encontrarlo en el cuadro de la bici o patinete</Text>
-            </View>
-          )}
-
-          {/* Apodo (opcional) */}
+          {/* Apodo */}
           <View style={styles.section}>
-            <Text style={styles.label}>✏️ Apodo (opcional)</Text>
+            <Text style={styles.label}>
+              ✏️ Apodo (opcional)
+            </Text>
             <TextInput
               style={styles.input}
-              placeholder="Mi coche, La bici roja..."
+              placeholder='Ej: "Mi primer coche"'
               value={formData.nickname}
               onChangeText={(text) => setFormData(prev => ({ ...prev, nickname: text }))}
               maxLength={50}
             />
           </View>
 
-          {/* Marcarlo como principal */}
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setFormData(prev => ({ ...prev, is_primary: !prev.is_primary }))}
-          >
-            <View style={[styles.checkbox, formData.is_primary && styles.checkboxChecked]}>
-              {formData.is_primary && <Text style={styles.checkboxIcon}>✓</Text>}
-            </View>
-            <Text style={styles.checkboxLabel}>Marcar como vehículo principal</Text>
-          </TouchableOpacity>
-
-          {/* Botón de envío */}
+          {/* Botón submit */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="white" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.submitButtonText}>✅ Añadir Vehículo</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => router.back()}
-            disabled={loading}
-          >
-            <Text style={styles.cancelButtonText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -620,7 +547,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 30,
-    lineHeight: 22,
   },
   section: {
     marginBottom: 25,
@@ -634,139 +560,105 @@ const styles = StyleSheet.create({
   required: {
     color: '#FF3B30',
   },
-  input: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
+  photoPreview: {
+    alignItems: 'center',
   },
-  typeSelector: {
+  previewImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  changePhotoButton: {
+    padding: 10,
+  },
+  changePhotoText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  photoButtonIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  photoButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  typeButtons: {
     flexDirection: 'row',
     gap: 10,
   },
   typeButton: {
     flex: 1,
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 12,
+    backgroundColor: '#fff',
     padding: 15,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   typeButtonActive: {
     borderColor: '#007AFF',
     backgroundColor: '#E3F2FD',
   },
   typeButtonIcon: {
-    fontSize: 32,
-    marginBottom: 6,
-  },
-  typeButtonIconActive: {
-    // Mantener mismo tamaño
+    fontSize: 24,
+    marginBottom: 5,
   },
   typeButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
     fontWeight: '600',
   },
   typeButtonTextActive: {
     color: '#007AFF',
-    fontWeight: 'bold',
   },
-  brandGrid: {
+  brandsScroll: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
   },
   brandButton: {
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 10,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    minWidth: '30%',
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   brandButtonActive: {
+    backgroundColor: '#007AFF',
     borderColor: '#007AFF',
-    backgroundColor: '#E3F2FD',
   },
   brandButtonText: {
     fontSize: 14,
     color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  brandButtonTextActive: {
-    color: '#007AFF',
-    fontWeight: 'bold',
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  colorButton: {
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    minWidth: '28%',
-  },
-  colorButtonActive: {
-    borderColor: '#007AFF',
-    backgroundColor: '#E3F2FD',
-  },
-  colorButtonText: {
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  colorButtonTextActive: {
-    color: '#007AFF',
-    fontWeight: 'bold',
-  },
-  selectedBadge: {
-    marginTop: 10,
-    backgroundColor: '#E8F5E9',
-    padding: 10,
-    borderRadius: 8,
-  },
-  selectedBadgeText: {
-    fontSize: 14,
-    color: '#2E7D32',
     fontWeight: '600',
   },
-  hint: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 5,
+  brandButtonTextActive: {
+    color: '#fff',
   },
-  infoBox: {
-    flexDirection: 'row',
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 15,
-    alignItems: 'center',
-  },
-  infoIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1565C0',
-    lineHeight: 18,
-  },
-  plateInputContainer: {
-    position: 'relative',
+  input: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   inputValid: {
     borderColor: '#34C759',
@@ -776,141 +668,74 @@ const styles = StyleSheet.create({
     borderColor: '#FF3B30',
     borderWidth: 2,
   },
-  validationIcon: {
+  colorsScroll: {
+    flexDirection: 'row',
+  },
+  colorButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  colorButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  colorButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  colorButtonTextActive: {
+    color: '#fff',
+  },
+  plateInputContainer: {
+    position: 'relative',
+  },
+  plateValidationIcon: {
     position: 'absolute',
     right: 15,
     top: 15,
   },
-  validationIconText: {
-    fontSize: 24,
+  plateValidationIconText: {
+    fontSize: 20,
   },
   validationSuccess: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#D4EDDA',
     padding: 10,
     borderRadius: 8,
     marginTop: 8,
   },
   validationSuccessText: {
+    color: '#155724',
     fontSize: 13,
-    color: '#2E7D32',
-    fontWeight: '600',
   },
   validationError: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#F8D7DA',
     padding: 10,
     borderRadius: 8,
     marginTop: 8,
   },
   validationErrorText: {
+    color: '#721C24',
     fontSize: 13,
-    color: '#C62828',
-    fontWeight: '600',
-  },
-  photoButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoButton: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 10,
-    padding: 20,
-    alignItems: 'center',
-  },
-  photoButtonIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  photoButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  photoPreview: {
-    alignItems: 'center',
-  },
-  photoImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  photoChangeButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  photoChangeButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  uploadingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-  },
-  uploadingText: {
-    marginLeft: 10,
-    fontSize: 14,
-    color: '#1565C0',
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30,
-    paddingVertical: 10,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 6,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#007AFF',
-  },
-  checkboxIcon: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  checkboxLabel: {
-    fontSize: 16,
-    color: '#333',
   },
   submitButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 15,
+    marginTop: 10,
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
   submitButtonText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  cancelButton: {
-    padding: 15,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
   },
 });

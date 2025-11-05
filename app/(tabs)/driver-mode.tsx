@@ -1,160 +1,306 @@
 // app/(tabs)/driver-mode.tsx
-// VERSIÓN CORREGIDA
 
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import * as Location from 'expo-location';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import LocationTrackingService from '../../src/services/LocationTrackingService';
 
 export default function DriverModeScreen() {
-  const [isActive, setIsActive] = useState(false);
-  const [userPlate, setUserPlate] = useState<string>('');
+  const router = useRouter();
+  const [isTracking, setIsTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
+  const [userPlate, setUserPlate] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    duration: 0,
+    distance: 0,
+    events: 0,
+    lastUpdate: null as Date | null
+  });
+  const [settings, setSettings] = useState({
+    autoCapture: true,
+    minDistance: 50, // metros
+    captureInterval: 30 // segundos
+  });
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  const trackingInterval = useRef<NodeJS.Timeout | null>(null);
+  const appState = useRef(AppState.currentState);
 
-  const loadUserData = async () => {
+  // Función para cargar vehículo activo
+  const loadActiveVehicle = async () => {
     try {
       setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Obtener usuario
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.error('❌ Error obteniendo usuario:', userError);
-        Alert.alert('Error', 'No hay usuario autenticado');
+      if (!user) {
+        setUserId('');
+        setUserPlate(null);
         return;
       }
-      
-      console.log('✅ Usuario autenticado:', user.email);
+
       setUserId(user.id);
 
-      // 2. Obtener vehículo activo del usuario
-      const { data: activeVehicle, error: vehicleError } = await supabase
+      const { data: activeVehicle } = await supabase
         .from('user_vehicles')
-        .select('plate, online')
+        .select('plate')
         .eq('user_id', user.id)
         .eq('online', true)
         .maybeSingle();
 
-      console.log('🚗 Vehículo activo:', activeVehicle);
-
-      if (vehicleError) {
-        console.error('❌ Error obteniendo vehículo:', vehicleError);
-      }
-
-      if (activeVehicle) {
-        console.log('✅ Matrícula encontrada:', activeVehicle.plate);
-        setUserPlate(activeVehicle.plate);
-        
-        // Verificar si el tracking ya está activo
-        const trackingActive = LocationTrackingService.isActive();
-        setIsActive(trackingActive);
-        console.log('📍 Tracking activo:', trackingActive);
-      } else {
-        console.log('⚠️ No hay vehículo activo');
-        setUserPlate('');
-        setIsActive(false);
-      }
+      setUserPlate(activeVehicle?.plate || null);
+      console.log('🚗 Vehículo activo cargado:', activeVehicle?.plate || 'ninguno');
       
-    } catch (error: any) {
-      console.error('❌ Error cargando datos:', error);
-      Alert.alert('Error', error.message);
+      // Verificar si el tracking ya está activo
+      const trackingActive = LocationTrackingService.isActive();
+      setIsTracking(trackingActive);
+      console.log('📍 Tracking activo:', trackingActive);
+      
+    } catch (error) {
+      console.error('Error cargando vehículo activo:', error);
+      setUserPlate(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggle = async (value: boolean) => {
+  // 🆕 Recargar cada vez que la pantalla gana el foco
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Driver Mode enfocado - Recargando vehículo activo...');
+      loadActiveVehicle();
+    }, [])
+  );
+
+  useEffect(() => {
+    // Manejar cambios en el estado de la app
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        console.log('App volvió al foreground');
+        if (isTracking) {
+          checkTrackingStatus();
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isTracking]);
+
+  useEffect(() => {
+    // Cleanup al desmontar
+    return () => {
+      if (trackingInterval.current) {
+        clearInterval(trackingInterval.current);
+      }
+    };
+  }, []);
+
+  const checkTrackingStatus = async () => {
+    const status = LocationTrackingService.isActive();
+    setIsTracking(status);
+    
+    if (status) {
+      updateStats();
+    }
+  };
+
+  const updateStats = () => {
+    // Actualizar timestamp
+    setStats(prev => ({
+      ...prev,
+      lastUpdate: new Date()
+    }));
+  };
+
+  const handleStartTracking = async () => {
     try {
       console.log('═══════════════════════════════════════');
-      console.log('🔧 handleToggle llamado');
-      console.log('📋 Value:', value);
-      console.log('📋 User Plate:', userPlate);
-      console.log('📋 User ID:', userId);
-      console.log('═══════════════════════════════════════');
-
-      if (value) {
-        // ═══ ACTIVAR MODO CONDUCTOR ═══
-        
-        // Validación 1: Usuario autenticado
-        if (!userId) {
-          Alert.alert('Error', 'No hay usuario autenticado');
-          return;
-        }
-
-        // Validación 2: Matrícula configurada
-        if (!userPlate || userPlate.trim() === '') {
-          Alert.alert(
-            'Sin vehículo activo',
-            'Debes activar un vehículo en la pantalla "Mis Vehículos" para poder usar el Modo Conductor.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { 
-                text: 'Ir a Vehículos',
-                onPress: () => {
-                  // TODO: Navegar a select-vehicle
-                  // router.push('/select-vehicle');
-                }
-              }
-            ]
-          );
-          return;
-        }
-
-        console.log('✅ Validaciones pasadas');
-        console.log('🚀 Iniciando LocationTrackingService...');
-
-        // Inicializar servicio
-        await LocationTrackingService.initialize(userId, userPlate);
-        console.log('✅ LocationTrackingService inicializado');
-
-        // Iniciar tracking
-        console.log('📍 Llamando a startTracking()...');
-        const success = await LocationTrackingService.startTracking();
-        console.log('📊 startTracking() result:', success);
-        
-        if (success) {
-          setIsActive(true);
-          Alert.alert(
-            '✅ Modo Conductor Activado',
-            `Tu ubicación se está registrando\n\nMatrícula: ${userPlate}`,
-            [{ text: 'OK' }]
-          );
-          console.log('✅ Tracking iniciado exitosamente');
-        } else {
-          Alert.alert('Error', 'No se pudo iniciar el tracking');
-          console.error('❌ startTracking() retornó false');
-        }
-        
-      } else {
-        // ═══ DESACTIVAR MODO CONDUCTOR ═══
-        
-        console.log('⏸️ Deteniendo tracking...');
-        await LocationTrackingService.stopTracking();
-        setIsActive(false);
-        Alert.alert('⏸️ Modo Conductor Desactivado', 'Tracking detenido');
-        console.log('✅ Tracking detenido');
-      }
+      console.log('🔧 handleStartTracking llamado');
       
+      // Validación 1: Usuario autenticado
+      if (!userId) {
+        Alert.alert('Error', 'Debes iniciar sesión');
+        return;
+      }
+
+      // 🆕 Validación 2: Recargar y verificar vehículo activo EN TIEMPO REAL
+      await loadActiveVehicle();
+      
+      console.log('📋 User ID:', userId);
+      console.log('📋 User Plate:', userPlate);
+      
+      if (!userPlate || userPlate.trim() === '') {
+        Alert.alert(
+          'Sin vehículo activo',
+          'Debes activar un vehículo en la pantalla "Mis Vehículos" para poder usar el Modo Conductor.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { 
+              text: 'Ir a Vehículos',
+              onPress: () => {
+                router.push('/select-vehicle');
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // Validación 3: Permisos de ubicación
+      const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+      
+      if (foregroundStatus !== 'granted') {
+        Alert.alert(
+          'Permisos necesarios',
+          'La app necesita acceso a tu ubicación para funcionar en modo conductor.'
+        );
+        return;
+      }
+
+      // En Android, también pedir permisos de background
+      if (Platform.OS === 'android') {
+        const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+        
+        if (backgroundStatus !== 'granted') {
+          Alert.alert(
+            'Permiso de ubicación en segundo plano',
+            'Para un seguimiento continuo, permite el acceso a la ubicación "Siempre" en la configuración.'
+          );
+        }
+      }
+
+      // Iniciar tracking
+      Alert.alert(
+        'Iniciar Modo Conductor',
+        `Se activará el seguimiento para el vehículo ${userPlate}.\n\n` +
+        '• Se capturará tu ubicación automáticamente\n' +
+        '• Podrás evaluar otros conductores\n' +
+        '• El modo funciona en segundo plano',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Iniciar',
+            onPress: async () => {
+              try {
+                console.log('✅ Validaciones pasadas');
+                console.log('🚀 Iniciando LocationTrackingService...');
+                
+                // Inicializar servicio
+                await LocationTrackingService.initialize(userId, userPlate);
+                console.log('✅ LocationTrackingService inicializado');
+
+                // Iniciar tracking
+                console.log('📍 Llamando a startTracking()...');
+                const success = await LocationTrackingService.startTracking();
+                console.log('📊 startTracking() result:', success);
+                
+                if (success) {
+                  setIsTracking(true);
+                  
+                  // Actualizar stats cada 10 segundos
+                  trackingInterval.current = setInterval(() => {
+                    updateStats();
+                  }, 10000);
+                  
+                  Alert.alert(
+                    '✅ Modo Conductor Activo',
+                    'El seguimiento ha comenzado. Puedes minimizar la app.'
+                  );
+                  console.log('✅ Tracking iniciado exitosamente');
+                } else {
+                  Alert.alert('Error', 'No se pudo iniciar el tracking');
+                  console.error('❌ startTracking() retornó false');
+                }
+              } catch (error: any) {
+                console.error('❌ Error iniciando tracking:', error);
+                Alert.alert('Error', error.message);
+              }
+            }
+          }
+        ]
+      );
     } catch (error: any) {
       console.error('═══════════════════════════════════════');
-      console.error('❌ Error en handleToggle:', error);
+      console.error('❌ Error en handleStartTracking:', error);
       console.error('❌ Error message:', error.message);
-      console.error('❌ Error stack:', error.stack);
       console.error('═══════════════════════════════════════');
-      
-      Alert.alert('Error', error.message || 'No se pudo cambiar el estado');
-      setIsActive(false);
+      Alert.alert('Error', error.message || 'No se pudo iniciar el modo conductor');
     }
+  };
+
+  const handleStopTracking = async () => {
+    Alert.alert(
+      'Detener Modo Conductor',
+      '¿Quieres finalizar el seguimiento?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Detener',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('⏸️ Deteniendo tracking...');
+              await LocationTrackingService.stopTracking();
+              setIsTracking(false);
+              
+              if (trackingInterval.current) {
+                clearInterval(trackingInterval.current);
+                trackingInterval.current = null;
+              }
+              
+              Alert.alert(
+                '✅ Modo Conductor Detenido',
+                'El seguimiento ha finalizado correctamente.'
+              );
+              console.log('✅ Tracking detenido');
+            } catch (error: any) {
+              console.error('❌ Error deteniendo tracking:', error);
+              Alert.alert('Error', error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const formatDistance = (meters: number): string => {
+    if (meters >= 1000) {
+      return `${(meters / 1000).toFixed(1)} km`;
+    }
+    return `${Math.round(meters)} m`;
   };
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Cargando...</Text>
       </View>
@@ -162,68 +308,171 @@ export default function DriverModeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🚗 Modo Conductor</Text>
-      
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Estado del Tracking</Text>
-            <Text style={styles.value}>
-              {isActive ? '🟢 Activo' : '⚪ Inactivo'}
-            </Text>
-          </View>
-          <Switch 
-            value={isActive} 
-            onValueChange={handleToggle}
-            trackColor={{ false: '#767577', true: '#81b0ff' }}
-            thumbColor={isActive ? '#007AFF' : '#f4f3f4'}
-          />
-        </View>
-
-        {userPlate ? (
-          <View style={styles.info}>
-            <Text style={styles.infoLabel}>Vehículo Activo:</Text>
-            <Text style={styles.infoValue}>{userPlate}</Text>
-          </View>
-        ) : (
-          <View style={styles.warning}>
-            <Text style={styles.warningText}>
-              ⚠️ No tienes ningún vehículo activo.
-              {'\n\n'}
-              Ve a "Mis Vehículos" para activar uno.
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.explanation}>
-        <Text style={styles.explanationTitle}>¿Qué hace el Modo Conductor?</Text>
-        <Text style={styles.explanationText}>
-          • Registra tu ubicación GPS continuamente{'\n'}
-          • Permite que otros te identifiquen al evaluarte{'\n'}
-          • Funciona en segundo plano{'\n'}
-          • Optimizado para bajo consumo de batería
-        </Text>
-      </View>
-
-      {isActive && (
-        <View style={styles.activeInfo}>
-          <Text style={styles.activeInfoText}>
-            📍 Tu ubicación se está registrando{'\n'}
-            🔋 Consumo: ~3-5% batería/hora{'\n'}
-            📡 Sincronización cada 30 segundos
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerIcon}>🚗</Text>
+          <Text style={styles.title}>Modo Conductor</Text>
+          <Text style={styles.subtitle}>
+            Activa el seguimiento automático mientras conduces
           </Text>
         </View>
-      )}
-    </View>
+
+        {/* Estado del vehículo */}
+        <View style={styles.vehicleCard}>
+          <Text style={styles.cardTitle}>Vehículo Activo</Text>
+          {userPlate ? (
+            <>
+              <Text style={styles.vehiclePlate}>🟢 {userPlate}</Text>
+              <Text style={styles.vehicleStatus}>Listo para conducir</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.noVehicle}>⚪ Sin vehículo activo</Text>
+              <TouchableOpacity
+                style={styles.selectVehicleButton}
+                onPress={() => router.push('/select-vehicle')}
+              >
+                <Text style={styles.selectVehicleButtonText}>
+                  Seleccionar vehículo →
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* Control de tracking */}
+        <View style={[
+          styles.trackingCard,
+          isTracking && styles.trackingCardActive
+        ]}>
+          <View style={styles.trackingHeader}>
+            <Text style={styles.cardTitle}>
+              {isTracking ? '🔴 Seguimiento Activo' : '⚪ Seguimiento Inactivo'}
+            </Text>
+            {isTracking && stats.lastUpdate && (
+              <Text style={styles.lastUpdate}>
+                Última actualización: {stats.lastUpdate.toLocaleTimeString()}
+              </Text>
+            )}
+          </View>
+
+          {isTracking ? (
+            <>
+              {/* Stats */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{formatDuration(stats.duration)}</Text>
+                  <Text style={styles.statLabel}>Duración</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{formatDistance(stats.distance)}</Text>
+                  <Text style={styles.statLabel}>Distancia</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{stats.events}</Text>
+                  <Text style={styles.statLabel}>Eventos</Text>
+                </View>
+              </View>
+
+              {/* Botón detener */}
+              <TouchableOpacity
+                style={styles.stopButton}
+                onPress={handleStopTracking}
+              >
+                <Text style={styles.stopButtonText}>⏹️ Detener Seguimiento</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.startButton,
+                !userPlate && styles.startButtonDisabled
+              ]}
+              onPress={handleStartTracking}
+              disabled={!userPlate}
+            >
+              <Text style={styles.startButtonText}>▶️ Iniciar Seguimiento</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Configuración */}
+        <View style={styles.settingsCard}>
+          <Text style={styles.cardTitle}>⚙️ Configuración</Text>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Captura automática</Text>
+              <Text style={styles.settingDescription}>
+                Registra eventos cuando detecta otros conductores
+              </Text>
+            </View>
+            <Switch
+              value={settings.autoCapture}
+              onValueChange={(value) =>
+                setSettings(prev => ({ ...prev, autoCapture: value }))
+              }
+              disabled={isTracking}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Distancia mínima</Text>
+              <Text style={styles.settingDescription}>
+                {settings.minDistance}m entre capturas
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Intervalo de captura</Text>
+              <Text style={styles.settingDescription}>
+                {settings.captureInterval}s entre registros
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Información */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>
+          <Text style={styles.infoText}>
+            1. Activa un vehículo en "Mis Vehículos"{'\n'}
+            2. Inicia el seguimiento antes de conducir{'\n'}
+            3. Usa el botón Bluetooth para evaluar conductores{'\n'}
+            4. El modo funciona en segundo plano{'\n'}
+            5. Detén el seguimiento al terminar tu viaje
+          </Text>
+        </View>
+
+        {/* Advertencias */}
+        <View style={styles.warningCard}>
+          <Text style={styles.warningIcon}>⚠️</Text>
+          <Text style={styles.warningText}>
+            • No uses el móvil mientras conduces{'\n'}
+            • El seguimiento consume batería{'\n'}
+            • Requiere conexión a internet{'\n'}
+            • Los datos se envían de forma segura
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
   loadingText: {
@@ -231,16 +480,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  content: {
+    padding: 20,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  headerIcon: {
+    fontSize: 60,
+    marginBottom: 15,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
+    marginBottom: 10,
+    color: '#000',
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  vehicleCard: {
+    backgroundColor: 'white',
     padding: 20,
+    borderRadius: 15,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -248,77 +513,172 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  row: {
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#000',
+  },
+  vehiclePlate: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#34C759',
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  vehicleStatus: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  noVehicle: {
+    fontSize: 20,
+    color: '#999',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  selectVehicleButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  selectVehicleButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  trackingCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  trackingCardActive: {
+    borderWidth: 2,
+    borderColor: '#FF3B30',
+  },
+  trackingHeader: {
+    marginBottom: 15,
+  },
+  lastUpdate: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 5,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  startButton: {
+    backgroundColor: '#34C759',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  startButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  startButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  stopButton: {
+    backgroundColor: '#FF3B30',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  stopButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  settingsCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  label: {
+  settingInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  settingLabel: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 13,
     color: '#666',
   },
-  value: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  info: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  infoValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 4,
-    letterSpacing: 2,
-    color: '#007AFF',
-  },
-  warning: {
-    marginTop: 20,
-    padding: 15,
-    backgroundColor: '#FFF3CD',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFC107',
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#856404',
-    textAlign: 'center',
-  },
-  explanation: {
+  infoCard: {
     backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 16,
+    padding: 20,
+    borderRadius: 15,
     marginBottom: 20,
   },
-  explanationTitle: {
+  infoTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#1565C0',
+    marginBottom: 10,
+    color: '#1976D2',
   },
-  explanationText: {
+  infoText: {
     fontSize: 14,
+    color: '#1976D2',
     lineHeight: 22,
-    color: '#333',
   },
-  activeInfo: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
+  warningCard: {
+    backgroundColor: '#FFF3CD',
+    padding: 20,
+    borderRadius: 15,
+    flexDirection: 'row',
+    marginBottom: 20,
   },
-  activeInfoText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#2E7D32',
+  warningIcon: {
+    fontSize: 24,
+    marginRight: 15,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#856404',
+    lineHeight: 22,
   },
 });

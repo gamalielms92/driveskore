@@ -140,21 +140,6 @@ export class VehicleValidationService {
     
     return { isValid: true };
   }
-  
-  /**
-   * Formatea matrícula al formato estándar (1234-ABC)
-   */
-  static formatPlate(plate: string): string {
-    const clean = plate.replace(/[-\s]/g, '').toUpperCase();
-    
-    // Formato nuevo: 1234ABC → 1234-ABC
-    if (/^[0-9]{4}[A-Z]{3}$/.test(clean)) {
-      return `${clean.substring(0, 4)}-${clean.substring(4)}`;
-    }
-    
-    // Devolver tal cual si no coincide
-    return clean;
-  }
 }
 
 export default VehicleValidationService;

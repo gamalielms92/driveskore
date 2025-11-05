@@ -127,8 +127,7 @@ export default function HomeScreen() {
         {/* Gestión de vehículos */}
         <TouchableOpacity
           style={styles.vehicleManagementCard}
-          //onPress={() => router.push('/select-vehicle')}
-          onPress={() => router.push('/add-vehicle')}
+          onPress={() => router.push('/select-vehicle')}
         >
           <Text style={styles.vehicleManagementIcon}>🚙</Text>
           <View style={styles.vehicleManagementContent}>

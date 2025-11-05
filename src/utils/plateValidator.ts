@@ -44,6 +44,33 @@ const cleanOCRText = (text: string): string => {
 };
 
 /**
+ * Normaliza matrícula para BASE DE DATOS (con espacio, sin guiones)
+ */
+export const normalizePlate = (plate: string | null | undefined): string => {
+  if (!plate) return '';
+  
+  // Eliminar guiones y normalizar espacios múltiples
+  const cleaned = plate
+    .toUpperCase()
+    .replace(/-/g, '')        // Elimina guiones
+    .replace(/\s+/g, ' ')     // Normaliza espacios múltiples a uno
+    .trim();
+  
+  // Si es formato nuevo sin espacio (1234ABC), añadir espacio
+  if (/^(\d{4})([A-Z]{3})$/.test(cleaned)) {
+    return cleaned.replace(/^(\d{4})([A-Z]{3})$/, '$1 $2'); // → "1234 ABC"
+  }
+  
+  // Si es formato provincial sin espacios (M1234BC), añadir espacios
+  if (/^([A-Z]{1,2})(\d{4})([A-Z]{1,2})$/.test(cleaned)) {
+    return cleaned.replace(/^([A-Z]{1,2})(\d{4})([A-Z]{1,2})$/, '$1 $2 $3'); // → "M 1234 BC"
+  }
+  
+  // Si ya tiene el formato correcto, devolverlo
+  return cleaned;
+};
+
+/**
  * Valida y formatea matrícula española
  */
 export const validateSpanishPlate = (text: string | null | undefined): PlateValidation => {
@@ -165,7 +192,7 @@ export const isBlacklisted = (plate: string | null | undefined): boolean => {
 };
 
 /**
- * Formatea matrícula para mostrar
+ * Formatea matrícula para VISUALIZACIÓN (con espacio, para mostrar al usuario)
  */
 export const formatPlate = (plate: string | null | undefined): string => {
   if (!plate) return '';

@@ -1,21 +1,31 @@
+// app/(tabs)/search.tsx
+
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
-import { isBlacklisted, validateSpanishPlate } from '../../src/utils/plateValidator';
+import { isBlacklisted, normalizePlate, validateSpanishPlate } from '../../src/utils/plateValidator';
 
-interface ConductorProfile {
-  plate: string;
+interface TopDriver {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
   total_score: number;
   num_ratings: number;
   average_score: number;
+  vehicles: Array<{
+    plate: string;
+    brand: string | null;
+    model: string | null;
+    vehicle_photo_url: string | null;
+  }>;
 }
 
 export default function SearchScreen() {
   const router = useRouter();
   const [searchPlate, setSearchPlate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<ConductorProfile[]>([]);
+  const [topDrivers, setTopDrivers] = useState<TopDriver[]>([]);
   const [plateValidation, setPlateValidation] = useState<any>(null);
 
   const handleSearchChange = (text: string) => {
@@ -56,14 +66,15 @@ export default function SearchScreen() {
       return;
     }
 
-    const plateUpper = searchPlate.toUpperCase().trim();
+    // ✅ NORMALIZAR antes de buscar
+    const plateNormalized = normalizePlate(searchPlate);
     setLoading(true);
 
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('plate', plateUpper)
+        .eq('plate', plateNormalized) // ← Usar normalizada
         .single();
 
       setLoading(false);
@@ -71,7 +82,7 @@ export default function SearchScreen() {
       if (error || !profile) {
         Alert.alert(
           'No encontrado',
-          `No hay valoraciones para la matrícula ${plateUpper}\n\n¿Quieres ser el primero en evaluarla?`,
+          `No hay valoraciones para la matrícula ${searchPlate}\n\n¿Quieres ser el primero en evaluarla?`,
           [
             { text: 'Cancelar', style: 'cancel' },
             { 
@@ -83,7 +94,7 @@ export default function SearchScreen() {
         return;
       }
 
-      router.push(`/conductor/${plateUpper}`);
+      router.push(`/conductor/${plateNormalized}`); // ← Usar normalizada
       
     } catch (error: any) {
       setLoading(false);
@@ -91,28 +102,92 @@ export default function SearchScreen() {
     }
   };
 
-  const loadRecentProfiles = async () => {
+  const loadTopDrivers = async () => {
     try {
-      const { data, error } = await supabase
+      // 1. Obtener perfiles con más valoraciones que tengan user_id
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('user_id, plate, total_score, num_ratings')
+        .not('user_id', 'is', null)
         .order('num_ratings', { ascending: false })
-        .limit(5);
+        .limit(20);
 
-      if (data) {
-        const profilesWithAverage = data.map(p => ({
-          ...p,
-          average_score: p.num_ratings > 0 ? p.total_score / p.num_ratings : 0
-        }));
-        setRecentSearches(profilesWithAverage);
+      if (profilesError) throw profilesError;
+      if (!profiles || profiles.length === 0) {
+        setTopDrivers([]);
+        return;
       }
+
+      // 2. Agrupar por user_id y agregar puntuaciones
+      const userScores = new Map<string, {
+        total_score: number;
+        num_ratings: number;
+        plates: string[];
+      }>();
+
+      profiles.forEach(profile => {
+        if (!profile.user_id) return;
+
+        const existing = userScores.get(profile.user_id);
+        if (existing) {
+          existing.total_score += profile.total_score;
+          existing.num_ratings += profile.num_ratings;
+          existing.plates.push(profile.plate);
+        } else {
+          userScores.set(profile.user_id, {
+            total_score: profile.total_score,
+            num_ratings: profile.num_ratings,
+            plates: [profile.plate]
+          });
+        }
+      });
+
+      // 3. Convertir a array y ordenar por número de valoraciones
+      const userIds = Array.from(userScores.entries())
+        .sort((a, b) => b[1].num_ratings - a[1].num_ratings)
+        .slice(0, 5)
+        .map(([userId]) => userId);
+
+      // 4. Cargar información de cada usuario
+      const driversData: TopDriver[] = [];
+
+      for (const userId of userIds) {
+        const scores = userScores.get(userId)!;
+
+        // Cargar perfil de usuario
+        const { data: userProfile } = await supabase
+          .from('user_profiles')
+          .select('full_name, avatar_url')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        // Cargar vehículos
+        const { data: vehicles } = await supabase
+          .from('user_vehicles')
+          .select('plate, brand, model, vehicle_photo_url')
+          .eq('user_id', userId)
+          .limit(3);
+
+        driversData.push({
+          user_id: userId,
+          full_name: userProfile?.full_name || 'Usuario sin nombre',
+          avatar_url: userProfile?.avatar_url || null,
+          total_score: scores.total_score,
+          num_ratings: scores.num_ratings,
+          average_score: scores.total_score / scores.num_ratings,
+          vehicles: vehicles || []
+        });
+      }
+
+      setTopDrivers(driversData);
+
     } catch (error) {
-      console.log('Error cargando perfiles recientes:', error);
+      console.error('Error cargando top conductores:', error);
     }
   };
 
   React.useEffect(() => {
-    loadRecentProfiles();
+    loadTopDrivers();
   }, []);
 
   const renderStars = (score: number) => {
@@ -169,35 +244,83 @@ export default function SearchScreen() {
           </TouchableOpacity>
         </View>
 
-        {recentSearches.length > 0 && (
+        {/* CONDUCTORES MÁS VALORADOS - CENTRADO EN PERSONAS */}
+        {topDrivers.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Conductores más valorados</Text>
+            <Text style={styles.sectionTitle}>👥 Conductores más valorados</Text>
             
-            {recentSearches.map((profile, index) => (
+            {topDrivers.map((driver, index) => (
               <TouchableOpacity
-                key={profile.plate}
-                style={styles.profileCard}
-                onPress={() => router.push(`/conductor/${profile.plate}`)}
+                key={driver.user_id}
+                style={styles.driverCard}
+                onPress={() => {
+                  if (driver.vehicles.length > 0) {
+                    router.push(`/conductor/${driver.vehicles[0].plate}`);
+                  }
+                }}
               >
-                <View style={styles.profileHeader}>
-                  <Text style={styles.profilePlate}>
-                    {index === 0 && '🥇 '}
-                    {index === 1 && '🥈 '}
-                    {index === 2 && '🥉 '}
-                    {profile.plate}
+                <View style={styles.driverHeader}>
+                  <Text style={styles.medal}>
+                    {index === 0 && '🥇'}
+                    {index === 1 && '🥈'}
+                    {index === 2 && '🥉'}
+                    {index > 2 && `${index + 1}.`}
                   </Text>
-                  <Text style={styles.profileRatings}>
-                    {profile.num_ratings} valoración{profile.num_ratings !== 1 ? 'es' : ''}
-                  </Text>
+
+                  {driver.avatar_url ? (
+                    <Image
+                      source={{ uri: driver.avatar_url }}
+                      style={styles.driverAvatar}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.driverAvatarPlaceholder}>
+                      <Text style={styles.driverAvatarText}>
+                        {driver.full_name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.driverInfo}>
+                    <Text style={styles.driverName}>{driver.full_name}</Text>
+                    <View style={styles.driverStatsRow}>
+                      <Text style={styles.driverRatings}>
+                        {driver.num_ratings} valoración{driver.num_ratings !== 1 ? 'es' : ''}
+                      </Text>
+                      {driver.vehicles.length > 0 && (
+                        <Text style={styles.driverVehicles}>
+                          • {driver.vehicles.length} vehículo{driver.vehicles.length !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.driverScoreSection}>
+                    <Text style={styles.driverScore}>
+                      {driver.average_score.toFixed(1)}
+                    </Text>
+                    <Text style={styles.driverStars}>
+                      {renderStars(driver.average_score)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.profileStats}>
-                  <Text style={styles.profileStars}>
-                    {renderStars(profile.average_score)}
-                  </Text>
-                  <Text style={styles.profileScore}>
-                    {profile.average_score.toFixed(1)}
-                  </Text>
-                </View>
+
+                {driver.vehicles.length > 0 && (
+                  <View style={styles.vehiclesPreview}>
+                    {driver.vehicles.slice(0, 2).map((vehicle) => (
+                      <View key={vehicle.plate} style={styles.vehicleTag}>
+                        <Text style={styles.vehicleTagText}>
+                          🚗 {vehicle.plate}
+                        </Text>
+                      </View>
+                    ))}
+                    {driver.vehicles.length > 2 && (
+                      <Text style={styles.moreVehicles}>
+                        +{driver.vehicles.length - 2}
+                      </Text>
+                    )}
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -290,44 +413,110 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     color: '#000',
   },
-  profileCard: {
+  driverCard: {
     backgroundColor: 'white',
     padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
+    borderRadius: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  profileHeader: {
+  driverHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  profilePlate: {
+  medal: {
+    fontSize: 24,
+    marginRight: 10,
+    width: 30,
+  },
+  driverAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  driverAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverAvatarText: {
     fontSize: 20,
+    color: 'white',
     fontWeight: 'bold',
-    color: '#007AFF',
   },
-  profileRatings: {
-    fontSize: 12,
-    color: '#999',
+  driverInfo: {
+    flex: 1,
   },
-  profileStats: {
+  driverName: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  driverStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  profileStars: {
-    fontSize: 20,
+  driverRatings: {
+    fontSize: 13,
+    color: '#666',
   },
-  profileScore: {
+  driverVehicles: {
+    fontSize: 13,
+    color: '#999',
+    marginLeft: 5,
+  },
+  driverScoreSection: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  driverScore: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#34C759',
+    marginBottom: 2,
+  },
+  driverStars: {
+    fontSize: 14,
+  },
+  vehiclesPreview: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  vehicleTag: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  vehicleTagText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
+  moreVehicles: {
+    fontSize: 12,
+    color: '#007AFF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontWeight: '600',
   },
   infoBox: {
     backgroundColor: '#E3F2FD',
