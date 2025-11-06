@@ -1,4 +1,5 @@
 // app/add-vehicle.tsx
+// ✅ CON AVISO DE PRIVACIDAD
 
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -18,6 +19,7 @@ import {
 import { supabase } from '../src/config/supabase';
 import ImageCompressionService from '../src/services/ImageCompressionService';
 import VehicleValidationService from '../src/services/VehicleValidationService';
+import { blurImageAfterOCR } from '../src/services/imageProcessing';
 import { detectPlateFromImage } from '../src/services/ocrService';
 import { VEHICLE_BRANDS, VEHICLE_COLORS, type VehicleFormData } from '../src/types/vehicle';
 import { isBlacklisted, normalizePlate, validateSpanishPlate } from '../src/utils/plateValidator';
@@ -61,10 +63,7 @@ export default function AddVehicleScreen() {
         return;
       }
       
-      // Comprimir imagen
-      const compressed = await ImageCompressionService.compressImage(selectedUri);
-      
-      // Si es coche o moto, intentar OCR ANTES de subir
+      // Si es coche o moto, intentar OCR ANTES de procesar
       if ((formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') && !formData.plate) {
         Alert.alert(
           '🔍 Detectando matrícula...',
@@ -72,7 +71,7 @@ export default function AddVehicleScreen() {
         );
         
         try {
-          const detectedPlate = await detectPlateFromImage(compressed.uri);
+          const detectedPlate = await detectPlateFromImage(selectedUri);
           
           if (detectedPlate && detectedPlate !== 'ERROR') {
             const validation = validateSpanishPlate(detectedPlate);
@@ -89,9 +88,24 @@ export default function AddVehicleScreen() {
           }
         } catch (ocrError) {
           console.log('ℹ️ No se pudo detectar matrícula automáticamente:', ocrError);
-          // No mostrar error, el usuario puede introducirla manualmente
         }
       }
+      
+      // ✅ NUEVO: Desenfocar imagen DESPUÉS del OCR (para proteger privacidad)
+      let processedUri = selectedUri;
+      if (formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') {
+        try {
+          console.log('🔒 Desenfocando matrícula en imagen...');
+          processedUri = await blurImageAfterOCR(selectedUri);
+          console.log('✅ Matrícula desenfocada para proteger privacidad');
+        } catch (blurError) {
+          console.log('⚠️ No se pudo desenfocar, usando imagen original:', blurError);
+          processedUri = selectedUri;
+        }
+      }
+      
+      // Comprimir imagen (ya desenfocada si es coche/moto)
+      const compressed = await ImageCompressionService.compressImage(processedUri);
       
       // Subir imagen
       const uploaded = await ImageCompressionService.uploadImage(
@@ -106,7 +120,7 @@ export default function AddVehicleScreen() {
       Alert.alert(
         '✅ Foto añadida', 
         formData.plate 
-          ? 'La foto se ha subido correctamente'
+          ? 'La foto se ha subido correctamente. La matrícula ha sido desenfocada para proteger tu privacidad.'
           : 'Foto subida. Recuerda introducir la matrícula manualmente si no se detectó.'
       );
       
@@ -122,7 +136,6 @@ export default function AddVehicleScreen() {
     const cleanText = text.toUpperCase().replace(/[^A-Z0-9\s-]/g, '');
     setFormData(prev => ({ ...prev, plate: cleanText }));
     
-    // Validar en tiempo real
     if (cleanText.length >= 4) {
       const validation = validateSpanishPlate(cleanText);
       setPlateValidation(validation);
@@ -135,14 +148,10 @@ export default function AddVehicleScreen() {
     try {
       setLoading(true);
       
-      // Validar formulario
       const validation = VehicleValidationService.validateVehicleForm(formData);
       
       if (!validation.isValid) {
-        Alert.alert(
-          'Datos incompletos',
-          validation.errors.join('\n')
-        );
+        Alert.alert('Datos incompletos', validation.errors.join('\n'));
         setLoading(false);
         return;
       }
@@ -155,12 +164,8 @@ export default function AddVehicleScreen() {
         return;
       }
       
-      // ✅ NORMALIZAR matrícula (sin espacios ni guiones)
-      const plateNormalized = formData.plate 
-        ? normalizePlate(formData.plate)
-        : null;
+      const plateNormalized = formData.plate ? normalizePlate(formData.plate) : null;
       
-      // Si es el primer vehículo, marcarlo como primary y online
       const { data: existingVehicles } = await supabase
         .from('user_vehicles')
         .select('id')
@@ -168,7 +173,6 @@ export default function AddVehicleScreen() {
       
       const isFirstVehicle = !existingVehicles || existingVehicles.length === 0;
       
-      // Si se marca como primary, desmarcar los demás
       if (formData.is_primary || isFirstVehicle) {
         await supabase
           .from('user_vehicles')
@@ -176,14 +180,13 @@ export default function AddVehicleScreen() {
           .eq('user_id', user.id);
       }
       
-      // Insertar vehículo
       const { error } = await supabase
         .from('user_vehicles')
         .insert({
           user_id: user.id,
-          plate: plateNormalized, // ✅ SIN espacios ni guiones
+          plate: plateNormalized,
           nickname: formData.nickname?.trim() || null,
-          online: isFirstVehicle, // Primer vehículo activo por defecto
+          online: isFirstVehicle,
           vehicle_photo_url: formData.vehicle_photo_url,
           brand: formData.brand.trim(),
           model: formData.model.trim(),
@@ -199,12 +202,7 @@ export default function AddVehicleScreen() {
       Alert.alert(
         '✅ Vehículo añadido',
         `${formData.brand} ${formData.model} registrado correctamente`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back()
-          }
-        ]
+        [{ text: 'OK', onPress: () => router.back() }]
       );
       
     } catch (error: any) {
@@ -257,7 +255,7 @@ export default function AddVehicleScreen() {
                   disabled={uploadingPhoto}
                 >
                   {uploadingPhoto ? (
-                    <ActivityIndicator color="#007AFF" />
+                    <ActivityIndicator color="#fff" />
                   ) : (
                     <>
                       <Text style={styles.photoButtonIcon}>📷</Text>
@@ -272,7 +270,7 @@ export default function AddVehicleScreen() {
                   disabled={uploadingPhoto}
                 >
                   {uploadingPhoto ? (
-                    <ActivityIndicator color="#007AFF" />
+                    <ActivityIndicator color="#fff" />
                   ) : (
                     <>
                       <Text style={styles.photoButtonIcon}>🖼️</Text>
@@ -282,6 +280,17 @@ export default function AddVehicleScreen() {
                 </TouchableOpacity>
               </View>
             )}
+
+            {/* ⚠️ AVISO DE PRIVACIDAD */}
+            <View style={styles.privacyNotice}>
+              <Text style={styles.privacyIcon}>⚠️</Text>
+              <View style={styles.privacyTextContainer}>
+                <Text style={styles.privacyTitle}>Aviso de Privacidad</Text>
+                <Text style={styles.privacyText}>
+                  La foto será visible públicamente para otros usuarios. Si deseas proteger tu privacidad, difumina la matrícula antes de subirla. Eres responsable del contenido que compartes.
+                </Text>
+              </View>
+            </View>
           </View>
 
           {/* Tipo de vehículo */}
@@ -441,7 +450,6 @@ export default function AddVehicleScreen() {
                 )}
               </View>
               
-              {/* Feedback de validación */}
               {plateValidation && formData.plate && (
                 <>
                   {plateValidation.isValid && !isBlacklisted(formData.plate) ? (
@@ -598,6 +606,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // ⚠️ NUEVOS ESTILOS: Aviso de privacidad
+  privacyNotice: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  privacyIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  privacyTextContainer: {
+    flex: 1,
+  },
+  privacyTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#E65100',
+    marginBottom: 4,
+  },
+  privacyText: {
+    fontSize: 12,
+    color: '#E65100',
+    lineHeight: 18,
   },
   typeButtons: {
     flexDirection: 'row',

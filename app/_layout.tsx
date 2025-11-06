@@ -1,11 +1,13 @@
 // app/_layout.tsx
 // ✅ ACTUALIZADO: Con VolumeButtonService para AB Shutter 3
 
+import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { supabase } from '../src/config/supabase';
 import ABShutter3Service from '../src/services/ABShutter3Service';
+import { Analytics } from '../src/services/Analytics';
 import EventCaptureService from '../src/services/EventCaptureService';
 
 export default function RootLayout() {
@@ -44,7 +46,19 @@ export default function RootLayout() {
         console.log('🔐 Sesión persistente detectada');
         console.log('👤 Usuario:', session.user.email);
         
-        // CRÍTICO: Inicializar EventCaptureService
+        // Inicializar Analytics
+        await Analytics.initialize();
+        await Analytics.setUserId(session.user.id);
+
+        // Establecer propiedades del dispositivo
+        await Analytics.setUserProperties({
+          device_model: Constants.deviceName || 'unknown',
+          android_version: Platform.Version?.toString() || 'unknown',
+          app_version: Constants.expoConfig?.version || '1.0.0',
+        });
+        console.log('📊 Analytics configurado');
+
+        // Inicializar EventCaptureService
         await EventCaptureService.initialize(session.user.id);
         console.log('✅ EventCaptureService inicializado al arranque');
         

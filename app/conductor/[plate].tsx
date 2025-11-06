@@ -366,18 +366,18 @@ export default function ConductorProfileScreen() {
                     </View>
                   )}
 
-                  <View style={styles.vehicleInfo}>
+                    <View style={styles.vehicleInfo}>
                     <View style={styles.vehicleTitleRow}>
-                      <Text style={styles.vehiclePlate}>
-                        {vehicle.plate}
+                      <Text style={styles.vehicleTitle}>
+                        {[vehicle.brand, vehicle.model].filter(Boolean).join(' ') || 'Vehículo'}
                         {vehicle.online && ' 🟢'}
                         {vehicle.is_primary && ' ⭐'}
                       </Text>
                     </View>
                     
-                    {(vehicle.brand || vehicle.model) && (
+                    {vehicle.year && (
                       <Text style={styles.vehicleDetails}>
-                        {[vehicle.brand, vehicle.model, vehicle.year].filter(Boolean).join(' ')}
+                        Año {vehicle.year}
                       </Text>
                     )}
                     
@@ -753,7 +753,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  vehiclePlate: {
+  vehicleTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',

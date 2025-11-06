@@ -1,14 +1,16 @@
 // src/services/EventCaptureService.ts
 
-import * as Location from 'expo-location';
-import * as Sensors from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import { Audio } from 'expo-av';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
+import * as Sensors from 'expo-sensors';
 import { LogBox, PermissionsAndroid, Platform, Vibration } from 'react-native';
+import { Analytics } from './Analytics';
 import DriverMatchingService from './DriverMatchingService';
+
 
 // ✅ Import condicional de Bluetooth (solo móvil)
 let BleManager: any = null;
@@ -326,9 +328,11 @@ class EventCaptureService {
   }
 
   /**
-   * Captura la ubicación GPS actual con máxima precisión
-   */
+    * Captura la ubicación GPS actual con máxima precisión
+    */
   private async captureLocation(): Promise<LocationData> {
+    const startTime = Date.now(); // ✅ NUEVO
+      
     console.log('📍 Capturando ubicación GPS...');
 
     const location = await Location.getCurrentPositionAsync({
@@ -336,6 +340,11 @@ class EventCaptureService {
       timeInterval: 1000,
       distanceInterval: 0,
     });
+
+    // ✅ NUEVO: Trackear latencia GPS
+    const latency = Date.now() - startTime;
+    Analytics.trackGpsLatency(latency, location.coords.accuracy || 0);
+    console.log(`📊 GPS completado en ${latency}ms`);
 
     return {
       latitude: location.coords.latitude,

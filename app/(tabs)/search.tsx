@@ -1,10 +1,12 @@
 // app/(tabs)/search.tsx
+// ✅ Búsqueda por MATRÍCULA o NOMBRE
+// ✅ Solo conductores registrados
+// ✅ Sin opción de "evaluar ahora" (valoraciones solo en carretera)
 
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
-import { isBlacklisted, normalizePlate, validateSpanishPlate } from '../../src/utils/plateValidator';
 
 interface TopDriver {
   user_id: string;
@@ -23,82 +25,80 @@ interface TopDriver {
 
 export default function SearchScreen() {
   const router = useRouter();
-  const [searchPlate, setSearchPlate] = useState('');
+  const [searchPlate, setSearchPlate] = useState(''); // Mantener nombre por compatibilidad
   const [loading, setLoading] = useState(false);
   const [topDrivers, setTopDrivers] = useState<TopDriver[]>([]);
-  const [plateValidation, setPlateValidation] = useState<any>(null);
 
   const handleSearchChange = (text: string) => {
-    const cleanText = text.toUpperCase().replace(/[^A-Z0-9\s]/g, '');
-    setSearchPlate(cleanText);
-    
-    const validation = validateSpanishPlate(cleanText);
-    setPlateValidation(validation);
-    
-    if (/^\d{4}[A-Z]{1,3}$/.test(cleanText)) {
-      const formatted = cleanText.replace(/(\d{4})([A-Z]+)/, '$1 $2');
-      setSearchPlate(formatted);
-    }
+    setSearchPlate(text); // Mantener el nombre de la variable por compatibilidad
   };
 
   const handleSearch = async () => {
-    if (!searchPlate || searchPlate.trim().length < 4) {
-      Alert.alert('Error', 'Introduce una matrícula válida');
+    if (!searchPlate || searchPlate.trim().length < 2) {
+      Alert.alert('Error', 'Introduce al menos 2 caracteres');
       return;
     }
 
-    const validation = validateSpanishPlate(searchPlate);
-    
-    if (!validation.isValid) {
-      Alert.alert(
-        '⚠️ Formato no válido',
-        `"${searchPlate}" no es una matrícula española válida.\n\nFormatos aceptados:\n• 1234 ABC (actual)\n• M 1234 BC (provincial)`,
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    if (isBlacklisted(searchPlate)) {
-      Alert.alert(
-        '🚫 Matrícula no válida',
-        `La combinación "${validation.letters}" no es válida según la DGT.`
-      );
-      return;
-    }
-
-    // ✅ NORMALIZAR antes de buscar
-    const plateNormalized = normalizePlate(searchPlate);
+    const searchTerm = searchPlate.trim();
     setLoading(true);
 
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('plate', plateNormalized) // ← Usar normalizada
-        .single();
+      // BÚSQUEDA SOLO POR NOMBRE
+      const { data: users, error: usersError } = await supabase
+        .from('user_profiles')
+        .select('user_id, full_name, avatar_url')
+        .ilike('full_name', `%${searchTerm}%`)
+        .limit(10);
 
       setLoading(false);
 
-      if (error || !profile) {
-        Alert.alert(
-          'No encontrado',
-          `No hay valoraciones para la matrícula ${searchPlate}\n\n¿Quieres ser el primero en evaluarla?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            { 
-              text: 'Evaluar ahora',
-              onPress: () => router.push('/(tabs)/capture')
-            }
-          ]
-        );
-        return;
+      if (usersError) throw usersError;
+
+      if (users && users.length > 0) {
+        // Si hay resultados
+        if (users.length === 1) {
+          // Solo un resultado → ir directo a su perfil
+          const { data: vehicle } = await supabase
+            .from('user_vehicles')
+            .select('plate')
+            .eq('user_id', users[0].user_id)
+            .limit(1)
+            .maybeSingle();
+
+          if (vehicle) {
+            router.push(`/conductor/${vehicle.plate}`);
+            return;
+          } else {
+            Alert.alert(
+              'Sin vehículos',
+              `${users[0].full_name} no tiene vehículos registrados aún.`,
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        } else {
+          // Múltiples resultados → mostrar lista
+          const usersList = users.map((u, i) => `${i + 1}. ${u.full_name}`).join('\n');
+          Alert.alert(
+            `🔍 ${users.length} resultados encontrados`,
+            `${usersList}\n\nRefina tu búsqueda para ver un conductor específico.`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
 
-      router.push(`/conductor/${plateNormalized}`); // ← Usar normalizada
+      // NO ENCONTRADO
+      Alert.alert(
+        '🔍 No encontrado',
+        `No se encontró ningún conductor con el nombre "${searchTerm}".\n\nRecuerda:\n• Solo puedes consultar conductores registrados\n• Busca por nombre o apellidos`,
+        [{ text: 'OK' }]
+      );
       
     } catch (error: any) {
       setLoading(false);
-      Alert.alert('Error', 'No se pudo buscar la matrícula');
+      console.error('Error en búsqueda:', error);
+      Alert.alert('Error', 'No se pudo realizar la búsqueda');
     }
   };
 
@@ -200,36 +200,17 @@ export default function SearchScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Buscar Conductor</Text>
-        <Text style={styles.subtitle}>Introduce la matrícula para ver su reputación</Text>
+        <Text style={styles.subtitle}>Por nombre o apellidos</Text>
 
         <View style={styles.searchContainer}>
           <TextInput
-            style={[
-              styles.input,
-              plateValidation?.isValid === true && styles.inputValid,
-              plateValidation?.isValid === false && searchPlate.length >= 4 && styles.inputInvalid
-            ]}
-            placeholder="Ej: 1234ABC"
+            style={styles.input}
+            placeholder="Ej: Juan Pérez García"
             value={searchPlate}
             onChangeText={handleSearchChange}
-            autoCapitalize="characters"
-            maxLength={10}
+            autoCapitalize="words"
             onSubmitEditing={handleSearch}
           />
-          
-          {searchPlate.length >= 4 && (
-            <View style={styles.validationFeedback}>
-              {plateValidation?.isValid ? (
-                <Text style={styles.validText}>
-                  ✅ {plateValidation.format === 'current' ? 'Formato actual' : 'Formato provincial'}
-                </Text>
-              ) : (
-                <Text style={styles.invalidText}>
-                  ⚠️ Formato no válido
-                </Text>
-              )}
-            </View>
-          )}
           
           <TouchableOpacity 
             style={[styles.searchButton, loading && styles.searchButtonDisabled]}
@@ -283,16 +264,9 @@ export default function SearchScreen() {
 
                   <View style={styles.driverInfo}>
                     <Text style={styles.driverName}>{driver.full_name}</Text>
-                    <View style={styles.driverStatsRow}>
-                      <Text style={styles.driverRatings}>
-                        {driver.num_ratings} valoración{driver.num_ratings !== 1 ? 'es' : ''}
-                      </Text>
-                      {driver.vehicles.length > 0 && (
-                        <Text style={styles.driverVehicles}>
-                          • {driver.vehicles.length} vehículo{driver.vehicles.length !== 1 ? 's' : ''}
-                        </Text>
-                      )}
-                    </View>
+                    <Text style={styles.driverRatings}>
+                      {driver.num_ratings} valoración{driver.num_ratings !== 1 ? 'es' : ''}
+                    </Text>
                   </View>
 
                   <View style={styles.driverScoreSection}>
@@ -304,23 +278,6 @@ export default function SearchScreen() {
                     </Text>
                   </View>
                 </View>
-
-                {driver.vehicles.length > 0 && (
-                  <View style={styles.vehiclesPreview}>
-                    {driver.vehicles.slice(0, 2).map((vehicle) => (
-                      <View key={vehicle.plate} style={styles.vehicleTag}>
-                        <Text style={styles.vehicleTagText}>
-                          🚗 {vehicle.plate}
-                        </Text>
-                      </View>
-                    ))}
-                    {driver.vehicles.length > 2 && (
-                      <Text style={styles.moreVehicles}>
-                        +{driver.vehicles.length - 2}
-                      </Text>
-                    )}
-                  </View>
-                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -329,7 +286,7 @@ export default function SearchScreen() {
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>💡</Text>
           <Text style={styles.infoText}>
-            La búsqueda te permite ver la reputación de cualquier conductor antes de compartir viaje o para reportar comportamientos.
+            Busca conductores por su nombre o apellidos. Solo puedes consultar conductores registrados en DriveSkore.
           </Text>
         </View>
       </View>
@@ -363,32 +320,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 15,
     borderRadius: 10,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
     borderWidth: 2,
     borderColor: '#007AFF',
-  },
-  inputValid: {
-    borderColor: '#34C759',
-  },
-  inputInvalid: {
-    borderColor: '#FF3B30',
-  },
-  validationFeedback: {
-    marginBottom: 15,
-  },
-  validText: {
-    fontSize: 14,
-    color: '#34C759',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  invalidText: {
-    fontSize: 14,
-    color: '#FF3B30',
-    textAlign: 'center',
   },
   searchButton: {
     backgroundColor: '#007AFF',
@@ -465,18 +401,9 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 4,
   },
-  driverStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   driverRatings: {
     fontSize: 13,
     color: '#666',
-  },
-  driverVehicles: {
-    fontSize: 13,
-    color: '#999',
-    marginLeft: 5,
   },
   driverScoreSection: {
     alignItems: 'flex-end',
@@ -490,33 +417,6 @@ const styles = StyleSheet.create({
   },
   driverStars: {
     fontSize: 14,
-  },
-  vehiclesPreview: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  vehicleTag: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  vehicleTagText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '600',
-  },
-  moreVehicles: {
-    fontSize: 12,
-    color: '#007AFF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    fontWeight: '600',
   },
   infoBox: {
     backgroundColor: '#E3F2FD',

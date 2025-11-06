@@ -4,6 +4,7 @@
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+import { Analytics } from '../services/Analytics';
 import EventCaptureService from '../services/EventCaptureService';
 import FloatingButtonNative from '../services/FloatingButtonNative';
 
@@ -48,6 +49,9 @@ export function useFloatingButton(): UseFloatingButtonResult {
       console.log('⏳ Llamando a EventCaptureService.captureEvent...');
       const event = await EventCaptureService.captureEvent('car');
       console.log('✅ Evento capturado:', event.id);
+
+      // Trackear uso del botón flotante
+      await Analytics.trackFloatingButtonPressed();
 
       // Notificación de éxito
       await Notifications.scheduleNotificationAsync({

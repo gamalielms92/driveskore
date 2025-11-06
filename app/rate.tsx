@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import UserCard from '../src/components/UserCard';
 import { supabase } from '../src/config/supabase';
+import { Analytics } from '../src/services/Analytics';
 import type { Vehicle } from '../src/types/vehicle';
 import { validateSpanishPlate } from '../src/utils/plateValidator';
 
@@ -171,6 +172,16 @@ export default function RateScreen() {
         });
 
       if (ratingError) throw ratingError;
+
+      const { count, error: countError } = await supabase
+      .from('ratings')
+      .select('*', { count: 'exact', head: true })
+      .eq('rater_id', user.id);
+    
+      if (!countError && count === 1) {
+        // Es la primera valoración de este usuario
+        await Analytics.trackFirstRating(score);
+      }
 
       // Actualizar o crear perfil del conductor
       const { data: existingProfile } = await supabase

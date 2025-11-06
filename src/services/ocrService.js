@@ -6,6 +6,7 @@ import {
   formatPlate,
   validateSpanishPlate
 } from '../utils/plateValidator';
+import { Analytics } from './Analytics';
 import { preprocessImageForOCR } from './imageProcessing';
 
 // Leer API key desde variables de entorno
@@ -164,6 +165,8 @@ export const extractPlateFromText = (text) => {
  * Función principal: detectar matrícula de imagen
  */
 export const detectPlateFromImage = async (imageUri) => {
+  const startTime = Date.now(); // ✅ Medición simple
+  
   try {
     console.log('📸 Procesando imagen:', imageUri);
     
@@ -180,11 +183,21 @@ export const detectPlateFromImage = async (imageUri) => {
       throw new Error('No se detectó una matrícula válida');
     }
     
+    // ✅ Trackear latencia exitosa
+    const latency = Date.now() - startTime;
+    Analytics.trackOcrLatency(latency, true);
+    console.log(`📊 OCR completado en ${latency}ms`);
+    
     // Devolver la matrícula formateada correctamente
     return formatPlate(plate);
     
   } catch (error) {
     console.error('❌ Error detectando matrícula:', error);
+    
+    // ✅ Trackear latencia fallida
+    const latency = Date.now() - startTime;
+    Analytics.trackOcrLatency(latency, false);
+    
     throw error;
   }
 };

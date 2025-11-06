@@ -15,6 +15,7 @@ import {
   View
 } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import { Analytics } from '../../src/services/Analytics';
 import EventCaptureService from '../../src/services/EventCaptureService';
 import { detectPlateFromImage } from '../../src/services/ocrService';
 import { formatPlate, validateSpanishPlate } from '../../src/utils/plateValidator';
@@ -84,8 +85,15 @@ export default function CaptureScreen() {
             const validation = validateSpanishPlate(detectedPlate);
             setPlateValidation(validation);
             
+            // Trackear escaneo exitoso
+            await Analytics.trackLicensePlateScan(true, 'camera');
+
             Alert.alert('✅ Matrícula detectada', `Se detectó: ${detectedPlate}\n\nPuedes editarla si es incorrecta.`);
           } else {
+
+            // Trackear escaneo fallido
+            await Analytics.trackLicensePlateScan(false, 'camera');
+
             console.log('ℹ️ OCR no detectó matrícula válida');
             Alert.alert(
               'ℹ️ Matrícula no detectada', 

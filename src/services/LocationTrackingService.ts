@@ -11,28 +11,35 @@ import { supabase } from '../config/supabase';
 // ============================================================================
 
 interface QueuedLocation {
-    user_id: string;
-    plate: string;
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    speed: number;
-    heading: number;
-    timestamp: string;
-  }
-  
-  interface DriverLocationInsert {
-    user_id: string;
-    plate: string;
-    latitude: number;          // ✅ Columna numérica
-    longitude: number;         // ✅ Columna numérica
-    location: string;          // ✅ PostGIS POINT format
-    accuracy: number;          // ✅ Añadido
-    speed: number;
-    heading: number;
-    bluetooth_mac_hash: string;
-    captured_at: string;
-  }
+  user_id: string;
+  plate: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed: number;
+  heading: number;
+  timestamp: string;
+}
+
+interface DriverLocationInsert {
+  user_id: string;
+  plate: string;
+  session_id: string | null; // ← NUEVO
+  latitude: number;
+  longitude: number;
+  location: string;
+  accuracy: number;
+  speed: number;
+  heading: number;
+  bluetooth_mac_hash: string;
+  captured_at: string;
+}
+
+// ✅ NUEVA INTERFAZ
+interface TrackingStats {
+  duration: number;
+  distance: number;
+}
 
 // ============================================================================
 // CONSTANTES
@@ -52,6 +59,13 @@ class LocationTrackingService {
   private syncTimer: NodeJS.Timeout | null = null;
   private currentUserId: string | null = null;
   private currentPlate: string | null = null;
+  
+  // ✅ NUEVAS PROPIEDADES PARA STATS
+  private sessionId: string | null = null;
+  private startTime: Date | null = null;
+  private lastLocation: { latitude: number; longitude: number } | null = null;
+  private totalDistance: number = 0;
+  private locationCount: number = 0;
 
   /**
    * Inicializa el servicio con userId y matrícula
@@ -60,12 +74,37 @@ class LocationTrackingService {
     this.currentUserId = userId;
     this.currentPlate = plate;
     
+    // ✅ RESETEAR stats
+    this.sessionId = null;
+    this.startTime = null;
+    this.lastLocation = null;
+    this.totalDistance = 0;
+    this.locationCount = 0;
+    
     console.log('🔧 LocationTrackingService inicializado');
     console.log('👤 User ID:', userId);
     console.log('🚗 Plate:', plate);
     
     // Definir tarea de background
     await this.defineBackgroundTask();
+  }
+
+  /**
+   * ✅ NUEVO: Obtiene estadísticas del tracking actual
+   */
+  async getTrackingStats(): Promise<TrackingStats | null> {
+    if (!this.isTracking || !this.startTime) {
+      return null;
+    }
+
+    // Calcular duración en segundos
+    const now = new Date();
+    const duration = Math.floor((now.getTime() - this.startTime.getTime()) / 1000);
+
+    return {
+      duration,
+      distance: this.totalDistance
+    };
   }
 
   /**
@@ -105,12 +144,96 @@ class LocationTrackingService {
         timestamp: new Date(location.timestamp).toISOString(),
       };
 
+      // ✅ CALCULAR DISTANCIA
+      if (this.lastLocation) {
+        const distance = this.calculateDistance(
+          this.lastLocation.latitude,
+          this.lastLocation.longitude,
+          locationData.latitude,
+          locationData.longitude
+        );
+        this.totalDistance += distance;
+      }
+
+      // ✅ ACTUALIZAR última ubicación y contador
+      this.lastLocation = { 
+        latitude: locationData.latitude, 
+        longitude: locationData.longitude 
+      };
+      this.locationCount++;
+
       // Guardar en cola local
       await this.queueLocationUpdate(locationData);
       
-      console.log('📍 Ubicación procesada:', locationData.latitude.toFixed(6), locationData.longitude.toFixed(6));
+      console.log(`📍 Ubicación procesada #${this.locationCount}:`, 
+        locationData.latitude.toFixed(6), 
+        locationData.longitude.toFixed(6),
+        `| Distancia total: ${this.totalDistance.toFixed(0)}m`
+      );
+
+      // ✅ ACTUALIZAR SESIÓN cada 5 ubicaciones
+      if (this.locationCount % 5 === 0) {
+        await this.updateSession();
+      }
     } catch (error) {
       console.error('❌ Error procesando ubicación:', error);
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Calcula distancia entre dos puntos GPS (Haversine)
+   */
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const R = 6371e3; // Radio de la Tierra en metros
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distancia en metros
+  }
+
+  /**
+   * ✅ NUEVO: Actualiza la sesión con stats actuales
+   */
+  private async updateSession(): Promise<void> {
+    if (!this.sessionId || !this.startTime) {
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const durationSeconds = Math.floor((now.getTime() - this.startTime.getTime()) / 1000);
+
+      const { error } = await supabase
+        .from('driving_sessions')
+        .update({
+          duration_seconds: durationSeconds,
+          distance_meters: Math.round(this.totalDistance),
+          locations_count: this.locationCount,
+          end_latitude: this.lastLocation?.latitude,
+          end_longitude: this.lastLocation?.longitude,
+          updated_at: now.toISOString()
+        })
+        .eq('id', this.sessionId);
+
+      if (error) {
+        console.error('❌ Error actualizando sesión:', error);
+      } else {
+        console.log(`✅ Sesión actualizada: ${durationSeconds}s, ${this.totalDistance.toFixed(0)}m`);
+      }
+    } catch (error) {
+      console.error('❌ Error en updateSession:', error);
     }
   }
 
@@ -151,6 +274,33 @@ class LocationTrackingService {
         console.error('❌ Servicio no inicializado correctamente');
         return false;
       }
+
+      // ✅ CREAR SESIÓN EN BD
+      this.startTime = new Date();
+      this.lastLocation = null;
+      this.totalDistance = 0;
+      this.locationCount = 0;
+
+      const { data: session, error: sessionError } = await supabase
+        .from('driving_sessions')
+        .insert({
+          user_id: this.currentUserId,
+          plate: this.currentPlate,
+          start_time: this.startTime.toISOString(),
+          duration_seconds: 0,
+          distance_meters: 0,
+          locations_count: 0
+        })
+        .select()
+        .single();
+
+      if (sessionError || !session) {
+        console.error('❌ Error creando sesión:', sessionError);
+        throw new Error('No se pudo crear la sesión de conducción');
+      }
+
+      this.sessionId = session.id;
+      console.log('✅ Sesión creada:', this.sessionId);
 
       // 1. Verificar permisos
       const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
@@ -195,6 +345,16 @@ class LocationTrackingService {
       return true;
     } catch (error) {
       console.error('❌ Error iniciando tracking:', error);
+      
+      // ✅ Limpiar sesión si falla
+      if (this.sessionId) {
+        await supabase
+          .from('driving_sessions')
+          .delete()
+          .eq('id', this.sessionId);
+        this.sessionId = null;
+      }
+      
       return false;
     }
   }
@@ -264,13 +424,14 @@ class LocationTrackingService {
   
       const locationsToSync = queue.slice(-5);
       
-      // ✅ Preparar datos con TODAS las columnas necesarias
-      const insertData = locationsToSync.map((loc: QueuedLocation) => ({
+      // ✅ Preparar datos con session_id
+      const insertData: DriverLocationInsert[] = locationsToSync.map((loc: QueuedLocation) => ({
         user_id: userId,
         plate: plate,
-        latitude: loc.latitude,                                      // ← Columna numérica
-        longitude: loc.longitude,                                    // ← Columna numérica
-        location: `POINT(${loc.longitude} ${loc.latitude})`,         // ← PostGIS (lon primero!)
+        session_id: this.sessionId, // ← RELACIONAR con sesión
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        location: `POINT(${loc.longitude} ${loc.latitude})`,
         accuracy: loc.accuracy,
         speed: loc.speed,
         heading: loc.heading,
@@ -279,12 +440,7 @@ class LocationTrackingService {
       }));
   
       console.log('📦 Preparando insert de', insertData.length, 'ubicaciones');
-      console.log('📍 Primera ubicación:', {
-        lat: insertData[0].latitude,
-        lon: insertData[0].longitude,
-        location: insertData[0].location,
-      });
-  
+
       const { data, error } = await supabase
         .from('driver_locations')
         .insert(insertData)
@@ -292,28 +448,18 @@ class LocationTrackingService {
   
       if (error) {
         console.error('❌ Error insertando ubicaciones:', error.message);
-        console.error('❌ Error code:', error.code);
-        console.error('❌ Error details:', error.details);
-        console.error('❌ Error hint:', error.hint);
         console.log('🔄 Intentando inserción individual...');
         
         let successCount = 0;
         for (const item of insertData) {
-          console.log('📍 Insertando ubicación individual:', {
-            lat: item.latitude,
-            lon: item.longitude,
-          });
-          
           const { error: singleError } = await supabase
             .from('driver_locations')
             .insert(item);
           
           if (singleError) {
             console.error('❌ Error individual:', singleError.message);
-            console.error('❌ Datos que fallaron:', JSON.stringify(item, null, 2));
           } else {
             successCount++;
-            console.log('✅ Ubicación insertada exitosamente');
           }
         }
         
@@ -321,7 +467,6 @@ class LocationTrackingService {
         
         if (successCount > 0) {
           await AsyncStorage.removeItem(queueKey);
-          console.log('🧹 Cola limpiada');
         }
         
         return;
@@ -348,6 +493,26 @@ class LocationTrackingService {
 
       console.log('⏸️ Deteniendo tracking...');
 
+      // ✅ FINALIZAR SESIÓN
+      if (this.sessionId && this.startTime) {
+        const endTime = new Date();
+        const durationSeconds = Math.floor((endTime.getTime() - this.startTime.getTime()) / 1000);
+
+        await supabase
+          .from('driving_sessions')
+          .update({
+            end_time: endTime.toISOString(),
+            duration_seconds: durationSeconds,
+            distance_meters: Math.round(this.totalDistance),
+            locations_count: this.locationCount,
+            end_latitude: this.lastLocation?.latitude,
+            end_longitude: this.lastLocation?.longitude
+          })
+          .eq('id', this.sessionId);
+
+        console.log(`✅ Sesión finalizada: ${durationSeconds}s, ${this.totalDistance.toFixed(0)}m, ${this.locationCount} ubicaciones`);
+      }
+
       const isTaskDefined = await TaskManager.isTaskDefined(LOCATION_TASK_NAME);
       if (isTaskDefined) {
         await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
@@ -366,7 +531,14 @@ class LocationTrackingService {
       await Notifications.dismissAllNotificationsAsync();
       console.log('✅ Notificaciones canceladas');
 
+      // ✅ RESETEAR stats
       this.isTracking = false;
+      this.sessionId = null;
+      this.startTime = null;
+      this.lastLocation = null;
+      this.totalDistance = 0;
+      this.locationCount = 0;
+
       console.log('✅ Tracking detenido exitosamente');
       
       return true;
@@ -436,6 +608,11 @@ class LocationTrackingService {
     this.isTracking = false;
     this.currentUserId = null;
     this.currentPlate = null;
+    this.sessionId = null;
+    this.startTime = null;
+    this.lastLocation = null;
+    this.totalDistance = 0;
+    this.locationCount = 0;
     
     console.log('✅ LocationTrackingService limpiado');
   }

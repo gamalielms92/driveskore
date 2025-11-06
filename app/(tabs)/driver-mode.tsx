@@ -10,12 +10,12 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import { Analytics } from '../../src/services/Analytics';
 import LocationTrackingService from '../../src/services/LocationTrackingService';
 
 export default function DriverModeScreen() {
@@ -27,13 +27,7 @@ export default function DriverModeScreen() {
   const [stats, setStats] = useState({
     duration: 0,
     distance: 0,
-    events: 0,
     lastUpdate: null as Date | null
-  });
-  const [settings, setSettings] = useState({
-    autoCapture: true,
-    minDistance: 50, // metros
-    captureInterval: 30 // segundos
   });
 
   const trackingInterval = useRef<NodeJS.Timeout | null>(null);
@@ -76,7 +70,7 @@ export default function DriverModeScreen() {
     }
   };
 
-  // 🆕 Recargar cada vez que la pantalla gana el foco
+  // Recargar cada vez que la pantalla gana el foco
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 Driver Mode enfocado - Recargando vehículo activo...');
@@ -122,12 +116,21 @@ export default function DriverModeScreen() {
     }
   };
 
-  const updateStats = () => {
-    // Actualizar timestamp
-    setStats(prev => ({
-      ...prev,
-      lastUpdate: new Date()
-    }));
+  const updateStats = async () => {
+    try {
+      // Obtener datos reales del servicio de tracking
+      const trackingData = await LocationTrackingService.getTrackingStats();
+      
+      if (trackingData) {
+        setStats({
+          duration: trackingData.duration || 0,
+          distance: trackingData.distance || 0,
+          lastUpdate: new Date()
+        });
+      }
+    } catch (error) {
+      console.error('Error actualizando stats:', error);
+    }
   };
 
   const handleStartTracking = async () => {
@@ -141,7 +144,7 @@ export default function DriverModeScreen() {
         return;
       }
 
-      // 🆕 Validación 2: Recargar y verificar vehículo activo EN TIEMPO REAL
+      // Validación 2: Recargar y verificar vehículo activo EN TIEMPO REAL
       await loadActiveVehicle();
       
       console.log('📋 User ID:', userId);
@@ -215,6 +218,10 @@ export default function DriverModeScreen() {
                 if (success) {
                   setIsTracking(true);
                   
+                  // ✅ NUEVO: Trackear inicio del modo conductor
+                  await Analytics.trackDriverModeStarted();
+                  console.log('📊 Analytics: driver_mode_started');
+                  
                   // Actualizar stats cada 10 segundos
                   trackingInterval.current = setInterval(() => {
                     updateStats();
@@ -231,6 +238,10 @@ export default function DriverModeScreen() {
                 }
               } catch (error: any) {
                 console.error('❌ Error iniciando tracking:', error);
+                
+                // ✅ NUEVO: Registrar error en Crashlytics
+                await Analytics.logError(error, 'handleStartTracking - Driver Mode');
+                
                 Alert.alert('Error', error.message);
               }
             }
@@ -242,6 +253,10 @@ export default function DriverModeScreen() {
       console.error('❌ Error en handleStartTracking:', error);
       console.error('❌ Error message:', error.message);
       console.error('═══════════════════════════════════════');
+      
+      // ✅ NUEVO: Registrar error en Crashlytics
+      await Analytics.logError(error, 'handleStartTracking - Outer catch');
+      
       Alert.alert('Error', error.message || 'No se pudo iniciar el modo conductor');
     }
   };
@@ -258,8 +273,16 @@ export default function DriverModeScreen() {
           onPress: async () => {
             try {
               console.log('⏸️ Deteniendo tracking...');
+              
+              // ✅ NUEVO: Usar duración de las stats existentes
+              const duration = stats.duration || 0;
+              
               await LocationTrackingService.stopTracking();
               setIsTracking(false);
+              
+              // ✅ NUEVO: Trackear fin del modo conductor con duración
+              await Analytics.trackDriverModeStopped(duration);
+              console.log(`📊 Analytics: driver_mode_stopped (${duration}s)`);
               
               if (trackingInterval.current) {
                 clearInterval(trackingInterval.current);
@@ -273,6 +296,10 @@ export default function DriverModeScreen() {
               console.log('✅ Tracking detenido');
             } catch (error: any) {
               console.error('❌ Error deteniendo tracking:', error);
+              
+              // ✅ NUEVO: Registrar error en Crashlytics
+              await Analytics.logError(error, 'handleStopTracking - Driver Mode');
+              
               Alert.alert('Error', error.message);
             }
           }
@@ -360,7 +387,7 @@ export default function DriverModeScreen() {
 
           {isTracking ? (
             <>
-              {/* Stats */}
+              {/* Stats - SOLO 2 valores */}
               <View style={styles.statsContainer}>
                 <View style={styles.statBox}>
                   <Text style={styles.statValue}>{formatDuration(stats.duration)}</Text>
@@ -369,10 +396,6 @@ export default function DriverModeScreen() {
                 <View style={styles.statBox}>
                   <Text style={styles.statValue}>{formatDistance(stats.distance)}</Text>
                   <Text style={styles.statLabel}>Distancia</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{stats.events}</Text>
-                  <Text style={styles.statLabel}>Eventos</Text>
                 </View>
               </View>
 
@@ -398,53 +421,14 @@ export default function DriverModeScreen() {
           )}
         </View>
 
-        {/* Configuración */}
-        <View style={styles.settingsCard}>
-          <Text style={styles.cardTitle}>⚙️ Configuración</Text>
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Captura automática</Text>
-              <Text style={styles.settingDescription}>
-                Registra eventos cuando detecta otros conductores
-              </Text>
-            </View>
-            <Switch
-              value={settings.autoCapture}
-              onValueChange={(value) =>
-                setSettings(prev => ({ ...prev, autoCapture: value }))
-              }
-              disabled={isTracking}
-            />
-          </View>
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Distancia mínima</Text>
-              <Text style={styles.settingDescription}>
-                {settings.minDistance}m entre capturas
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Intervalo de captura</Text>
-              <Text style={styles.settingDescription}>
-                {settings.captureInterval}s entre registros
-              </Text>
-            </View>
-          </View>
-        </View>
-
         {/* Información */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>
           <Text style={styles.infoText}>
             1. Activa un vehículo en "Mis Vehículos"{'\n'}
             2. Inicia el seguimiento antes de conducir{'\n'}
-            3. Usa el botón Bluetooth para evaluar conductores{'\n'}
-            4. El modo funciona en segundo plano{'\n'}
+            3. Tu ubicación se registra automáticamente cada 30s{'\n'}
+            4. Otros conductores pueden identificarte fácilmente{'\n'}
             5. Detén el seguimiento al terminar tu viaje
           </Text>
         </View>
@@ -454,8 +438,8 @@ export default function DriverModeScreen() {
           <Text style={styles.warningIcon}>⚠️</Text>
           <Text style={styles.warningText}>
             • No uses el móvil mientras conduces{'\n'}
-            • El seguimiento consume batería{'\n'}
-            • Requiere conexión a internet{'\n'}
+            • El seguimiento consume ~3-5% batería/hora{'\n'}
+            • Funciona en segundo plano{'\n'}
             • Los datos se envían de forma segura
           </Text>
         </View>
@@ -613,39 +597,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  settingsCard: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  settingInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 13,
-    color: '#666',
   },
   infoCard: {
     backgroundColor: '#E3F2FD',

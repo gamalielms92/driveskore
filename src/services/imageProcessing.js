@@ -87,3 +87,64 @@ export const cropToPlateArea = async (imageUri, cropArea) => {
     return imageUri;
   }
 };
+
+/**
+ * Desenfoca la imagen completa reduciendo calidad después del OCR
+ * Es la solución más simple y efectiva sin necesitar librerías adicionales
+ * 
+ * @param {string} imageUri - URI de la imagen original
+ * @returns {Promise<string>} - URI de la imagen con baja calidad (matrícula ilegible)
+ */
+export const blurImageAfterOCR = async (imageUri) => {
+  try {
+    console.log('🔒 Reduciendo calidad de imagen después de OCR...');
+
+    const processed = await manipulateAsync(
+      imageUri,
+      [
+        { resize: { width: 600 } }, // Tamaño pequeño
+      ],
+      { 
+        compress: 0.2, // Muy baja calidad = matrícula ilegible
+        format: SaveFormat.JPEG 
+      }
+    );
+
+    console.log('✅ Imagen procesada con baja calidad para privacidad');
+    return processed.uri;
+
+  } catch (error) {
+    console.error('❌ Error procesando imagen:', error);
+    return imageUri;
+  }
+};
+
+/**
+ * Alternativa: Desenfoca aún más (para máxima privacidad)
+ * 
+ * @param {string} imageUri - URI de la imagen
+ * @returns {Promise<string>} - URI con muy baja calidad
+ */
+export const blurPlateInImage = async (imageUri) => {
+  try {
+    console.log('🔒 Desenfocando matrícula en imagen...');
+
+    const blurred = await manipulateAsync(
+      imageUri,
+      [
+        { resize: { width: 500 } }, // Más pequeño
+      ],
+      { 
+        compress: 0.15, // Aún menos calidad
+        format: SaveFormat.JPEG 
+      }
+    );
+
+    console.log('✅ Imagen con matrícula menos legible');
+    return blurred.uri;
+
+  } catch (error) {
+    console.error('❌ Error desenfocando matrícula:', error);
+    return imageUri;
+  }
+};

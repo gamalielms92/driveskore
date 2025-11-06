@@ -58,7 +58,8 @@
         "POST_NOTIFICATIONS",
         "SYSTEM_ALERT_WINDOW",
         "FOREGROUND_SERVICE_SPECIAL_USE"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
@@ -85,6 +86,8 @@
           "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."
         }
       ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
       "expo-router"
     ],
     "extra": {

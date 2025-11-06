@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../src/config/supabase';
+import { Analytics } from '../src/services/Analytics';
 import EventCaptureService from '../src/services/EventCaptureService';
 import type { DriverCandidate } from '../src/types/events';
 import type { Vehicle } from '../src/types/vehicle';
@@ -134,6 +135,14 @@ export default function MatchingResultsScreen() {
             try {
               console.log('🗑️ [MatchingResults] Eliminando evento:', eventId);
               await EventCaptureService.removeEvent(eventId);
+
+
+                // Trackear matching completado
+                await Analytics.trackMatchingCompleted(
+                  candidates.length, 
+                  candidate.match_score
+                );
+                console.log('📊 Analytics: matching_completed');
               
               console.log('🧭 [MatchingResults] Navegando a /rate...');
               router.replace({

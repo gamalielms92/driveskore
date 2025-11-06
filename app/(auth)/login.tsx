@@ -2,8 +2,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import { Analytics } from '../../src/services/Analytics';
 import EventCaptureService from '../../src/services/EventCaptureService';
-
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -28,6 +28,9 @@ export default function LoginScreen() {
         });
 
         if (error) throw error;
+
+        // Trackear registro
+        await Analytics.trackSignUp('email');
 
         Alert.alert(
           '¡Registro exitoso!',
