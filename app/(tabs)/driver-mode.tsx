@@ -33,7 +33,7 @@ export default function DriverModeScreen() {
   const trackingInterval = useRef<NodeJS.Timeout | null>(null);
   const appState = useRef(AppState.currentState);
 
-  // Función para cargar vehículo activo
+  // Función para cargar vehículo emparejado
   const loadActiveVehicle = async () => {
     try {
       setLoading(true);
@@ -55,7 +55,7 @@ export default function DriverModeScreen() {
         .maybeSingle();
 
       setUserPlate(activeVehicle?.plate || null);
-      console.log('🚗 Vehículo activo cargado:', activeVehicle?.plate || 'ninguno');
+      console.log('🚗 Vehículo emparejado cargado:', activeVehicle?.plate || 'ninguno');
       
       // Verificar si el tracking ya está activo
       const trackingActive = LocationTrackingService.isActive();
@@ -63,7 +63,7 @@ export default function DriverModeScreen() {
       console.log('📍 Tracking activo:', trackingActive);
       
     } catch (error) {
-      console.error('Error cargando vehículo activo:', error);
+      console.error('Error cargando vehículo emparejado:', error);
       setUserPlate(null);
     } finally {
       setLoading(false);
@@ -73,7 +73,7 @@ export default function DriverModeScreen() {
   // Recargar cada vez que la pantalla gana el foco
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 Driver Mode enfocado - Recargando vehículo activo...');
+      console.log('🔄 Driver Mode enfocado - Recargando vehículo emparejado...');
       loadActiveVehicle();
     }, [])
   );
@@ -144,7 +144,7 @@ export default function DriverModeScreen() {
         return;
       }
 
-      // Validación 2: Recargar y verificar vehículo activo EN TIEMPO REAL
+      // Validación 2: Recargar y verificar vehículo emparejado EN TIEMPO REAL
       await loadActiveVehicle();
       
       console.log('📋 User ID:', userId);
@@ -340,15 +340,15 @@ export default function DriverModeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerIcon}>🚗</Text>
-          <Text style={styles.title}>Modo Conductor</Text>
+          <Text style={styles.title}>Modo Conducción</Text>
           <Text style={styles.subtitle}>
-            Activa el seguimiento automático mientras conduces
+            Activa el seguimiento mientras conduces
           </Text>
         </View>
 
         {/* Estado del vehículo */}
         <View style={styles.vehicleCard}>
-          <Text style={styles.cardTitle}>Vehículo Activo</Text>
+          <Text style={styles.cardTitle}>Vehículo emparejado</Text>
           {userPlate ? (
             <>
               <Text style={styles.vehiclePlate}>🟢 {userPlate}</Text>
@@ -427,8 +427,8 @@ export default function DriverModeScreen() {
           <Text style={styles.infoText}>
             1. Activa un vehículo en "Mis Vehículos"{'\n'}
             2. Inicia el seguimiento antes de conducir{'\n'}
-            3. Tu ubicación se registra automáticamente cada 30s{'\n'}
-            4. Otros conductores pueden identificarte fácilmente{'\n'}
+            3. Tu ubicación se registra automáticamente{'\n'}
+            4. Otros conductores pueden valorarte{'\n'}
             5. Detén el seguimiento al terminar tu viaje
           </Text>
         </View>
@@ -437,9 +437,9 @@ export default function DriverModeScreen() {
         <View style={styles.warningCard}>
           <Text style={styles.warningIcon}>⚠️</Text>
           <Text style={styles.warningText}>
-            • No uses el móvil mientras conduces{'\n'}
-            • El seguimiento consume ~3-5% batería/hora{'\n'}
-            • Funciona en segundo plano{'\n'}
+            - Al activar el seguimiento:{'\n'}
+            • El gps consume ~3-5% batería/hora{'\n'}
+            • La app funciona en segundo plano{'\n'}
             • Los datos se envían de forma segura
           </Text>
         </View>

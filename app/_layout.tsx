@@ -1,5 +1,9 @@
 // app/_layout.tsx
-// ✅ ACTUALIZADO: Con VolumeButtonService para AB Shutter 3
+declare global {
+  var RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS: boolean | undefined;
+}
+// Suprimir warnings de deprecación de Firebase
+globalThis.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
 
 import Constants from 'expo-constants';
 import { Stack, useRouter, useSegments } from 'expo-router';

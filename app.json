@@ -81,6 +81,9 @@
         "./plugin/withFloatingButton.js"
       ],
       [
+        "./plugin/withReactNativeKeyEvent.js"
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."

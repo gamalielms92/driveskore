@@ -27,3 +27,30 @@ if (AsyncStorage) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig);
+
+// ✅ Manejar errores de refresh token silenciosamente
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('✅ Token refrescado correctamente');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('👋 Usuario cerró sesión');
+  } else if (event === 'SIGNED_IN') {
+    console.log('🔐 Usuario inició sesión');
+  }
+});
+
+// ✅ Capturar errores de refresh token al iniciar
+if (AsyncStorage) {
+  supabase.auth.getSession().catch(async (error) => {
+    console.log('⚠️ Error recuperando sesión inicial:', error.message);
+    // Limpiar storage corrupto si es error de refresh token
+    if (error.message?.includes('Refresh Token')) {
+      console.log('🧹 Limpiando storage corrupto...');
+      try {
+        await AsyncStorage.removeItem('supabase.auth.token');
+      } catch (e) {
+        console.log('Error limpiando storage:', e);
+      }
+    }
+  });
+}

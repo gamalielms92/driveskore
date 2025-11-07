@@ -147,52 +147,6 @@ export default function CaptureSettingsScreen() {
             </Text>
           </View>
         </View>
-
-        <View style={styles.recommendationCard}>
-          <Text style={styles.recommendationIcon}>⭐</Text>
-          <View style={styles.recommendationContent}>
-            <Text style={styles.recommendationTitle}>Usa Ambos</Text>
-            <Text style={styles.recommendationText}>
-              Activa los dos. Usa el flotante cuando no tengas el mando a mano.
-            </Text>
-            <Text style={styles.recommendationBest}>
-              ✨ Mejor para: Máxima flexibilidad
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Consejos */}
-      <View style={styles.tipsSection}>
-        <Text style={styles.tipsTitle}>🎓 Consejos de Uso</Text>
-        
-        <View style={styles.tipItem}>
-          <Text style={styles.tipIcon}>🚗</Text>
-          <Text style={styles.tipText}>
-            Activa el método antes de empezar a conducir
-          </Text>
-        </View>
-
-        <View style={styles.tipItem}>
-          <Text style={styles.tipIcon}>🗺️</Text>
-          <Text style={styles.tipText}>
-            Ambos funcionan sobre Google Maps y Waze
-          </Text>
-        </View>
-
-        <View style={styles.tipItem}>
-          <Text style={styles.tipIcon}>🔋</Text>
-          <Text style={styles.tipText}>
-            El flotante consume menos batería que el AB Shutter
-          </Text>
-        </View>
-
-        <View style={styles.tipItem}>
-          <Text style={styles.tipIcon}>⚖️</Text>
-          <Text style={styles.tipText}>
-            Ambos son 100% legales mientras conduces (no tocas pantalla)
-          </Text>
-        </View>
       </View>
 
       {/* Footer espaciador */}

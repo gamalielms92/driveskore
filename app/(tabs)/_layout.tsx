@@ -1,3 +1,5 @@
+// app/(tabs)/_layout.tsx
+
 import { Tabs } from 'expo-router';
 import { Platform, Text } from 'react-native';
 
@@ -45,6 +47,15 @@ export default function TabLayout() {
         options={{
           title: 'Buscar',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🔍</Text>,
+        }}
+      />
+
+      <Tabs.Screen
+        name="help"
+        options={{
+          title: 'Ayuda',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>💬</Text>,
+          headerTitle: 'Ayuda y Feedback',
         }}
       />
       

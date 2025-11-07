@@ -74,7 +74,7 @@ export default function HomeScreen() {
         {/* Vehículo activo */}
         {!loading && activeVehicle && (
           <View style={styles.activeVehicleCard}>
-            <Text style={styles.activeVehicleTitle}>🟢 Vehículo Activo</Text>
+            <Text style={styles.activeVehicleTitle}>🟢 Vehículo emparejado</Text>
             <Text style={styles.activeVehiclePlate}>{activeVehicle.plate}</Text>
             {activeVehicle.nickname && (
               <Text style={styles.activeVehicleNickname}>{activeVehicle.nickname}</Text>
@@ -88,7 +88,7 @@ export default function HomeScreen() {
         {/* BOTÓN MODO CONDUCCIÓN */}
         <TouchableOpacity
           style={styles.drivingModeButton}
-          onPress={() => router.push('/driving-mode')}
+          onPress={() => router.push('/driver-mode')}
         >
           <Text style={styles.drivingModeIcon}>🚗</Text>
           <View style={styles.drivingModeContent}>
@@ -147,7 +147,7 @@ export default function HomeScreen() {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>
           <Text style={styles.infoText}>
-            1. Captura o busca la matrícula del conductor{'\n'}
+            1. Captura la matrícula del conductor{'\n'} o el evento con el modo conducción{'\n'}
             2. Evalúa su comportamiento en la vía{'\n'}
             3. Ayuda a crear una comunidad de conductores responsables
           </Text>

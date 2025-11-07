@@ -187,7 +187,7 @@ export class ImageCompressionService {
    */
   static async uploadImage(
     compressedUri: string,
-    bucket: 'vehicle-photos' | 'user-avatars',
+    bucket: 'vehicle-photos' | 'user-avatars' | 'feedback-screenshots',
     userId: string,
     additionalPath?: string
   ): Promise<ImageUploadResult> {
@@ -246,7 +246,7 @@ export class ImageCompressionService {
    * Elimina imagen de Supabase Storage
    */
   static async deleteImage(
-    bucket: 'vehicle-photos' | 'user-avatars',
+    bucket: 'vehicle-photos' | 'user-avatars' | 'feedback-screenshots',
     path: string
   ): Promise<boolean> {
     try {

@@ -24,7 +24,7 @@ interface QueuedLocation {
 interface DriverLocationInsert {
   user_id: string;
   plate: string;
-  session_id: string | null; // ← NUEVO
+  session_id: string | null;
   latitude: number;
   longitude: number;
   location: string;
@@ -35,7 +35,6 @@ interface DriverLocationInsert {
   captured_at: string;
 }
 
-// ✅ NUEVA INTERFAZ
 interface TrackingStats {
   duration: number;
   distance: number;
@@ -49,6 +48,7 @@ const LOCATION_TASK_NAME = 'background-location-task';
 const SYNC_INTERVAL = 15000; // 15 segundos
 const GPS_UPDATE_INTERVAL = 5000; // 5 segundos
 const GPS_DISTANCE_INTERVAL = 10; // 10 metros
+const MIN_DISTANCE_THRESHOLD = 30; // 🎯 Umbral mínimo para contar distancia
 
 // ============================================================================
 // SERVICIO
@@ -60,7 +60,6 @@ class LocationTrackingService {
   private currentUserId: string | null = null;
   private currentPlate: string | null = null;
   
-  // ✅ NUEVAS PROPIEDADES PARA STATS
   private sessionId: string | null = null;
   private startTime: Date | null = null;
   private lastLocation: { latitude: number; longitude: number } | null = null;
@@ -74,7 +73,7 @@ class LocationTrackingService {
     this.currentUserId = userId;
     this.currentPlate = plate;
     
-    // ✅ RESETEAR stats
+    // Resetear stats
     this.sessionId = null;
     this.startTime = null;
     this.lastLocation = null;
@@ -90,7 +89,7 @@ class LocationTrackingService {
   }
 
   /**
-   * ✅ NUEVO: Obtiene estadísticas del tracking actual
+   * Obtiene estadísticas del tracking actual
    */
   async getTrackingStats(): Promise<TrackingStats | null> {
     if (!this.isTracking || !this.startTime) {
@@ -144,7 +143,7 @@ class LocationTrackingService {
         timestamp: new Date(location.timestamp).toISOString(),
       };
 
-      // ✅ CALCULAR DISTANCIA
+      // 🎯 CALCULAR DISTANCIA CON FILTRO
       if (this.lastLocation) {
         const distance = this.calculateDistance(
           this.lastLocation.latitude,
@@ -152,26 +151,37 @@ class LocationTrackingService {
           locationData.latitude,
           locationData.longitude
         );
-        this.totalDistance += distance;
+
+        // ✅ FILTRO: Solo contar si el movimiento es >= 50m
+        // Esto elimina el "ruido" del GPS cuando estás parado
+        if (distance >= MIN_DISTANCE_THRESHOLD) {
+          this.totalDistance += distance;
+          
+          // Solo actualizar lastLocation si el movimiento fue significativo
+          this.lastLocation = { 
+            latitude: locationData.latitude, 
+            longitude: locationData.longitude 
+          };
+          
+          console.log(`📍 Movimiento válido #${this.locationCount}: ${distance.toFixed(0)}m | Total: ${this.totalDistance.toFixed(0)}m`);
+        } else {
+          console.log(`⏸️ Movimiento ignorado: ${distance.toFixed(1)}m (< ${MIN_DISTANCE_THRESHOLD}m)`);
+        }
+      } else {
+        // Primera ubicación = punto de referencia
+        this.lastLocation = { 
+          latitude: locationData.latitude, 
+          longitude: locationData.longitude 
+        };
+        console.log('📍 Primera ubicación establecida como referencia');
       }
 
-      // ✅ ACTUALIZAR última ubicación y contador
-      this.lastLocation = { 
-        latitude: locationData.latitude, 
-        longitude: locationData.longitude 
-      };
       this.locationCount++;
 
-      // Guardar en cola local
+      // Guardar en cola local (SIEMPRE, para el tracking en BD)
       await this.queueLocationUpdate(locationData);
-      
-      console.log(`📍 Ubicación procesada #${this.locationCount}:`, 
-        locationData.latitude.toFixed(6), 
-        locationData.longitude.toFixed(6),
-        `| Distancia total: ${this.totalDistance.toFixed(0)}m`
-      );
 
-      // ✅ ACTUALIZAR SESIÓN cada 5 ubicaciones
+      // Actualizar sesión cada 5 ubicaciones
       if (this.locationCount % 5 === 0) {
         await this.updateSession();
       }
@@ -181,7 +191,7 @@ class LocationTrackingService {
   }
 
   /**
-   * ✅ NUEVO: Calcula distancia entre dos puntos GPS (Haversine)
+   * Calcula distancia entre dos puntos GPS (Haversine)
    */
   private calculateDistance(
     lat1: number,
@@ -204,7 +214,7 @@ class LocationTrackingService {
   }
 
   /**
-   * ✅ NUEVO: Actualiza la sesión con stats actuales
+   * Actualiza la sesión con stats actuales
    */
   private async updateSession(): Promise<void> {
     if (!this.sessionId || !this.startTime) {
@@ -275,7 +285,7 @@ class LocationTrackingService {
         return false;
       }
 
-      // ✅ CREAR SESIÓN EN BD
+      // Crear sesión en BD
       this.startTime = new Date();
       this.lastLocation = null;
       this.totalDistance = 0;
@@ -302,7 +312,7 @@ class LocationTrackingService {
       this.sessionId = session.id;
       console.log('✅ Sesión creada:', this.sessionId);
 
-      // 1. Verificar permisos
+      // Verificar permisos
       const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus !== 'granted') {
         console.error('❌ Permiso de ubicación foreground denegado');
@@ -317,10 +327,10 @@ class LocationTrackingService {
 
       console.log('✅ Permisos otorgados');
 
-      // 2. Iniciar foreground service
+      // Iniciar foreground service
       await this.startForegroundService();
 
-      // 3. Iniciar tracking
+      // Iniciar tracking
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: GPS_UPDATE_INTERVAL,
@@ -336,7 +346,7 @@ class LocationTrackingService {
 
       console.log('✅ Location updates iniciados');
 
-      // 4. Iniciar sincronización periódica
+      // Iniciar sincronización periódica
       this.startPeriodicSync();
 
       this.isTracking = true;
@@ -346,7 +356,7 @@ class LocationTrackingService {
     } catch (error) {
       console.error('❌ Error iniciando tracking:', error);
       
-      // ✅ Limpiar sesión si falla
+      // Limpiar sesión si falla
       if (this.sessionId) {
         await supabase
           .from('driving_sessions')
@@ -424,11 +434,11 @@ class LocationTrackingService {
   
       const locationsToSync = queue.slice(-5);
       
-      // ✅ Preparar datos con session_id
+      // Preparar datos con session_id
       const insertData: DriverLocationInsert[] = locationsToSync.map((loc: QueuedLocation) => ({
         user_id: userId,
         plate: plate,
-        session_id: this.sessionId, // ← RELACIONAR con sesión
+        session_id: this.sessionId,
         latitude: loc.latitude,
         longitude: loc.longitude,
         location: `POINT(${loc.longitude} ${loc.latitude})`,
@@ -493,7 +503,7 @@ class LocationTrackingService {
 
       console.log('⏸️ Deteniendo tracking...');
 
-      // ✅ FINALIZAR SESIÓN
+      // Finalizar sesión
       if (this.sessionId && this.startTime) {
         const endTime = new Date();
         const durationSeconds = Math.floor((endTime.getTime() - this.startTime.getTime()) / 1000);
@@ -531,7 +541,7 @@ class LocationTrackingService {
       await Notifications.dismissAllNotificationsAsync();
       console.log('✅ Notificaciones canceladas');
 
-      // ✅ RESETEAR stats
+      // Resetear stats
       this.isTracking = false;
       this.sessionId = null;
       this.startTime = null;
