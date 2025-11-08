@@ -114,7 +114,7 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/search')}
+            onPress={() => router.push('src\components\FloatingButtonTest.tsx')}
           >
             <Text style={styles.actionIcon}>🔍</Text>
             <Text style={styles.actionTitle}>Buscar</Text>

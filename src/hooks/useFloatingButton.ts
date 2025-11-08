@@ -1,10 +1,11 @@
 // src/hooks/useFloatingButton.ts
-// Hook para gestionar el estado y eventos del botón flotante
+// VERSIÓN FINAL - Con guardado de preferencias
 
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Analytics } from '../services/Analytics';
+import CapturePreferencesService from '../services/CapturePreferencesService';
 import EventCaptureService from '../services/EventCaptureService';
 import FloatingButtonNative from '../services/FloatingButtonNative';
 
@@ -29,7 +30,6 @@ export function useFloatingButton(): UseFloatingButtonResult {
     checkInitialState();
   }, []);
 
-  // ✅ CORRECCIÓN: Usar useCallback para mantener referencia estable
   const handleCaptureFromNative = useCallback(async () => {
     try {
       console.log('🎯 Captura activada desde botón flotante nativo');
@@ -78,7 +78,7 @@ export function useFloatingButton(): UseFloatingButtonResult {
         trigger: null,
       });
     }
-  }, []); // Sin dependencias porque EventCaptureService es singleton
+  }, []);
 
   // Escuchar eventos de captura del botón nativo
   useEffect(() => {
@@ -97,7 +97,7 @@ export function useFloatingButton(): UseFloatingButtonResult {
       console.log('🛑 Desregistrando listener del botón flotante');
       unsubscribe();
     };
-  }, [handleCaptureFromNative]); // ✅ Añadir como dependencia
+  }, [handleCaptureFromNative]);
 
   const checkInitialState = async () => {
     setIsChecking(true);
@@ -135,6 +135,10 @@ export function useFloatingButton(): UseFloatingButtonResult {
       if (started) {
         setIsActive(true);
         
+        // ✅ Guardar preferencia
+        await CapturePreferencesService.setFloatingButtonEnabled(true);
+        console.log('💾 Preferencia guardada: Botón flotante ACTIVADO');
+        
         await Notifications.scheduleNotificationAsync({
           content: {
             title: '🟢 Botón Flotante Activo',
@@ -158,6 +162,10 @@ export function useFloatingButton(): UseFloatingButtonResult {
       const stopped = await FloatingButtonNative.stop();
       if (stopped) {
         setIsActive(false);
+        
+        // ✅ Guardar preferencia
+        await CapturePreferencesService.setFloatingButtonEnabled(false);
+        console.log('💾 Preferencia guardada: Botón flotante DESACTIVADO');
         
         await Notifications.scheduleNotificationAsync({
           content: {

@@ -14,13 +14,14 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { supabase } from '../../src/config/supabase';
-import ABShutter3Service from '../../src/services/ABShutter3Service';
-import { Analytics } from '../../src/services/Analytics';
-import CapturePreferencesService from '../../src/services/CapturePreferencesService';
-import EventCaptureService from '../../src/services/EventCaptureService';
-import FloatingButtonNative from '../../src/services/FloatingButtonNative';
-import LocationTrackingService from '../../src/services/LocationTrackingService';
+import FloatingButtonListener from '../src/components/FloatingButtonListener';
+import { supabase } from '../src/config/supabase';
+import ABShutter3Service from '../src/services/ABShutter3Service';
+import { Analytics } from '../src/services/Analytics';
+import CapturePreferencesService from '../src/services/CapturePreferencesService';
+import EventCaptureService from '../src/services/EventCaptureService';
+import FloatingButtonNative from '../src/services/FloatingButtonNative';
+import LocationTrackingService from '../src/services/LocationTrackingService';
 
 
 export default function DriverModeScreen() {
@@ -83,6 +84,37 @@ export default function DriverModeScreen() {
     }, [])
   );
 
+  // ✅ Mantener las estadísticas actualizándose mientras el tracking está activo
+  useEffect(() => {
+    // Solo ejecutar si el tracking está activo
+    if (!isTracking) {
+      return;
+    }
+
+    console.log('⏱️ Configurando actualización periódica de stats');
+    
+    // Actualizar inmediatamente
+    updateStats();
+    
+    // Configurar interval para actualizar cada 5 segundos
+    const interval = setInterval(() => {
+      console.log('🔄 Actualizando stats...');
+      updateStats();
+    }, 15000); // Actualizar cada 5 segundos para ver los cambios más rápido
+    
+    // Guardar referencia del interval
+    trackingInterval.current = interval;
+    
+    // Limpiar al desmontar o cuando isTracking cambie
+    return () => {
+      console.log('🛑 Limpiando interval de stats');
+      if (trackingInterval.current) {
+        clearInterval(trackingInterval.current);
+        trackingInterval.current = null;
+      }
+    };
+  }, [isTracking]); // Se reinicia cuando isTracking cambia
+  
   useEffect(() => {
     // Manejar cambios en el estado de la app
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -121,22 +153,31 @@ export default function DriverModeScreen() {
     }
   };
 
-  const updateStats = async () => {
-    try {
-      // Obtener datos reales del servicio de tracking
-      const trackingData = await LocationTrackingService.getTrackingStats();
+// También, asegúrate de que updateStats tenga logs para debug:
+const updateStats = async () => {
+  console.log('📊 updateStats() llamado');
+  
+  try {
+    // Obtener datos reales del servicio de tracking
+    const trackingData = await LocationTrackingService.getTrackingStats();
+    console.log('📊 Datos recibidos:', trackingData);
+    
+    if (trackingData) {
+      const newStats = {
+        duration: trackingData.duration || 0,
+        distance: trackingData.distance || 0,
+        lastUpdate: new Date()
+      };
       
-      if (trackingData) {
-        setStats({
-          duration: trackingData.duration || 0,
-          distance: trackingData.distance || 0,
-          lastUpdate: new Date()
-        });
-      }
-    } catch (error) {
-      console.error('Error actualizando stats:', error);
+      console.log('📊 Actualizando estado con:', newStats);
+      setStats(newStats);
+    } else {
+      console.log('⚠️ No hay datos de tracking');
     }
-  };
+  } catch (error) {
+    console.error('❌ Error actualizando stats:', error);
+  }
+};
 
   const handleStartTracking = async () => {
     try {
@@ -214,10 +255,12 @@ export default function DriverModeScreen() {
                 // Inicializar servicio
                 await LocationTrackingService.initialize(userId, userPlate);
                 console.log('✅ LocationTrackingService inicializado');
-// ✅ Asegurar que EventCaptureService está inicializado
-console.log('🔧 Verificando EventCaptureService...');
-await EventCaptureService.initialize(userId);
-console.log('✅ EventCaptureService verificado/reinicializado');
+
+                // ✅ Asegurar que EventCaptureService está inicializado
+                console.log('🔧 Verificando EventCaptureService...');
+                await EventCaptureService.initialize(userId);
+                console.log('✅ EventCaptureService verificado/reinicializado');
+
                 // Iniciar tracking
                 console.log('📍 Llamando a startTracking()...');
                 const success = await LocationTrackingService.startTracking();
@@ -226,27 +269,27 @@ console.log('✅ EventCaptureService verificado/reinicializado');
                 if (success) {
                   setIsTracking(true);
                   // ✅ NUEVO: Leer preferencias de captura
-  const preferences = await CapturePreferencesService.getAllPreferences();
-  console.log('📋 Preferencias de captura:', preferences);
+                  const preferences = await CapturePreferencesService.getAllPreferences();
+                  console.log('📋 Preferencias de captura:', preferences);
 
-  // ✅ NUEVO: Activar AB Shutter 3 si está en preferencias
-  if (preferences.abShutter3Enabled) {
-    console.log('🎮 Activando AB Shutter 3...');
-    ABShutter3Service.startListening();
-  }
+                  // ✅ NUEVO: Activar AB Shutter 3 si está en preferencias
+                  if (preferences.abShutter3Enabled) {
+                    console.log('🎮 Activando AB Shutter 3...');
+                    ABShutter3Service.startListening();
+                  }
 
-  // ✅ NUEVO: Activar Botón Flotante si está en preferencias
-  if (preferences.floatingButtonEnabled && Platform.OS === 'android') {
-    console.log('🔘 Activando Botón Flotante...');
+                  // ✅ NUEVO: Activar Botón Flotante si está en preferencias
+                  if (preferences.floatingButtonEnabled && Platform.OS === 'android') {
+                    console.log('🔘 Activando Botón Flotante...');
     
-    // Verificar permiso
-    const hasPermission = await FloatingButtonNative.checkPermission();
-    if (hasPermission) {
-      await FloatingButtonNative.start();
-    } else {
-      console.warn('⚠️ No hay permiso para botón flotante');
-    }
-  }
+                    // Verificar permiso
+                    const hasPermission = await FloatingButtonNative.checkPermission();
+                    if (hasPermission) {
+                      await FloatingButtonNative.start();
+                    } else {
+                      console.warn('⚠️ No hay permiso para botón flotante');
+                    }
+                  }
                   // ✅ NUEVO: Trackear inicio del modo conductor
                   await Analytics.trackDriverModeStarted();
                   console.log('📊 Analytics: driver_mode_started');
@@ -304,14 +347,14 @@ console.log('✅ EventCaptureService verificado/reinicializado');
               console.log('⏸️ Deteniendo tracking...');
               
               // ✅ NUEVO: Detener AB Shutter 3
-    console.log('🛑 Deteniendo AB Shutter 3...');
-    ABShutter3Service.stopListening();
+              console.log('🛑 Deteniendo AB Shutter 3...');
+              ABShutter3Service.stopListening();
 
-    // ✅ NUEVO: Detener Botón Flotante
-    if (Platform.OS === 'android') {
-      console.log('🛑 Deteniendo Botón Flotante...');
-      await FloatingButtonNative.stop();
-    }
+              // ✅ NUEVO: Detener Botón Flotante
+              if (Platform.OS === 'android') {
+                console.log('🛑 Deteniendo Botón Flotante...');
+                await FloatingButtonNative.stop();
+              }
               // ✅ NUEVO: Usar duración de las stats existentes
               const duration = stats.duration || 0;
               
@@ -482,6 +525,8 @@ console.log('✅ EventCaptureService verificado/reinicializado');
           </Text>
         </View>
       </View>
+      {/* Listener del botón flotante (invisible) */}
+    <FloatingButtonListener />
     </ScrollView>
   );
 }
