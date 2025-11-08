@@ -15,8 +15,13 @@ import {
   View
 } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import ABShutter3Service from '../../src/services/ABShutter3Service';
 import { Analytics } from '../../src/services/Analytics';
+import CapturePreferencesService from '../../src/services/CapturePreferencesService';
+import EventCaptureService from '../../src/services/EventCaptureService';
+import FloatingButtonNative from '../../src/services/FloatingButtonNative';
 import LocationTrackingService from '../../src/services/LocationTrackingService';
+
 
 export default function DriverModeScreen() {
   const router = useRouter();
@@ -209,7 +214,10 @@ export default function DriverModeScreen() {
                 // Inicializar servicio
                 await LocationTrackingService.initialize(userId, userPlate);
                 console.log('✅ LocationTrackingService inicializado');
-
+// ✅ Asegurar que EventCaptureService está inicializado
+console.log('🔧 Verificando EventCaptureService...');
+await EventCaptureService.initialize(userId);
+console.log('✅ EventCaptureService verificado/reinicializado');
                 // Iniciar tracking
                 console.log('📍 Llamando a startTracking()...');
                 const success = await LocationTrackingService.startTracking();
@@ -217,7 +225,28 @@ export default function DriverModeScreen() {
                 
                 if (success) {
                   setIsTracking(true);
-                  
+                  // ✅ NUEVO: Leer preferencias de captura
+  const preferences = await CapturePreferencesService.getAllPreferences();
+  console.log('📋 Preferencias de captura:', preferences);
+
+  // ✅ NUEVO: Activar AB Shutter 3 si está en preferencias
+  if (preferences.abShutter3Enabled) {
+    console.log('🎮 Activando AB Shutter 3...');
+    ABShutter3Service.startListening();
+  }
+
+  // ✅ NUEVO: Activar Botón Flotante si está en preferencias
+  if (preferences.floatingButtonEnabled && Platform.OS === 'android') {
+    console.log('🔘 Activando Botón Flotante...');
+    
+    // Verificar permiso
+    const hasPermission = await FloatingButtonNative.checkPermission();
+    if (hasPermission) {
+      await FloatingButtonNative.start();
+    } else {
+      console.warn('⚠️ No hay permiso para botón flotante');
+    }
+  }
                   // ✅ NUEVO: Trackear inicio del modo conductor
                   await Analytics.trackDriverModeStarted();
                   console.log('📊 Analytics: driver_mode_started');
@@ -274,6 +303,15 @@ export default function DriverModeScreen() {
             try {
               console.log('⏸️ Deteniendo tracking...');
               
+              // ✅ NUEVO: Detener AB Shutter 3
+    console.log('🛑 Deteniendo AB Shutter 3...');
+    ABShutter3Service.stopListening();
+
+    // ✅ NUEVO: Detener Botón Flotante
+    if (Platform.OS === 'android') {
+      console.log('🛑 Deteniendo Botón Flotante...');
+      await FloatingButtonNative.stop();
+    }
               // ✅ NUEVO: Usar duración de las stats existentes
               const duration = stats.duration || 0;
               

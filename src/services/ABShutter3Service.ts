@@ -1,5 +1,5 @@
 // src/services/ABShutter3Service.ts
-// ✅ Servicio para AB Shutter 3 usando react-native-keyevent
+// ✅ ACTUALIZADO: Con soporte para segundo plano
 
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -21,6 +21,7 @@ class ABShutter3Service {
   private currentUserId: string | null = null;
   private lastCaptureTime: number = 0;
   private DEBOUNCE_MS = 2000;
+  private persistentNotificationId: string | null = null;
 
   /**
    * Inicializa el servicio
@@ -61,6 +62,17 @@ class ABShutter3Service {
     if (status !== 'granted') {
       console.warn('⚠️ Permisos de notificaciones no concedidos');
     }
+
+    // ✅ NUEVO: Crear canal de notificación para Android (requerido para foreground service)
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('abshutter3-service', {
+        name: 'Servicio AB Shutter 3',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
   }
 
   /**
@@ -94,12 +106,10 @@ class ABShutter3Service {
 
     this.isListening = true;
     
-    this.showNotification(
-      '🎮 AB Shutter 3 Activo',
-      'Presiona el botón Bluetooth para capturar eventos'
-    );
+    // ✅ NUEVO: Notificación PERSISTENTE para mantener servicio activo en background
+    this.showPersistentNotification();
 
-    console.log('✅ Escuchando AB Shutter 3');
+    console.log('✅ Escuchando AB Shutter 3 (funciona en background)');
   }
 
   /**
@@ -116,8 +126,49 @@ class ABShutter3Service {
       console.warn('⚠️ Error removiendo listener:', error);
     }
 
+    // ✅ NUEVO: Cancelar notificación persistente
+    this.cancelPersistentNotification();
+
     this.isListening = false;
     console.log('✅ Escucha detenida');
+  }
+
+  /**
+   * ✅ NUEVO: Muestra notificación persistente para mantener servicio activo
+   */
+  private async showPersistentNotification() {
+    try {
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🎮 AB Shutter 3 Activo',
+          body: 'Presiona tu botón Bluetooth para capturar eventos. Esta notificación mantiene el servicio activo.',
+          sound: false,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          sticky: true, // No se puede deslizar para eliminar
+        },
+        trigger: null,
+      });
+
+      this.persistentNotificationId = notificationId;
+      console.log('✅ Notificación persistente mostrada:', notificationId);
+    } catch (error) {
+      console.error('❌ Error mostrando notificación persistente:', error);
+    }
+  }
+
+  /**
+   * ✅ NUEVO: Cancela la notificación persistente
+   */
+  private async cancelPersistentNotification() {
+    if (!this.persistentNotificationId) return;
+
+    try {
+      await Notifications.dismissNotificationAsync(this.persistentNotificationId);
+      this.persistentNotificationId = null;
+      console.log('✅ Notificación persistente cancelada');
+    } catch (error) {
+      console.error('❌ Error cancelando notificación persistente:', error);
+    }
   }
 
   /**
@@ -133,7 +184,7 @@ class ABShutter3Service {
     }
 
     this.lastCaptureTime = now;
-    console.log('🔴 AB SHUTTER 3 PRESIONADO');
+    console.log('🔴 AB SHUTTER 3 PRESIONADO (Background activo)');
 
     try {
       await this.showNotification(
@@ -156,7 +207,7 @@ class ABShutter3Service {
   }
 
   /**
-   * Muestra notificación
+   * Muestra notificación temporal
    */
   private async showNotification(title: string, body: string, data?: string) {
     try {
