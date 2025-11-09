@@ -1,28 +1,30 @@
 // src/components/FloatingButtonControl.tsx
-// Componente UI para controlar el botón flotante
+// VERSIÓN ACTUALIZADA - Soporta Android (nativo) e iOS (local)
 
 import React from 'react';
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFloatingButton } from '../hooks/useFloatingButton'; // ✅ IMPORTAR EL HOOK
+import { useFloatingButton } from '../hooks/useFloatingButton';
 
 export default function FloatingButtonControl() {
-  // ✅ USAR EL HOOK EN LUGAR DE ESTADO LOCAL
   const {
     isActive,
     hasPermission,
     isChecking,
     toggleButton,
     requestPermission,
+    platform,
+    isLocalButton,
   } = useFloatingButton();
 
-  if (Platform.OS !== 'android') {
+  // Web no soportado
+  if (Platform.OS === 'web') {
     return (
       <View style={styles.container}>
         <View style={styles.unavailableCard}>
           <Text style={styles.unavailableIcon}>⚠️</Text>
-          <Text style={styles.unavailableTitle}>No Disponible</Text>
+          <Text style={styles.unavailableTitle}>No Disponible en Web</Text>
           <Text style={styles.unavailableText}>
-            El botón flotante solo está disponible en Android
+            El botón flotante solo está disponible en la app móvil
           </Text>
         </View>
       </View>
@@ -50,7 +52,7 @@ export default function FloatingButtonControl() {
   };
 
   const handleToggle = async () => {
-    if (!hasPermission) {
+    if (!hasPermission && Platform.OS === 'android') {
       handleRequestPermission();
       return;
     }
@@ -60,54 +62,105 @@ export default function FloatingButtonControl() {
       
       if (!isActive) {
         // Se acaba de activar
-        Alert.alert(
-          '✅ Botón Activo',
-          'El botón flotante está activo.\n\n' +
-          'Minimiza la aplicación o abre Google Maps para verlo en acción.',
-          [{ text: 'Entendido' }]
-        );
+        if (Platform.OS === 'ios') {
+          Alert.alert(
+            '✅ Botón Flotante iOS Activo',
+            'El botón aparecerá en la esquina de la app.\n\n' +
+            '• Puedes arrastrarlo a cualquier posición\n' +
+            '• Toca para capturar eventos\n' +
+            '• Doble tap para ocultarlo temporalmente\n' +
+            '• Funciona mientras uses DriveSkore',
+            [{ text: 'Entendido' }]
+          );
+        } else {
+          Alert.alert(
+            '✅ Botón Flotante Activo',
+            'El botón flotante está activo.\n\n' +
+            'Minimiza la aplicación o abre Google Maps para verlo en acción.',
+            [{ text: 'Entendido' }]
+          );
+        }
       }
     } catch (error) {
       Alert.alert(
         '❌ Error',
-        'No se pudo cambiar el estado del botón. Verifica los permisos.',
+        'No se pudo cambiar el estado del botón.',
         [{ text: 'OK' }]
       );
     }
   };
 
+  // Contenido específico por plataforma
+  const renderPlatformContent = () => {
+    if (Platform.OS === 'ios') {
+      return (
+        <>
+          <View style={styles.header}>
+            <Text style={styles.title}>🎯 Botón Flotante iOS</Text>
+            <View style={[styles.statusBadge, isActive && styles.statusBadgeActive]}>
+              <Text style={styles.statusText}>
+                {isActive ? '🟢 ACTIVO' : '🔴 INACTIVO'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.description}>
+            Botón flotante dentro de la app. Aparece en todas las pantallas de DriveSkore y permite capturar eventos rápidamente.
+          </Text>
+
+          <View style={styles.iosInfoBox}>
+            <Text style={styles.iosInfoTitle}>📱 Características iOS:</Text>
+            <Text style={styles.iosInfoItem}>• Funciona dentro de DriveSkore</Text>
+            <Text style={styles.iosInfoItem}>• Se puede arrastrar por la pantalla</Text>
+            <Text style={styles.iosInfoItem}>• Ideal para uso con CarPlay</Text>
+            <Text style={styles.iosInfoItem}>• Útil al cambiar entre apps rápidamente</Text>
+          </View>
+        </>
+      );
+    }
+
+    // Android
+    return (
+      <>
+        <View style={styles.header}>
+          <Text style={styles.title}>🎯 Botón Flotante Android</Text>
+          <View style={[styles.statusBadge, isActive && styles.statusBadgeActive]}>
+            <Text style={styles.statusText}>
+              {isActive ? '🟢 ACTIVO' : '🔴 INACTIVO'}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.description}>
+          Botón flotante sobre todas las apps. Funciona con Google Maps, Waze y cualquier otra aplicación.
+        </Text>
+
+        {!hasPermission && (
+          <View style={styles.permissionSection}>
+            <Text style={styles.permissionIcon}>🔐</Text>
+            <Text style={styles.permissionTitle}>Permiso Requerido</Text>
+            <Text style={styles.permissionText}>
+              Para usar esta función, debes conceder permiso para mostrar el botón sobre otras apps.
+            </Text>
+            <TouchableOpacity 
+              style={styles.permissionButton}
+              onPress={handleRequestPermission}
+            >
+              <Text style={styles.permissionButtonText}>
+                Conceder Permiso
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>🎯 Botón Flotante</Text>
-        <View style={[styles.statusBadge, isActive && styles.statusBadgeActive]}>
-          <Text style={styles.statusText}>
-            {isActive ? '🟢 ACTIVO' : '🔴 INACTIVO'}
-          </Text>
-        </View>
-      </View>
+      {renderPlatformContent()}
 
-      <Text style={styles.description}>
-        Captura eventos rápidamente mientras usas otras aplicaciones como Google Maps.
-      </Text>
-
-      {!hasPermission ? (
-        <View style={styles.permissionSection}>
-          <Text style={styles.permissionIcon}>🔐</Text>
-          <Text style={styles.permissionTitle}>Permiso Requerido</Text>
-          <Text style={styles.permissionText}>
-            Para usar esta función, debes conceder permiso para mostrar el botón sobre otras apps.
-          </Text>
-          <TouchableOpacity 
-            style={styles.permissionButton}
-            onPress={handleRequestPermission}
-          >
-            <Text style={styles.permissionButtonText}>
-              Conceder Permiso
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
+      {(Platform.OS === 'ios' || hasPermission) && (
         <View style={styles.controlSection}>
           <TouchableOpacity 
             style={[styles.toggleButton, isActive && styles.toggleButtonActive]}
@@ -122,10 +175,21 @@ export default function FloatingButtonControl() {
             <View style={styles.infoBox}>
               <Text style={styles.infoTitle}>✅ Botón Activo</Text>
               <View style={styles.infoList}>
-                <Text style={styles.infoItem}>• Minimiza la app para verlo</Text>
-                <Text style={styles.infoItem}>• Tócalo para capturar eventos</Text>
-                <Text style={styles.infoItem}>• Arrástralo para reposicionarlo</Text>
-                <Text style={styles.infoItem}>• Funciona sobre todas las apps</Text>
+                {Platform.OS === 'ios' ? (
+                  <>
+                    <Text style={styles.infoItem}>• Visible en todas las pantallas de la app</Text>
+                    <Text style={styles.infoItem}>• Arrástralo para reposicionarlo</Text>
+                    <Text style={styles.infoItem}>• Un tap para capturar</Text>
+                    <Text style={styles.infoItem}>• Doble tap para ocultar 5 segundos</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.infoItem}>• Minimiza la app para verlo</Text>
+                    <Text style={styles.infoItem}>• Tócalo para capturar eventos</Text>
+                    <Text style={styles.infoItem}>• Arrástralo para reposicionarlo</Text>
+                    <Text style={styles.infoItem}>• Funciona sobre todas las apps</Text>
+                  </>
+                )}
               </View>
             </View>
           )}
@@ -134,8 +198,6 @@ export default function FloatingButtonControl() {
     </View>
   );
 }
-
-// ... (mantén todos los estilos sin cambios)
 
 const styles = StyleSheet.create({
   container: {
@@ -209,6 +271,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFE69C',
     alignItems: 'center',
+    marginBottom: 16,
   },
   permissionIcon: {
     fontSize: 48,
@@ -259,6 +322,23 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
     lineHeight: 20,
   },
+  iosInfoBox: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  iosInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 8,
+  },
+  iosInfoItem: {
+    fontSize: 13,
+    color: '#1976D2',
+    lineHeight: 20,
+  },
   checkingText: {
     textAlign: 'center',
     color: '#666',
@@ -283,37 +363,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-  },
-  notImplementedCard: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  notImplementedIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  notImplementedTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF9500',
-    marginBottom: 12,
-  },
-  notImplementedText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  infoButton: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  infoButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

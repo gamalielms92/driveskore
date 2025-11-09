@@ -199,6 +199,68 @@ class AnalyticsService {
     }
   }
 
+/**
+   * Trackear cuando se activa el AB Shutter 3
+   */
+async trackABShutter3Started() {
+  try {
+    await analytics().logEvent('abshutter3_started', {
+      timestamp: new Date().toISOString(),
+    });
+    console.log('📊 Evento: abshutter3_started');
+  } catch (error) {
+    console.error('Error tracking abshutter3_started:', error);
+  }
+}
+
+/**
+ * Trackear cuando se detiene el AB Shutter 3
+ */
+async trackABShutter3Stopped() {
+  try {
+    await analytics().logEvent('abshutter3_stopped', {
+      timestamp: new Date().toISOString(),
+    });
+    console.log('📊 Evento: abshutter3_stopped');
+  } catch (error) {
+    console.error('Error tracking abshutter3_stopped:', error);
+  }
+}
+
+/**
+ * Trackear cuando se captura un evento con AB Shutter 3
+ */
+async trackABShutter3Capture() {
+  try {
+    await analytics().logEvent('abshutter3_capture', {
+      timestamp: new Date().toISOString(),
+    });
+    console.log('📊 Evento: abshutter3_capture');
+  } catch (error) {
+    console.error('Error tracking abshutter3_capture:', error);
+  }
+}
+
+/**
+ * Trackear preferencias de captura activadas
+ * Llamar cuando el usuario guarda preferencias
+ */
+async trackCapturePreferences(preferences: {
+  floatingButton: boolean;
+  abShutter3: boolean;
+}) {
+  try {
+    await analytics().logEvent('capture_preferences_updated', {
+      floating_button_enabled: preferences.floatingButton,
+      abshutter3_enabled: preferences.abShutter3,
+      timestamp: new Date().toISOString(),
+    });
+    console.log('📊 Evento: capture_preferences_updated');
+  } catch (error) {
+    console.error('Error tracking capture_preferences_updated:', error);
+  }
+}
+
   /**
    * Establecer propiedades del usuario
    * Útil para segmentación en el dashboard

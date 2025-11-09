@@ -428,12 +428,22 @@ const updateStats = async () => {
         </View>
 
         {/* Estado del vehículo */}
-        <View style={styles.vehicleCard}>
+        <View style={[
+            styles.vehicleCard,
+            isTracking && styles.vehicleCardActive
+          ]}>
           <Text style={styles.cardTitle}>Vehículo emparejado</Text>
           {userPlate ? (
             <>
-              <Text style={styles.vehiclePlate}>🟢 {userPlate}</Text>
-              <Text style={styles.vehicleStatus}>Listo para conducir</Text>
+              <Text style={[
+                styles.vehiclePlate,
+                isTracking && styles.vehiclePlateTracking
+              ]}>
+                {isTracking ? '🟢' : '🔵'} {userPlate}
+              </Text>
+              <Text style={styles.vehicleStatus}>
+                {isTracking ? 'Estado: Online' : 'Listo para conducir'}
+              </Text>
             </>
           ) : (
             <>
@@ -580,6 +590,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  vehicleCardActive: {
+    borderWidth: 2,
+    borderColor: '#34C759', // Borde verde cuando está activo
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -589,9 +603,12 @@ const styles = StyleSheet.create({
   vehiclePlate: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#34C759',
+    color: '#007AFF', // Cambiado de #34C759 (verde) a #007AFF (azul)
     marginBottom: 5,
     textAlign: 'center',
+  },
+  vehiclePlateTracking: {
+    color: '#34C759', // Verde cuando está tracking
   },
   vehicleStatus: {
     fontSize: 14,

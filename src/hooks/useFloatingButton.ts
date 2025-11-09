@@ -1,5 +1,5 @@
 // src/hooks/useFloatingButton.ts
-// VERSIÓN FINAL - Con guardado de preferencias
+// VERSIÓN ACTUALIZADA - Soporta Android (nativo) e iOS (local)
 
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useState } from 'react';
@@ -18,12 +18,16 @@ interface UseFloatingButtonResult {
   toggleButton: () => Promise<void>;
   requestPermission: () => void;
   checkPermission: () => Promise<void>;
+  platform: 'android' | 'ios' | 'web';
+  isLocalButton: boolean; // Para iOS
 }
 
 export function useFloatingButton(): UseFloatingButtonResult {
   const [isActive, setIsActive] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const platform = Platform.OS as 'android' | 'ios' | 'web';
+  const isLocalButton = Platform.OS === 'ios';
 
   // Verificar estado inicial
   useEffect(() => {
@@ -33,7 +37,6 @@ export function useFloatingButton(): UseFloatingButtonResult {
   const handleCaptureFromNative = useCallback(async () => {
     try {
       console.log('🎯 Captura activada desde botón flotante nativo');
-      console.log('🔍 EventCaptureService disponible:', !!EventCaptureService);
       
       // Notificación de inicio
       await Notifications.scheduleNotificationAsync({
@@ -46,7 +49,6 @@ export function useFloatingButton(): UseFloatingButtonResult {
       });
 
       // Capturar evento
-      console.log('⏳ Llamando a EventCaptureService.captureEvent...');
       const event = await EventCaptureService.captureEvent('car');
       console.log('✅ Evento capturado:', event.id);
 
@@ -66,8 +68,6 @@ export function useFloatingButton(): UseFloatingButtonResult {
 
     } catch (error: any) {
       console.error('❌ Error capturando desde botón flotante:', error);
-      console.error('❌ Error message:', error?.message);
-      console.error('❌ Error stack:', error?.stack);
       
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -80,13 +80,13 @@ export function useFloatingButton(): UseFloatingButtonResult {
     }
   }, []);
 
-  // Escuchar eventos de captura del botón nativo
+  // Solo para Android: escuchar eventos del botón nativo
   useEffect(() => {
     if (Platform.OS !== 'android') {
       return;
     }
 
-    console.log('👂 Registrando listener de eventos del botón flotante');
+    console.log('👂 Registrando listener de eventos del botón flotante nativo');
     
     const unsubscribe = FloatingButtonNative.onCaptureEvent(() => {
       console.log('📡 Evento recibido desde módulo nativo');
@@ -102,55 +102,86 @@ export function useFloatingButton(): UseFloatingButtonResult {
   const checkInitialState = async () => {
     setIsChecking(true);
     
-    // Verificar permiso
-    const permission = await FloatingButtonNative.checkPermission();
-    setHasPermission(permission);
-    
-    // Verificar si el servicio está activo
-    if (permission) {
-      const running = await FloatingButtonNative.isRunning();
-      setIsActive(running);
+    if (Platform.OS === 'android') {
+      // Android: verificar permisos del sistema
+      const permission = await FloatingButtonNative.checkPermission();
+      setHasPermission(permission);
+      
+      if (permission) {
+        const running = await FloatingButtonNative.isRunning();
+        setIsActive(running);
+      }
+    } else if (Platform.OS === 'ios') {
+      // iOS: el botón local siempre tiene "permiso"
+      setHasPermission(true);
+      
+      // Leer preferencia guardada
+      const savedPreference = await CapturePreferencesService.getFloatingButtonEnabled();
+      setIsActive(savedPreference);
+    } else {
+      // Web: no soportado
+      setHasPermission(false);
+      setIsActive(false);
     }
     
     setIsChecking(false);
   };
 
   const checkPermission = async () => {
-    const permission = await FloatingButtonNative.checkPermission();
-    setHasPermission(permission);
+    if (Platform.OS === 'android') {
+      const permission = await FloatingButtonNative.checkPermission();
+      setHasPermission(permission);
+    } else if (Platform.OS === 'ios') {
+      setHasPermission(true); // iOS siempre tiene permiso para botón local
+    } else {
+      setHasPermission(false);
+    }
   };
 
   const requestPermission = useCallback(() => {
-    FloatingButtonNative.requestPermission();
-    
-    // Verificar permiso después de 2 segundos
-    setTimeout(() => {
-      checkPermission();
-    }, 2000);
+    if (Platform.OS === 'android') {
+      FloatingButtonNative.requestPermission();
+      
+      // Verificar permiso después de 2 segundos
+      setTimeout(() => {
+        checkPermission();
+      }, 2000);
+    }
+    // iOS no necesita permisos para botón local
   }, []);
 
   const startButton = async () => {
     try {
-      const started = await FloatingButtonNative.start();
-      if (started) {
+      if (Platform.OS === 'android') {
+        // Android: iniciar servicio nativo
+        const started = await FloatingButtonNative.start();
+        if (started) {
+          setIsActive(true);
+          await CapturePreferencesService.setFloatingButtonEnabled(true);
+          
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: '🟢 Botón Flotante Activo',
+              body: 'Minimiza la app para ver el botón flotante',
+            },
+            trigger: null,
+          });
+        }
+      } else if (Platform.OS === 'ios') {
+        // iOS: solo cambiar estado y guardar preferencia
         setIsActive(true);
-        
-        // ✅ Guardar preferencia
         await CapturePreferencesService.setFloatingButtonEnabled(true);
-        console.log('💾 Preferencia guardada: Botón flotante ACTIVADO');
         
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: '🟢 Botón Flotante Activo',
-            body: 'Minimiza la app para ver el botón flotante',
+            title: '🟢 Botón Flotante iOS Activo',
+            body: 'El botón aparecerá en la esquina de la app',
           },
           trigger: null,
         });
-        
-        return;
       }
       
-      throw new Error('No se pudo iniciar el botón');
+      console.log('💾 Preferencia guardada: Botón flotante ACTIVADO');
     } catch (error) {
       console.error('Error al iniciar botón flotante:', error);
       throw error;
@@ -159,22 +190,36 @@ export function useFloatingButton(): UseFloatingButtonResult {
 
   const stopButton = async () => {
     try {
-      const stopped = await FloatingButtonNative.stop();
-      if (stopped) {
+      if (Platform.OS === 'android') {
+        // Android: detener servicio nativo
+        const stopped = await FloatingButtonNative.stop();
+        if (stopped) {
+          setIsActive(false);
+          await CapturePreferencesService.setFloatingButtonEnabled(false);
+          
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: '🔴 Botón Flotante Desactivado',
+              body: 'Ya no capturarás eventos en segundo plano',
+            },
+            trigger: null,
+          });
+        }
+      } else if (Platform.OS === 'ios') {
+        // iOS: solo cambiar estado y guardar preferencia
         setIsActive(false);
-        
-        // ✅ Guardar preferencia
         await CapturePreferencesService.setFloatingButtonEnabled(false);
-        console.log('💾 Preferencia guardada: Botón flotante DESACTIVADO');
         
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: '🔴 Botón Flotante Desactivado',
-            body: 'Ya no capturarás eventos en segundo plano',
+            title: '🔴 Botón Flotante iOS Desactivado',
+            body: 'El botón ya no aparecerá en la app',
           },
           trigger: null,
         });
       }
+      
+      console.log('💾 Preferencia guardada: Botón flotante DESACTIVADO');
     } catch (error) {
       console.error('Error al detener botón flotante:', error);
       throw error;
@@ -182,7 +227,7 @@ export function useFloatingButton(): UseFloatingButtonResult {
   };
 
   const toggleButton = async () => {
-    if (!hasPermission) {
+    if (!hasPermission && Platform.OS === 'android') {
       requestPermission();
       return;
     }
@@ -203,5 +248,7 @@ export function useFloatingButton(): UseFloatingButtonResult {
     toggleButton,
     requestPermission,
     checkPermission,
+    platform,
+    isLocalButton,
   };
 }
