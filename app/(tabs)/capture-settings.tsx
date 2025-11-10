@@ -42,8 +42,7 @@ export default function CaptureSettingsScreen() {
       <View style={styles.infoBox}>
         <Text style={styles.infoIcon}>⚙️</Text>
         <Text style={styles.infoText}>
-          Configura qué métodos quieres usar para capturar eventos. 
-          Se activarán automáticamente al iniciar el Modo Conductor.
+          Selecciona qué métodos usar de capturar eventos para su posterior valoración. 
         </Text>
       </View>
 

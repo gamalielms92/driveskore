@@ -3,13 +3,13 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Linking,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Linking,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import ABShutter3Service from '../services/ABShutter3Service';
 
@@ -42,7 +42,7 @@ export default function ABShutter3Control() {
       
       Alert.alert(
         '✅ AB Shutter 3 Activo',
-        'Presiona el botón de volumen (+) o (-) del mando para capturar eventos.\n\n' +
+        'Presiona el botón para capturar eventos.\n\n' +
         'El mando debe estar emparejado en Bluetooth.',
         [{ text: 'Entendido' }]
       );
@@ -151,9 +151,6 @@ export default function ABShutter3Control() {
             </Text>
             <Text style={styles.activeInfoItem}>
               • Recibirás una notificación de confirmación
-            </Text>
-            <Text style={styles.activeInfoItem}>
-              • Funciona en segundo plano
             </Text>
           </View>
         </View>

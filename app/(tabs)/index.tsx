@@ -103,23 +103,24 @@ export default function HomeScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/capture')}
+            onPress={() => router.push('/raffle')}
           >
-            <Text style={styles.actionIcon}>📷</Text>
-            <Text style={styles.actionTitle}>Capturar</Text>
+            <Text style={styles.actionIcon}>📣</Text>
+            <Text style={styles.actionTitle}>¡Sorteo!</Text>
             <Text style={styles.actionDescription}>
-              Evalúa con foto de matrícula
+              Participa con el sistema de referidos
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => router.push('src\components\FloatingButtonTest.tsx')}
+            onPress={() => router.push('/referrals')}
           >
-            <Text style={styles.actionIcon}>🔍</Text>
-            <Text style={styles.actionTitle}>Buscar</Text>
+            <Text style={styles.actionIcon}>👥</Text>
+            <Text style={styles.actionTitle}>Invitar</Text>
             <Text style={styles.actionDescription}>
-              Consulta historial de conductores
+              Invita a Amigos
+              Creamos la comunidad
             </Text>
           </TouchableOpacity>
         </View>

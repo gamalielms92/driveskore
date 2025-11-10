@@ -9,6 +9,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -22,20 +23,61 @@ export default function LoginScreen() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        // REGISTRO
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
 
         if (error) throw error;
 
+        // Si hay código de referido, procesarlo
+        if (referralCode.trim() && data.user) {
+          try {
+            // Validar que el código existe y obtener el referrer
+            const { data: codeData } = await supabase
+              .from('user_referral_codes')
+              .select('user_id')
+              .eq('referral_code', referralCode.toUpperCase().trim())
+              .maybeSingle();
+
+            // Si el código es válido y no es el mismo usuario
+            if (codeData && codeData.user_id !== data.user.id) {
+              // Crear relación de referido
+              const { error: referralError } = await supabase
+                .from('user_referrals')
+                .insert({
+                  referrer_id: codeData.user_id,
+                  referred_id: data.user.id,
+                  referral_code: referralCode.toUpperCase().trim()
+                });
+
+              if (!referralError) {
+                console.log('✅ Referral registered successfully');
+              }
+            } else if (codeData && codeData.user_id === data.user.id) {
+              console.log('⚠️ User tried to use their own referral code');
+            } else {
+              console.log('⚠️ Invalid referral code:', referralCode);
+            }
+          } catch (error) {
+            console.error('Error processing referral code:', error);
+            // No bloquear el registro si falla el referido
+          }
+        }
+
         // Trackear registro
         await Analytics.trackSignUp('email');
 
         Alert.alert(
-          '¡Registro exitoso!',
-          'Por favor verifica tu email antes de iniciar sesión.',
-          [{ text: 'OK', onPress: () => setIsSignUp(false) }]
+          '🎉 ¡Registro exitoso!',
+          referralCode.trim() 
+            ? 'Gracias por usar un código de invitación. Por favor verifica tu email.'
+            : 'Por favor verifica tu email antes de iniciar sesión.',
+          [{ text: 'OK', onPress: () => {
+            setIsSignUp(false);
+            setReferralCode('');
+          }}]
         );
       } else {
         // LOGIN
@@ -46,7 +88,7 @@ export default function LoginScreen() {
 
         if (error) throw error;
         
-        // ✅ NUEVO: Inicializar EventCaptureService con el userId
+        // Inicializar EventCaptureService con el userId
         if (data.user) {
           console.log('🔐 Login exitoso, inicializando EventCaptureService...');
           await EventCaptureService.initialize(data.user.id);
@@ -81,6 +123,7 @@ export default function LoginScreen() {
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
+          editable={!loading}
         />
 
         <TextInput
@@ -89,7 +132,21 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          editable={!loading}
         />
+
+        {/* Campo de código de referido - solo en registro */}
+        {isSignUp && (
+          <TextInput
+            style={[styles.input, styles.referralInput]}
+            placeholder="Código de invitación (opcional)"
+            value={referralCode}
+            onChangeText={(text) => setReferralCode(text.toUpperCase())}
+            autoCapitalize="characters"
+            maxLength={11}
+            editable={!loading}
+          />
+        )}
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -103,7 +160,11 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.switchButton}
-          onPress={() => setIsSignUp(!isSignUp)}
+          onPress={() => {
+            setIsSignUp(!isSignUp);
+            setReferralCode(''); // Limpiar código al cambiar
+          }}
+          disabled={loading}
         >
           <Text style={styles.switchText}>
             {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
@@ -150,6 +211,11 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  referralInput: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
+    borderStyle: 'dashed',
   },
   button: {
     backgroundColor: '#007AFF',

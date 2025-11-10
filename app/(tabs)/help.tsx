@@ -199,7 +199,7 @@ export default function HelpScreen() {
           </Text>
           <View style={styles.surveyMetadata}>
             <Text style={styles.surveyDuration}>⏱️ Duración: 5 minutos </Text>
-            <Text style={styles.surveyReward}>🙏 Ayúdame por favor</Text>
+            <Text style={styles.surveyReward}>🙏 ¿Me ayudas?</Text>
           </View>
           
           <TouchableOpacity 
@@ -222,9 +222,9 @@ export default function HelpScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tipo de feedback</Text>
           <View style={styles.categoryContainer}>
-            {renderCategoryButton('bug', '🐛', 'Bug')}
-            {renderCategoryButton('suggestion', '💡', 'Propuesta')}
-            {renderCategoryButton('other', '📝', 'Otro')}
+            {renderCategoryButton('bug', '🐛', 'Fallos')}
+            {renderCategoryButton('suggestion', '💡', 'Ideas')}
+            {renderCategoryButton('other', '📝', 'Otros')}
           </View>
         </View>
 
@@ -242,6 +242,7 @@ export default function HelpScreen() {
                 ? 'Cuéntanos tu idea de mejora...'
                 : 'Escribe tu comentario...'
             }
+            placeholderTextColor="#999"
             value={description}
             onChangeText={setDescription}
             multiline
@@ -306,7 +307,7 @@ export default function HelpScreen() {
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
-            Tu feedback nos ayuda a mejorar DriveSkore. Incluimos automáticamente
+            Tu feedback ayuda a mejorar DriveSkore. Incluimos automáticamente
             información técnica de tu dispositivo para resolver problemas más rápido.
           </Text>
         </View>
@@ -318,15 +319,15 @@ export default function HelpScreen() {
           <View style={styles.faqItem}>
             <Text style={styles.faqQuestion}>¿Cómo funciona la evaluación?</Text>
             <Text style={styles.faqAnswer}>
-              Escanea matrículas con OCR, el sistema identifica al conductor y tú
-              evalúas su comportamiento. Las puntuaciones se agregan en su perfil público.
+              Activa el modo conducción, pulsa el botón (físico o virtual) cuando quiera evaluar y el sistema se encarga de identificar al conductor por proximidad y tú
+              evalúas su comportamiento a posteriori, en la pestaña de Eventos. Las puntuaciones se añadirán a su perfil.
             </Text>
           </View>
 
           <View style={styles.faqItem}>
             <Text style={styles.faqQuestion}>¿Mi ubicación es privada?</Text>
             <Text style={styles.faqAnswer}>
-              Sí. Solo se usa temporalmente para matching. No se almacenan rutas
+              Sí. Solo se usa temporalmente por el algoritmo de proximidad, para poder realizar la búsqueda del candidato a evaluar. No se almacenan rutas
               ni historial de ubicaciones.
             </Text>
           </View>
@@ -334,18 +335,19 @@ export default function HelpScreen() {
           <View style={styles.faqItem}>
             <Text style={styles.faqQuestion}>¿Puedo editar mis evaluaciones?</Text>
             <Text style={styles.faqAnswer}>
-              Por ahora no, para evitar manipulación. Si cometiste un error,
-              repórtalo usando este formulario.
+              Por ahora no, para evitar manipulación indebida. Si cometiste un error,
+              repórtalo usando el formulario de tipo "Otro".
             </Text>
           </View>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>DriveSkore v1.0.0</Text>
+          <Text style={styles.footerText}>DriveSkore - Closed Beta</Text>
           <Text style={styles.footerText}>TFM - Ingeniería Informática</Text>
           <Text style={styles.footerText}>Universidad de Huelva</Text>
-          <Text style={styles.footerText}>Gamaliel Moreno Sánchez</Text>
+          <Text style={styles.footerText}>Autor: Gamaliel Moreno Sánchez</Text>
+          <Text style={styles.footerText}>Mentor: Jose Carpio Cañada</Text>
         </View>
       </View>
     </ScrollView>
@@ -492,6 +494,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E5EA',
     minHeight: 150,
+    color: '#333'
   },
   input: {
     backgroundColor: '#fff',

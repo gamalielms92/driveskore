@@ -25,8 +25,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="pending"
         options={{
-          title: 'Pendientes',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏰</Text>,
+          title: 'Eventos',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏳</Text>,
+          headerTitle: '⏳ Eventos',
         }}
       />
 
@@ -35,6 +36,7 @@ export default function TabLayout() {
         options={{
           title: 'Buscar',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🔍</Text>,
+          headerTitle: '🔍 Buscar y Ranking',
         }}
       />
       
@@ -43,6 +45,7 @@ export default function TabLayout() {
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👤</Text>,
+          headerTitle: '👤 Perfil',
         }}
       />
 
@@ -51,7 +54,7 @@ export default function TabLayout() {
         options={{
           title: 'Ayuda',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>💬</Text>,
-          headerTitle: 'Ayuda y Feedback',
+          headerTitle: '💬 Ayuda y Feedback',
         }}
       />
 
@@ -60,11 +63,19 @@ export default function TabLayout() {
         options={{
           title: 'Ajustes',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
+          headerTitle: '⚙️ Ajustes',
           href: Platform.OS === 'web' ? null : undefined,
         }}
       />
 
-
+      <Tabs.Screen
+        name="benefits"
+        options={{
+          title: 'Beneficios',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🎁</Text>,
+          headerTitle: '🎁 Beneficios',
+        }}
+      />
 
     </Tabs>
   );
