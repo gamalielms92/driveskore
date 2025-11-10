@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { supabase } from '../src/config/supabase';
+import { supabase } from '../../src/config/supabase';
 
 interface Referral {
   id: string;

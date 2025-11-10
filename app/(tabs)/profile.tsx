@@ -2,7 +2,7 @@
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import EventCaptureService from '../../src/services/EventCaptureService';
 import WeeklyRankingService from '../../src/services/WeeklyRankingService';
@@ -186,6 +186,20 @@ export default function ProfileScreen() {
   );
 
   const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      // ✅ En web usamos window.confirm
+      const confirmed = window.confirm('¿Estás seguro de que quieres cerrar sesión?');
+      if (confirmed) {
+        try {
+          await EventCaptureService.cleanup();
+          await supabase.auth.signOut();
+          router.replace('/(auth)/login');
+        } catch (error) {
+          console.error('Error cerrando sesión:', error);
+          alert('Error al cerrar sesión. Por favor intenta de nuevo.');
+        }
+      }
+    } else {
     Alert.alert(
       'Cerrar Sesión',
       '¿Estás seguro de que quieres salir?',
@@ -202,7 +216,7 @@ export default function ProfileScreen() {
         }
       ]
     );
-  };
+  }};
 
   const renderStars = (score: number) => {
     return '⭐'.repeat(Math.round(score)) + '☆'.repeat(5 - Math.round(score));

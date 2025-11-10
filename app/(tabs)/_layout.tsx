@@ -1,4 +1,5 @@
 // app/(tabs)/_layout.tsx
+// ✅ VERSIÓN CORREGIDA: Navegación adaptada para web
 
 import { Tabs } from 'expo-router';
 import { Platform, Text } from 'react-native';
@@ -22,12 +23,14 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ OCULTAR en web - Eventos pendientes (solo móvil) */}
       <Tabs.Screen
         name="pending"
         options={{
           title: 'Eventos',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏳</Text>,
           headerTitle: '⏳ Eventos',
+          href: Platform.OS === 'web' ? null : undefined,
         }}
       />
 
@@ -49,6 +52,28 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ NUEVO - Mostrar Sorteo solo en WEB */}
+      <Tabs.Screen
+        name="raffle"
+        options={{
+          title: 'Sorteo',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🎁</Text>,
+          headerTitle: '🎁 Sorteo del Piloto',
+          href: Platform.OS === 'web' ? undefined : null,
+        }}
+      />
+
+      {/* ✅ NUEVO - Mostrar Referidos solo en WEB */}
+      <Tabs.Screen
+        name="referrals"
+        options={{
+          title: 'Referidos',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👥</Text>,
+          headerTitle: '👥 Invita Amigos',
+          href: Platform.OS === 'web' ? undefined : null,
+        }}
+      />
+
       <Tabs.Screen
         name="help"
         options={{
@@ -58,6 +83,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ OCULTAR en web - Ajustes de captura (solo móvil) */}
       <Tabs.Screen
         name="capture-settings"
         options={{
@@ -74,6 +100,21 @@ export default function TabLayout() {
           title: 'Beneficios',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🎁</Text>,
           headerTitle: '🎁 Beneficios',
+        }}
+      />
+
+      {/* ✅ Ocultar otras rutas que no son tabs principales */}
+      <Tabs.Screen
+        name="vehicles"
+        options={{
+          href: null, // No mostrar en tabs
+        }}
+      />
+
+      <Tabs.Screen
+        name="driver-profile"
+        options={{
+          href: null, // No mostrar en tabs
         }}
       />
 

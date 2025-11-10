@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { supabase } from '../src/config/supabase';
+import { supabase } from '../../src/config/supabase';
 
 export default function RaffleScreen() {
   const router = useRouter();
