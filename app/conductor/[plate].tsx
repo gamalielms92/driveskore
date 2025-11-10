@@ -9,10 +9,8 @@ import {
   DRIVING_ATTRIBUTES,
   getDriverRank,
   getEarnedBadges,
-  getTopAttributes,
-  type AttributeStat,
   type AttributeStats,
-  type Profile as GamificationProfile
+  type UserStats
 } from '../../src/utils/gamification';
 
 interface Rating {
@@ -29,6 +27,12 @@ interface UserProfile {
   avatar_url: string | null;
   bio: string | null;
   phone: string | null;
+  badge_counts?: {
+    gold: number;
+    silver: number;
+    bronze: number;
+  };
+  pilot_survey_completed?: boolean;
 }
 
 interface Vehicle {
@@ -103,7 +107,9 @@ export default function ConductorProfileScreen() {
         full_name: 'Usuario sin nombre',
         avatar_url: null,
         bio: null,
-        phone: null
+        phone: null,
+        badge_counts: { gold: 0, silver: 0, bronze: 0 },
+        pilot_survey_completed: false,
       });
 
       // 3. Cargar TODOS los vehículos de esta persona
@@ -267,20 +273,21 @@ export default function ConductorProfileScreen() {
   const distribution = getScoreDistribution();
   const driverRank = getDriverRank(average);
 
-  const gamificationProfile: GamificationProfile = {
-    plate: aggregatedProfile.plate,
-    total_score: aggregatedProfile.total_score,
-    num_ratings: aggregatedProfile.num_ratings,
-    positive_attributes: aggregatedProfile.positive_attributes,
-    total_votes: aggregatedProfile.total_votes
+  const userStats: UserStats = {
+    ratingsGiven: 0,
+    ratingsReceived: aggregatedProfile.num_ratings,
+    averageScore: aggregatedProfile.num_ratings > 0 
+      ? aggregatedProfile.total_score / aggregatedProfile.num_ratings 
+      : 0,
+    badgeCounts: userProfile?.badge_counts || { gold: 0, silver: 0, bronze: 0 },
+    pilotSurveyCompleted: userProfile?.pilot_survey_completed || false,
   };
-
-  const earnedBadges = getEarnedBadges(gamificationProfile);
+  
+  const earnedBadges = getEarnedBadges(userStats);
   const attributeStats: AttributeStats = calculateAttributeStats(
     aggregatedProfile.positive_attributes,
     aggregatedProfile.total_votes
   );
-  const topAttributes: AttributeStat[] = getTopAttributes(attributeStats);
 
   // Renderizado
   return (
@@ -443,38 +450,6 @@ export default function ConductorProfileScreen() {
               </View>
             ))}
           </View>
-        </View>
-      )}
-
-      {/* Top 3 Atributos */}
-      {topAttributes.length > 0 && aggregatedProfile.total_votes > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>✨ Mejores Cualidades</Text>
-          {topAttributes.map((attr, index) => (
-            <View key={attr.id} style={styles.topAttributeCard}>
-              <View style={styles.topAttributeHeader}>
-                <Text style={styles.topAttributeRank}>
-                  {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                </Text>
-                <Text style={styles.topAttributeIcon}>{attr.icon}</Text>
-                <Text style={styles.topAttributeLabel}>{attr.positive}</Text>
-              </View>
-              <View style={styles.topAttributeStats}>
-                <View style={styles.progressBarContainer}>
-                  <View 
-                    style={[
-                      styles.progressBar, 
-                      { width: `${attr.percentage}%` }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.topAttributePercentage}>{attr.percentage}%</Text>
-              </View>
-              <Text style={styles.topAttributeVotes}>
-                {attr.votes} de {aggregatedProfile.total_votes} evaluaciones
-              </Text>
-            </View>
-          ))}
         </View>
       )}
 

@@ -5,10 +5,14 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import EventCaptureService from '../../src/services/EventCaptureService';
+import WeeklyRankingService from '../../src/services/WeeklyRankingService';
 import {
-  calculateAttributeStats,
   getDriverRank,
-  getEarnedBadges
+  getEarnedBadges,
+  getLevelProgress,
+  getLockedBadges,
+  getUserLevel,
+  type UserStats
 } from '../../src/utils/gamification';
 
 interface UserRating {
@@ -39,6 +43,12 @@ interface UserProfile {
   avatar_url: string | null;
   bio: string | null;
   phone: string | null;
+  badge_counts?: {
+    gold: number;
+    silver: number;
+    bronze: number;
+  };
+  pilot_survey_completed?: boolean;
 }
 
 export default function ProfileScreen() {
@@ -50,8 +60,10 @@ export default function ProfileScreen() {
   const [userRatings, setUserRatings] = useState<UserRating[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [driverProfiles, setDriverProfiles] = useState<DriverProfile[]>([]);
+  const [globalPosition, setGlobalPosition] = useState<number | null>(null);
   const [stats, setStats] = useState({
-    totalRatings: 0,
+    totalRatingsGiven: 0,
+    totalRatingsReceived: 0,
     averageScore: 0,
     memberSince: '',
   });
@@ -67,7 +79,7 @@ export default function ProfileScreen() {
       setEmail(user.email || 'Sin email');
       setUserId(user.id);
 
-      // ✨ NUEVO: Cargar perfil de usuario
+      // Cargar perfil de usuario
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('*')
@@ -102,31 +114,49 @@ export default function ProfileScreen() {
       const driverProfilesData: DriverProfile[] = [];
       
       for (const vehicle of userVehicles || []) {
-        const { data: profile } = await supabase
+        const { data: driverProfile } = await supabase
           .from('profiles')
           .select('*')
           .eq('plate', vehicle.plate)
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (profile) {
+        if (driverProfile) {
           driverProfilesData.push({
-            plate: profile.plate,
-            total_score: profile.total_score,
-            num_ratings: profile.num_ratings,
-            positive_attributes: profile.positive_attributes || {},
-            total_votes: profile.total_votes || 0
+            plate: driverProfile.plate,
+            total_score: driverProfile.total_score,
+            num_ratings: driverProfile.num_ratings,
+            positive_attributes: driverProfile.positive_attributes || {},
+            total_votes: driverProfile.total_votes || 0
           });
         }
       }
 
       setDriverProfiles(driverProfilesData);
 
-      // Calcular estadísticas de evaluaciones HECHAS
-      const total = ratings?.length || 0;
-      const avgScore = total > 0 
-        ? ratings!.reduce((sum, r) => sum + r.score, 0) / total 
+      // Calcular posición global
+      try {
+        const position = await WeeklyRankingService.getUserGlobalPosition(user.id);
+        setGlobalPosition(position === 9999 ? null : position);
+      } catch (error) {
+        console.error('Error cargando posición global:', error);
+      }
+
+      // Calcular estadísticas
+      const totalGiven = ratings?.length || 0;
+      const avgGivenScore = totalGiven > 0 
+        ? ratings!.reduce((sum, r) => sum + r.score, 0) / totalGiven 
         : 0;
+      
+      // Total recibidas
+      let totalReceived = 0;
+      let totalReceivedScore = 0;
+      driverProfilesData.forEach(p => {
+        totalReceived += p.num_ratings;
+        totalReceivedScore += p.total_score;
+      });
+      
+      const avgReceivedScore = totalReceived > 0 ? totalReceivedScore / totalReceived : 0;
       
       const memberSince = user.created_at 
         ? new Date(user.created_at).toLocaleDateString('es-ES', { 
@@ -136,8 +166,9 @@ export default function ProfileScreen() {
         : 'Desconocido';
 
       setStats({
-        totalRatings: total,
-        averageScore: avgScore,
+        totalRatingsGiven: totalGiven,
+        totalRatingsReceived: totalReceived,
+        averageScore: avgReceivedScore,
         memberSince,
       });
 
@@ -153,8 +184,6 @@ export default function ProfileScreen() {
       loadUserData();
     }, [])
   );
-
-
 
   const handleLogout = async () => {
     Alert.alert(
@@ -179,37 +208,6 @@ export default function ProfileScreen() {
     return '⭐'.repeat(Math.round(score)) + '☆'.repeat(5 - Math.round(score));
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES');
-  };
-
-  const calculateDriverStats = () => {
-    let totalScore = 0;
-    let totalRatings = 0;
-    let totalVotes = 0;
-    const combinedAttributes: { [key: string]: number } = {};
-
-    driverProfiles.forEach(profile => {
-      totalScore += profile.total_score;
-      totalRatings += profile.num_ratings;
-      totalVotes += profile.total_votes;
-
-      Object.entries(profile.positive_attributes).forEach(([key, value]) => {
-        combinedAttributes[key] = (combinedAttributes[key] || 0) + value;
-      });
-    });
-
-    const average = totalRatings > 0 ? totalScore / totalRatings : 0;
-
-    return {
-      average,
-      totalRatings,
-      totalVotes,
-      attributes: combinedAttributes
-    };
-  };
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -219,30 +217,26 @@ export default function ProfileScreen() {
     );
   }
 
-  const driverStats = calculateDriverStats();
-  const driverRank = driverStats.totalRatings > 0 ? getDriverRank(driverStats.average) : null;
+  // Calcular nivel y progreso
+  const userLevel = getUserLevel(stats.totalRatingsGiven);
+  const levelProgress = getLevelProgress(stats.totalRatingsGiven);
   
-  const combinedProfile = driverStats.totalRatings > 0 ? {
-    plate: 'COMBINED',
-    total_score: driverStats.average * driverStats.totalRatings,
-    num_ratings: driverStats.totalRatings,
-    positive_attributes: driverStats.attributes,
-    total_votes: driverStats.totalVotes
-  } : null;
+  // Calcular rango como conductor
+  const driverRank = stats.totalRatingsReceived > 0 
+    ? getDriverRank(stats.averageScore) 
+    : null;
 
-  const earnedBadges = combinedProfile ? getEarnedBadges(combinedProfile) : [];
-  
-  // Calcular estadísticas de atributos correctamente
-  const attributeStats = combinedProfile 
-    ? calculateAttributeStats(combinedProfile.positive_attributes, combinedProfile.total_votes)
-    : {};
-  
-  // Obtener top 3 atributos desde las estadísticas calculadas
-  const topAttributes = Object.keys(attributeStats).length > 0
-    ? Object.values(attributeStats)
-        .sort((a, b) => b.percentage - a.percentage)
-        .slice(0, 3)
-    : [];
+  // Preparar UserStats para badges
+  const userStatsForBadges: UserStats = {
+    ratingsGiven: stats.totalRatingsGiven,
+    ratingsReceived: stats.totalRatingsReceived,
+    averageScore: stats.averageScore,
+    badgeCounts: userProfile?.badge_counts || { gold: 0, silver: 0, bronze: 0 },
+    pilotSurveyCompleted: userProfile?.pilot_survey_completed || false,
+  };
+
+  const earnedBadges = getEarnedBadges(userStatsForBadges);
+  const lockedBadges = getLockedBadges(userStatsForBadges);
 
   return (
     <ScrollView style={styles.container}>
@@ -279,7 +273,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ✨ NUEVO: Botón editar perfil */}
+        {/* Botón editar perfil */}
         <TouchableOpacity
           style={styles.editProfileButton}
           onPress={() => router.push('/edit-profile')}
@@ -289,86 +283,106 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Reputación como conductor */}
-        {driverStats.totalRatings > 0 && driverRank && (
-          <>
-            <View style={styles.driverReputationCard}>
-              <Text style={styles.sectionTitle}>🚗 Mi Reputación como Conductor</Text>
-              
-              {/* Rango */}
-              <View style={[styles.rankBadge, { backgroundColor: driverRank.color + '15' }]}>
-                <Text style={styles.rankIcon}>{driverRank.icon}</Text>
-                <View style={styles.rankInfo}>
-                  <Text style={[styles.rankName, { color: driverRank.color }]}>
-                    {driverRank.name}
-                  </Text>
-                  <Text style={styles.rankDescription}>{driverRank.description}</Text>
-                </View>
-              </View>
-
-              {/* Puntuación */}
-              <View style={styles.driverScoreContainer}>
-                <View style={styles.driverScoreItem}>
-                  <Text style={styles.driverScoreValue}>
-                    {driverStats.average.toFixed(1)}
-                  </Text>
-                  <Text style={styles.driverScoreLabel}>Promedio</Text>
-                </View>
-                <View style={styles.driverScoreDivider} />
-                <View style={styles.driverScoreItem}>
-                  <Text style={styles.driverScoreValue}>
-                    {driverStats.totalRatings}
-                  </Text>
-                  <Text style={styles.driverScoreLabel}>Valoraciones{'\n'}recibidas</Text>
-                </View>
-              </View>
-
-              {/* Top 3 Atributos */}
-              {topAttributes.length > 0 && (
-                <View style={styles.topAttributesSection}>
-                  <Text style={styles.subsectionTitle}>✨ Mejores Cualidades</Text>
-                  {topAttributes.slice(0, 3).map((attr, index) => (
-                    <View key={attr.id} style={styles.topAttributeRow}>
-                      <Text style={styles.topAttributeRank}>
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                      </Text>
-                      <Text style={styles.topAttributeIcon}>{attr.icon}</Text>
-                      <Text style={styles.topAttributeText}>{attr.positive}</Text>
-                      <Text style={styles.topAttributePercentage}>{attr.percentage}%</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Insignias */}
-              {earnedBadges.length > 0 && (
-                <View style={styles.badgesSection}>
-                  <Text style={styles.subsectionTitle}>🏅 Insignias</Text>
-                  <View style={styles.badgesList}>
-                    {earnedBadges.map(badge => (
-                      <View key={badge.id} style={styles.badgeMini}>
-                        <Text style={styles.badgeMiniIcon}>{badge.icon}</Text>
-                        <Text style={styles.badgeMiniName}>{badge.name}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.viewDetailsButton}
-                onPress={() => {
-                  if (vehicles.length > 0 && vehicles[0].online) {
-                    router.push(`/conductor/${vehicles[0].plate}`);
-                  } else if (vehicles.length > 0) {
-                    router.push(`/conductor/${vehicles[0].plate}`);
-                  }
-                }}
-              >
-                <Text style={styles.viewDetailsButtonText}>Ver perfil completo →</Text>
-              </TouchableOpacity>
+        {/* 🆕 SISTEMA DE NIVELES */}
+        <View style={styles.levelCard}>
+          <View style={styles.levelHeader}>
+            <Text style={styles.levelIcon}>{userLevel.icon}</Text>
+            <View style={styles.levelInfo}>
+              <Text style={styles.levelTitle}>Nivel {userLevel.level}: {userLevel.name}</Text>
+              <Text style={styles.levelDescription}>{userLevel.description}</Text>
             </View>
-          </>
+          </View>
+          
+          {/* Barra de progreso */}
+          {levelProgress.nextLevel && (
+            <View style={styles.progressSection}>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { 
+                      width: `${levelProgress.progressPercentage}%`,
+                      backgroundColor: userLevel.color 
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {levelProgress.currentRatings} / {levelProgress.nextLevel.minRatings} evaluaciones
+              </Text>
+              <Text style={styles.progressHint}>
+                Te faltan {levelProgress.ratingsToNext} para alcanzar {levelProgress.nextLevel.name}
+              </Text>
+            </View>
+          )}
+          
+          {!levelProgress.nextLevel && (
+            <Text style={styles.maxLevelText}>
+              ¡Has alcanzado el nivel máximo! 🏆
+            </Text>
+          )}
+        </View>
+
+        {/* 🆕 POSICIÓN GLOBAL */}
+        {globalPosition && (
+          <View style={styles.globalPositionCard}>
+            <Text style={styles.globalPositionTitle}>🌍 Posición Global</Text>
+            <Text style={styles.globalPositionNumber}>#{globalPosition}</Text>
+            <TouchableOpacity 
+              style={styles.viewRankingButton}
+              onPress={() => router.push('/(tabs)/search')}
+            >
+              <Text style={styles.viewRankingButtonText}>Ver Ranking Completo →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Reputación como conductor */}
+        {stats.totalRatingsReceived > 0 && driverRank && (
+          <View style={styles.driverReputationCard}>
+            <Text style={styles.sectionTitle}>🚗 Mi Reputación como Conductor</Text>
+            
+            {/* Rango */}
+            <View style={[styles.rankBadge, { backgroundColor: driverRank.color + '15' }]}>
+              <Text style={styles.rankIcon}>{driverRank.icon}</Text>
+              <View style={styles.rankInfo}>
+                <Text style={[styles.rankName, { color: driverRank.color }]}>
+                  {driverRank.name}
+                </Text>
+                <Text style={styles.rankDescription}>{driverRank.description}</Text>
+              </View>
+            </View>
+
+            {/* Puntuación */}
+            <View style={styles.driverScoreContainer}>
+              <View style={styles.driverScoreItem}>
+                <Text style={styles.driverScoreValue}>
+                  {stats.averageScore.toFixed(1)}
+                </Text>
+                <Text style={styles.driverScoreLabel}>Promedio</Text>
+              </View>
+              <View style={styles.driverScoreDivider} />
+              <View style={styles.driverScoreItem}>
+                <Text style={styles.driverScoreValue}>
+                  {stats.totalRatingsReceived}
+                </Text>
+                <Text style={styles.driverScoreLabel}>Valoraciones{'\n'}recibidas</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.viewDetailsButton}
+              onPress={() => {
+                if (vehicles.length > 0 && vehicles[0].online) {
+                  router.push(`/conductor/${vehicles[0].plate}`);
+                } else if (vehicles.length > 0) {
+                  router.push(`/conductor/${vehicles[0].plate}`);
+                }
+              }}
+            >
+              <Text style={styles.viewDetailsButtonText}>Ver perfil completo →</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Estadísticas de evaluaciones HECHAS */}
@@ -376,23 +390,59 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>📊 Mis Evaluaciones a Otros</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalRatings}</Text>
+              <Text style={styles.statValue}>{stats.totalRatingsGiven}</Text>
               <Text style={styles.statLabel}>Realizadas</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.averageScore.toFixed(1)}</Text>
-              <Text style={styles.statLabel}>Promedio dado</Text>
             </View>
           </View>
         </View>
 
-        {/* Mis Vehículos */}
+        {/* 🆕 INSIGNIAS */}
+        <View style={styles.badgesCard}>
+          <Text style={styles.sectionTitle}>🏅 Mis Insignias</Text>
+          
+          {/* Insignias desbloqueadas */}
+          {earnedBadges.length > 0 && (
+            <View style={styles.badgesSection}>
+              <Text style={styles.badgesSubtitle}>Desbloqueadas ({earnedBadges.length})</Text>
+              <View style={styles.badgesList}>
+                {earnedBadges.map(badge => (
+                  <View key={badge.id} style={styles.badgeItem}>
+                    <Text style={styles.badgeIcon}>{badge.icon}</Text>
+                    <Text style={styles.badgeName}>{badge.name}</Text>
+                    {badge.count !== undefined && badge.count > 0 && (
+                      <Text style={styles.badgeCount}>x{badge.count}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Insignias bloqueadas */}
+          {lockedBadges.length > 0 && (
+            <View style={styles.badgesSection}>
+              <Text style={styles.badgesSubtitle}>Bloqueadas ({lockedBadges.length})</Text>
+              <View style={styles.badgesList}>
+                {lockedBadges.map(badge => (
+                  <View key={badge.id} style={[styles.badgeItem, styles.badgeItemLocked]}>
+                    <Text style={styles.badgeIconLocked}>{badge.icon}</Text>
+                    <Text style={styles.badgeNameLocked}>{badge.name}</Text>
+                    {badge.progress && (
+                      <Text style={styles.badgeProgress}>{badge.progress}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Mi Garaje */}
         <TouchableOpacity
           style={styles.vehiclesCard}
           onPress={() => router.push('/select-vehicle')}
         >
-          <Text style={styles.sectionTitle}>🚗 Mis Vehículos</Text>
+          <Text style={styles.sectionTitle}>🏢 Mi Garaje</Text>
           
           {vehicles.length === 0 ? (
             <Text style={styles.vehiclesText}>
@@ -400,57 +450,35 @@ export default function ProfileScreen() {
             </Text>
           ) : (
             <View style={styles.vehiclesList}>
-              {vehicles.slice(0, 2).map((vehicle) => (
+              {vehicles.slice(0, 3).map(vehicle => (
                 <View key={vehicle.id} style={styles.vehicleItem}>
-                  <Text style={styles.vehiclePlate}>
-                    {vehicle.online ? '🟢' : '⚪'} {vehicle.plate}
-                  </Text>
-                  {vehicle.nickname && (
-                    <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
+                  <Text style={styles.vehicleIcon}>🚗</Text>
+                  <View style={styles.vehicleInfo}>
+                    <Text style={styles.vehiclePlate}>{vehicle.plate}</Text>
+                    {vehicle.nickname && (
+                      <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
+                    )}
+                  </View>
+                  {vehicle.online && (
+                    <View style={styles.onlineBadge}>
+                      <Text style={styles.onlineBadgeText}>Activo</Text>
+                    </View>
                   )}
                 </View>
               ))}
-              {vehicles.length > 2 && (
-                <Text style={styles.vehiclesMore}>
-                  +{vehicles.length - 2} más
-                </Text>
+              
+              {vehicles.length > 3 && (
+                <Text style={styles.moreVehicles}>+{vehicles.length - 3} más</Text>
               )}
             </View>
           )}
           
-          <View style={styles.vehiclesButton}>
-            <Text style={styles.vehiclesButtonText}>
-              {vehicles.length === 0 ? 'Añadir vehículo →' : 'Ver y gestionar →'}
-            </Text>
-          </View>
+          <Text style={styles.manageVehiclesText}>Toca para gestionar vehículos →</Text>
         </TouchableOpacity>
 
-        {/* Historial de valoraciones hechas (resumido) */}
-        {userRatings.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📝 Últimas Evaluaciones Realizadas</Text>
-            {userRatings.slice(0, 3).map((rating) => (
-              <TouchableOpacity
-                key={rating.id}
-                style={styles.ratingCard}
-                onPress={() => router.push(`/conductor/${rating.plate}`)}
-              >
-                <View style={styles.ratingHeader}>
-                  <Text style={styles.ratingPlate}>{rating.plate}</Text>
-                  <Text style={styles.ratingDate}>{formatDate(rating.created_at)}</Text>
-                </View>
-                <Text style={styles.ratingStars}>{renderStars(rating.score)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Botón de cerrar sesión */}
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutButtonText}>🚪 Cerrar Sesión</Text>
+        {/* Botón Cerrar Sesión */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -460,118 +488,222 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F2F2F7',
+  },
+  content: {
+    padding: 16,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F2F2F7',
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 16,
     color: '#666',
   },
-  content: {
-    padding: 20,
-  },
   header: {
-    backgroundColor: 'white',
-    padding: 30,
-    borderRadius: 15,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 15,
-    borderWidth: 3,
-    borderColor: '#007AFF',
-  },
   avatar: {
-    fontSize: 60,
-    marginBottom: 15,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#007AFF',
+    color: '#FFF',
+    fontSize: 36,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 80,
+    marginBottom: 12,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
   },
   fullName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 5,
-  },
-  incompleteProfileBadge: {
-    backgroundColor: '#FFF3CD',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  incompleteProfileText: {
-    fontSize: 12,
-    color: '#856404',
-    fontWeight: '600',
+    marginBottom: 4,
   },
   email: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   memberSince: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#999',
   },
   bio: {
     fontSize: 14,
     color: '#666',
+    marginTop: 12,
     textAlign: 'center',
-    marginTop: 10,
     fontStyle: 'italic',
+  },
+  incompleteProfileBadge: {
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  incompleteProfileText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   editProfileButton: {
     backgroundColor: '#007AFF',
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 16,
   },
   editProfileButtonText: {
-    color: 'white',
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  driverReputationCard: {
-    backgroundColor: 'white',
+  // 🆕 Estilos de Niveles
+  levelCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
     padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
+  },
+  levelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  levelIcon: {
+    fontSize: 48,
+    marginRight: 16,
+  },
+  levelInfo: {
+    flex: 1,
+  },
+  levelTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  levelDescription: {
+    fontSize: 14,
+    color: '#666',
+  },
+  progressSection: {
+    marginTop: 8,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  progressHint: {
+    fontSize: 12,
+    color: '#999',
+  },
+  maxLevelText: {
+    fontSize: 14,
+    color: '#34C759',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  // 🆕 Posición Global
+  globalPositionCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  globalPositionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  globalPositionNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  viewRankingButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  viewRankingButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  driverReputationCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 16,
   },
   rankBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
   },
   rankIcon: {
-    fontSize: 40,
-    marginRight: 15,
+    fontSize: 36,
+    marginRight: 12,
   },
   rankInfo: {
     flex: 1,
@@ -582,237 +714,212 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   rankDescription: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
   },
   driverScoreContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    justifyContent: 'space-around',
+    marginBottom: 16,
   },
   driverScoreItem: {
-    flex: 1,
     alignItems: 'center',
   },
-  driverScoreDivider: {
-    width: 1,
-    backgroundColor: '#ddd',
-  },
   driverScoreValue: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#34C759',
-    marginBottom: 5,
+    color: '#007AFF',
   },
   driverScoreLabel: {
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
   },
-  topAttributesSection: {
-    marginBottom: 15,
-  },
-  subsectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#000',
-  },
-  topAttributeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  topAttributeRank: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  topAttributeIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  topAttributeText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333',
-  },
-  topAttributePercentage: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  badgesSection: {
-    marginBottom: 15,
-  },
-  badgesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  badgeMini: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  badgeMiniIcon: {
-    fontSize: 16,
-  },
-  badgeMiniName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
+  driverScoreDivider: {
+    width: 1,
+    backgroundColor: '#E5E5EA',
   },
   viewDetailsButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   viewDetailsButtonText: {
-    color: 'white',
+    color: '#007AFF',
     fontSize: 14,
     fontWeight: '600',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#000',
-  },
   statsCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#FFF',
+    borderRadius: 16,
     padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
   statsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   statItem: {
-    flex: 1,
     alignItems: 'center',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#ddd',
   },
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#007AFF',
-    marginBottom: 5,
   },
   statLabel: {
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
   },
-  vehiclesCard: {
-    backgroundColor: 'white',
+  // 🆕 Badges
+  badgesCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
     padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  badgesSection: {
+    marginBottom: 20,
+  },
+  badgesSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 12,
+  },
+  badgesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  badgeItem: {
+    width: '30%',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  badgeIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  badgeName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#000',
+    textAlign: 'center',
+  },
+  badgeCount: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginTop: 4,
+  },
+  badgeItemLocked: {
+    opacity: 0.4,
+  },
+  badgeIconLocked: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  badgeNameLocked: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+  },
+  badgeProgress: {
+    fontSize: 9,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  vehiclesCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
   },
   vehiclesText: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 15,
-    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 12,
   },
   vehiclesList: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   vehicleItem: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  vehicleIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  vehicleInfo: {
+    flex: 1,
   },
   vehiclePlate: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: '#000',
   },
   vehicleNickname: {
-    fontSize: 13,
-    color: '#999',
-    fontStyle: 'italic',
+    fontSize: 12,
+    color: '#666',
   },
-  vehiclesMore: {
-    fontSize: 13,
-    color: '#007AFF',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  vehiclesButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
+  onlineBadge: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    alignItems: 'center',
   },
-  vehiclesButtonText: {
-    color: 'white',
+  onlineBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  moreVehicles: {
     fontSize: 14,
-    fontWeight: '600',
-  },
-  section: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  ratingCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  ratingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  ratingPlate: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#007AFF',
+    textAlign: 'center',
+    fontWeight: '600',
   },
-  ratingDate: {
-    fontSize: 13,
+  manageVehiclesText: {
+    fontSize: 12,
     color: '#999',
-  },
-  ratingStars: {
-    fontSize: 16,
+    textAlign: 'center',
   },
   logoutButton: {
     backgroundColor: '#FF3B30',
-    padding: 18,
+    padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
   },
   logoutButtonText: {
-    color: 'white',
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

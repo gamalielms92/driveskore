@@ -1,4 +1,4 @@
-// app/rate.tsx
+// app/rate.tsx - CON CONTROLES ANTI-MANIPULACIÓN
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -17,6 +17,7 @@ import UserCard from '../src/components/UserCard';
 import { supabase } from '../src/config/supabase';
 import { Analytics } from '../src/services/Analytics';
 import type { Vehicle } from '../src/types/vehicle';
+import { DRIVING_ATTRIBUTES } from '../src/utils/gamification';
 import { validateSpanishPlate } from '../src/utils/plateValidator';
 
 interface Attribute {
@@ -26,17 +27,6 @@ interface Attribute {
   positive: string;
   negative: string;
 }
-
-const DRIVING_ATTRIBUTES: Attribute[] = [
-  { id: 'respect_distance', label: 'Distancia de seguridad', icon: '📏', positive: 'Mantiene distancia', negative: 'Muy pegado' },
-  { id: 'use_turn_signals', label: 'Uso de intermitentes', icon: '💡', positive: 'Señaliza correctamente', negative: 'No señaliza' },
-  { id: 'respect_speed_limits', label: 'Límites de velocidad', icon: '🚦', positive: 'Respeta límites', negative: 'Exceso de velocidad' },
-  { id: 'smooth_driving', label: 'Conducción suave', icon: '🌊', positive: 'Conducción fluida', negative: 'Brusco/agresivo' },
-  { id: 'respect_pedestrians', label: 'Respeto a peatones', icon: '🚶', positive: 'Cede el paso', negative: 'No cede el paso' },
-  { id: 'parking_courtesy', label: 'Cortesía al aparcar', icon: '🅿️', positive: 'Aparca correctamente', negative: 'Aparca mal' },
-  { id: 'lane_discipline', label: 'Disciplina de carril', icon: '🛣️', positive: 'Mantiene carril', negative: 'Invade carriles' },
-  { id: 'general_courtesy', label: 'Cortesía general', icon: '🤝', positive: 'Conductor cortés', negative: 'Conductor descortés' },
-];
 
 export default function RateScreen() {
   const router = useRouter();
@@ -152,6 +142,86 @@ export default function RateScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No hay usuario autenticado');
 
+      // ============================================
+      // 🛡️ CONTROLES ANTI-MANIPULACIÓN
+      // ============================================
+
+      // ✅ CONTROL 1: Auto-votación bloqueada
+      if (params.userId && params.userId === user.id) {
+        Alert.alert(
+          '🚫 No permitido',
+          'No puedes evaluarte a ti mismo.\n\nDriveSkore es un sistema de evaluación comunitaria, donde otros conductores valoran tu comportamiento en la vía.',
+          [{ text: 'Entendido', onPress: () => router.back() }]
+        );
+        setLoading(false);
+        return;
+      }
+
+      const displayPlateForInsert = params.userId 
+        ? (currentVehicle?.plate || params.plate || 'Desconocida')
+        : (params.plate || 'Desconocida');
+
+      // ✅ CONTROL 2: Rate limit mismo conductor (24h)
+      const { data: recentRating } = await supabase
+        .from('ratings')
+        .select('created_at')
+        .eq('rater_id', user.id)
+        .eq('plate', displayPlateForInsert)
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .maybeSingle();
+
+      if (recentRating) {
+        const hoursAgo = Math.floor(
+          (Date.now() - new Date(recentRating.created_at).getTime()) / (60 * 60 * 1000)
+        );
+        
+        Alert.alert(
+          '⏳ Espera un momento',
+          `Ya evaluaste a este conductor hace ${hoursAgo} hora${hoursAgo !== 1 ? 's' : ''}.\n\nPuedes evaluarlo nuevamente después de 24 horas.`,
+          [{ text: 'Entendido', onPress: () => router.back() }]
+        );
+        setLoading(false);
+        return;
+      }
+
+      // ✅ CONTROL 3: Rate limit global (20/día)
+      const { count: todayRatings } = await supabase
+        .from('ratings')
+        .select('*', { count: 'exact', head: true })
+        .eq('rater_id', user.id)
+        .gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString());
+
+      const MAX_RATINGS_PER_DAY = 20;
+
+      if (todayRatings && todayRatings >= MAX_RATINGS_PER_DAY) {
+        Alert.alert(
+          '🚫 Límite diario alcanzado',
+          `Has alcanzado el límite de ${MAX_RATINGS_PER_DAY} evaluaciones por día.\n\nPodrás evaluar más conductores mañana.`,
+          [{ text: 'Entendido' }]
+        );
+        setLoading(false);
+        return;
+      }
+
+      // ✅ CONTROL 4: Matching score mínimo (50)
+      if (params.fromMatching === 'true' && params.matchScore) {
+        const matchScore = parseInt(params.matchScore);
+        
+        if (matchScore < 50) {
+          Alert.alert(
+            '⚠️ Confianza baja',
+            `El matching tiene baja confianza (${matchScore}/100).\n\nPara garantizar evaluaciones justas, solo permitimos evaluar con confianza media o alta.`,
+            [{ text: 'Entendido', onPress: () => router.back() }]
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ============================================
+      // ✅ TODOS LOS CONTROLES PASADOS - INSERTAR
+      // ============================================
+
       const score = calculateScore();
       
       const positiveAttrs: { [key: string]: number } = {};
@@ -166,20 +236,20 @@ export default function RateScreen() {
         .from('ratings')
         .insert({
           rater_id: user.id,
-          plate: displayPlate,
+          plate: displayPlateForInsert,
           score: score,
           comment: comment.trim() || null,
         });
 
       if (ratingError) throw ratingError;
 
+      // Trackear primera valoración
       const { count, error: countError } = await supabase
-      .from('ratings')
-      .select('*', { count: 'exact', head: true })
-      .eq('rater_id', user.id);
+        .from('ratings')
+        .select('*', { count: 'exact', head: true })
+        .eq('rater_id', user.id);
     
       if (!countError && count === 1) {
-        // Es la primera valoración de este usuario
         await Analytics.trackFirstRating(score);
       }
 
@@ -187,7 +257,7 @@ export default function RateScreen() {
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
-        .eq('plate', displayPlate)
+        .eq('plate', displayPlateForInsert)
         .maybeSingle();
 
       if (existingProfile) {
@@ -209,13 +279,13 @@ export default function RateScreen() {
             positive_attributes: updatedAttributes,
             total_votes: newTotalVotes,
           })
-          .eq('plate', displayPlate);
+          .eq('plate', displayPlateForInsert);
       } else {
         // Crear nuevo perfil
         await supabase
           .from('profiles')
           .insert({
-            plate: displayPlate,
+            plate: displayPlateForInsert,
             total_score: score,
             num_ratings: 1,
             positive_attributes: positiveAttrs,
@@ -310,39 +380,50 @@ export default function RateScreen() {
           </View>
         )}
 
+        {/* Resumen de evaluación */}
         {total > 0 && (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Puntuación estimada</Text>
-            <Text style={styles.summaryScore}>⭐ {estimatedScore.toFixed(1)}/5.0</Text>
+            <Text style={styles.summaryTitle}>Resumen de tu evaluación</Text>
+            <Text style={styles.summaryScore}>
+              {estimatedScore.toFixed(1)} / 5.0
+            </Text>
             <View style={styles.summaryStats}>
               <View style={styles.summaryStatItem}>
-                <Text style={styles.summaryStatValue}>✅ {positive}</Text>
+                <Text style={[styles.summaryStatValue, { color: '#34C759' }]}>
+                  {positive}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Positivos</Text>
               </View>
               <View style={styles.summaryStatItem}>
-                <Text style={styles.summaryStatValue}>❌ {negative}</Text>
+                <Text style={[styles.summaryStatValue, { color: '#FF3B30' }]}>
+                  {negative}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Negativos</Text>
               </View>
             </View>
           </View>
         )}
 
+        {/* Instrucciones */}
         <View style={styles.instructionsCard}>
           <Text style={styles.instructionsIcon}>💡</Text>
           <Text style={styles.instructionsText}>
-            Selecciona los comportamientos que observaste:{'\n'}
-            ✅ = Correcto | ❌ = Incorrecto
+            Evalúa cada comportamiento que observaste. Puedes votar solo los que viste, no es necesario evaluar todos.
           </Text>
         </View>
 
+        {/* Atributos */}
         <View style={styles.attributesSection}>
-          {DRIVING_ATTRIBUTES.map(attr => (
+          <Text style={styles.sectionTitle}>Comportamientos observados</Text>
+          
+          {DRIVING_ATTRIBUTES.map((attr) => (
             <View key={attr.id} style={styles.attributeRow}>
               <View style={styles.attributeInfo}>
                 <Text style={styles.attributeIcon}>{attr.icon}</Text>
                 <Text style={styles.attributeLabel}>{attr.label}</Text>
               </View>
               <View style={styles.attributeVoteButtons}>
+                {/* Botón Positivo */}
                 <TouchableOpacity
                   style={[
                     styles.voteButton,
@@ -359,6 +440,8 @@ export default function RateScreen() {
                     ✓
                   </Text>
                 </TouchableOpacity>
+                
+                {/* Botón Negativo */}
                 <TouchableOpacity
                   style={[
                     styles.voteButton,

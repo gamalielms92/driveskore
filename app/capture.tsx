@@ -14,11 +14,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { supabase } from '../../src/config/supabase';
-import { Analytics } from '../../src/services/Analytics';
-import EventCaptureService from '../../src/services/EventCaptureService';
-import { detectPlateFromImage } from '../../src/services/ocrService';
-import { formatPlate, validateSpanishPlate } from '../../src/utils/plateValidator';
+import { supabase } from '../src/config/supabase';
+import { Analytics } from '../src/services/Analytics';
+import EventCaptureService from '../src/services/EventCaptureService';
+import { detectPlateFromImage } from '../src/services/ocrService';
+import { formatPlate, validateSpanishPlate } from '../src/utils/plateValidator';
 
 export default function CaptureScreen() {
   const router = useRouter();

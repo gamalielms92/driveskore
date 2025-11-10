@@ -1,12 +1,21 @@
 // app/(tabs)/search.tsx
-// ✅ Búsqueda por MATRÍCULA o NOMBRE
-// ✅ Solo conductores registrados
-// ✅ Sin opción de "evaluar ahora" (valoraciones solo en carretera)
 
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import WeeklyRankingService, { type GlobalRankingEntry } from '../../src/services/WeeklyRankingService';
+import { getUserLevel } from '../../src/utils/gamification';
 
 interface TopDriver {
   user_id: string;
@@ -17,68 +26,100 @@ interface TopDriver {
   average_score: number;
   vehicles: Array<{
     plate: string;
-    brand: string | null;
-    model: string | null;
+    brand: string;
+    model: string;
     vehicle_photo_url: string | null;
   }>;
 }
 
+type RankingMode = 'weekly' | 'global';
+
 export default function SearchScreen() {
   const router = useRouter();
-  const [searchPlate, setSearchPlate] = useState(''); // Mantener nombre por compatibilidad
+  const [searchPlate, setSearchPlate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [topDrivers, setTopDrivers] = useState<TopDriver[]>([]);
+  const [rankingMode, setRankingMode] = useState<RankingMode>('global');
+  const [globalRanking, setGlobalRanking] = useState<GlobalRankingEntry[]>([]);
+  const [weeklyRanking, setWeeklyRanking] = useState<any[]>([]);
+  const [loadingRanking, setLoadingRanking] = useState(true);
+
+  useEffect(() => {
+    loadRankings();
+  }, []);
+
+  const loadRankings = async () => {
+    try {
+      setLoadingRanking(true);
+      
+      // Cargar ranking global
+      const global = await WeeklyRankingService.getGlobalRanking();
+      setGlobalRanking(global);
+      
+      // Cargar ranking semanal
+      const weekly = await WeeklyRankingService.getCurrentWeeklyRanking();
+      setWeeklyRanking(weekly);
+      
+    } catch (error) {
+      console.error('Error cargando rankings:', error);
+    } finally {
+      setLoadingRanking(false);
+    }
+  };
 
   const handleSearchChange = (text: string) => {
-    setSearchPlate(text); // Mantener el nombre de la variable por compatibilidad
+    setSearchPlate(text.toUpperCase());
   };
 
   const handleSearch = async () => {
-    if (!searchPlate || searchPlate.trim().length < 2) {
-      Alert.alert('Error', 'Introduce al menos 2 caracteres');
+    if (!searchPlate.trim()) {
+      Alert.alert('Atención', 'Por favor ingresa un nombre para buscar');
       return;
     }
 
-    const searchTerm = searchPlate.trim();
-    setLoading(true);
-
     try {
-      // BÚSQUEDA SOLO POR NOMBRE
+      setLoading(true);
+
+      const searchTerm = searchPlate.trim().toLowerCase();
+
+      // Buscar por nombre en user_profiles
       const { data: users, error: usersError } = await supabase
         .from('user_profiles')
-        .select('user_id, full_name, avatar_url')
-        .ilike('full_name', `%${searchTerm}%`)
+        .select('user_id, full_name')
+        .or(`full_name.ilike.%${searchTerm}%`)
         .limit(10);
-
-      setLoading(false);
 
       if (usersError) throw usersError;
 
       if (users && users.length > 0) {
-        // Si hay resultados
         if (users.length === 1) {
-          // Solo un resultado → ir directo a su perfil
-          const { data: vehicle } = await supabase
+          // UN SOLO RESULTADO - Cargar primer vehículo y redirigir
+          const userId = users[0].user_id;
+
+          const { data: vehicles, error: vehiclesError } = await supabase
             .from('user_vehicles')
             .select('plate')
-            .eq('user_id', users[0].user_id)
-            .limit(1)
-            .maybeSingle();
+            .eq('user_id', userId)
+            .order('is_primary', { ascending: false })
+            .limit(1);
 
-          if (vehicle) {
-            router.push(`/conductor/${vehicle.plate}`);
+          if (vehiclesError) throw vehiclesError;
+
+          if (vehicles && vehicles.length > 0) {
+            router.push(`/conductor/${vehicles[0].plate}`);
+            setSearchPlate('');
             return;
           } else {
             Alert.alert(
-              'Sin vehículos',
-              `${users[0].full_name} no tiene vehículos registrados aún.`,
+              'Perfil encontrado',
+              `Se encontró a ${users[0].full_name}, pero no tiene vehículos registrados.`,
               [{ text: 'OK' }]
             );
             return;
           }
         } else {
-          // Múltiples resultados → mostrar lista
-          const usersList = users.map((u, i) => `${i + 1}. ${u.full_name}`).join('\n');
+          // MÚLTIPLES RESULTADOS
+          setLoading(false);
+          const usersList = users.map((u) => `• ${u.full_name}`).join('\n');
           Alert.alert(
             `🔍 ${users.length} resultados encontrados`,
             `${usersList}\n\nRefina tu búsqueda para ver un conductor específico.`,
@@ -94,199 +135,196 @@ export default function SearchScreen() {
         `No se encontró ningún conductor con el nombre "${searchTerm}".\n\nRecuerda:\n• Solo puedes consultar conductores registrados\n• Busca por nombre o apellidos`,
         [{ text: 'OK' }]
       );
-      
     } catch (error: any) {
-      setLoading(false);
       console.error('Error en búsqueda:', error);
       Alert.alert('Error', 'No se pudo realizar la búsqueda');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const loadTopDrivers = async () => {
-    try {
-      // 1. Obtener perfiles con más valoraciones que tengan user_id
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, plate, total_score, num_ratings')
-        .not('user_id', 'is', null)
-        .order('num_ratings', { ascending: false })
-        .limit(20);
-
-      if (profilesError) throw profilesError;
-      if (!profiles || profiles.length === 0) {
-        setTopDrivers([]);
-        return;
-      }
-
-      // 2. Agrupar por user_id y agregar puntuaciones
-      const userScores = new Map<string, {
-        total_score: number;
-        num_ratings: number;
-        plates: string[];
-      }>();
-
-      profiles.forEach(profile => {
-        if (!profile.user_id) return;
-
-        const existing = userScores.get(profile.user_id);
-        if (existing) {
-          existing.total_score += profile.total_score;
-          existing.num_ratings += profile.num_ratings;
-          existing.plates.push(profile.plate);
-        } else {
-          userScores.set(profile.user_id, {
-            total_score: profile.total_score,
-            num_ratings: profile.num_ratings,
-            plates: [profile.plate]
-          });
-        }
-      });
-
-      // 3. Convertir a array y ordenar por número de valoraciones
-      const userIds = Array.from(userScores.entries())
-        .sort((a, b) => b[1].num_ratings - a[1].num_ratings)
-        .slice(0, 5)
-        .map(([userId]) => userId);
-
-      // 4. Cargar información de cada usuario
-      const driversData: TopDriver[] = [];
-
-      for (const userId of userIds) {
-        const scores = userScores.get(userId)!;
-
-        // Cargar perfil de usuario
-        const { data: userProfile } = await supabase
-          .from('user_profiles')
-          .select('full_name, avatar_url')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        // Cargar vehículos
-        const { data: vehicles } = await supabase
-          .from('user_vehicles')
-          .select('plate, brand, model, vehicle_photo_url')
-          .eq('user_id', userId)
-          .limit(3);
-
-        driversData.push({
-          user_id: userId,
-          full_name: userProfile?.full_name || 'Usuario sin nombre',
-          avatar_url: userProfile?.avatar_url || null,
-          total_score: scores.total_score,
-          num_ratings: scores.num_ratings,
-          average_score: scores.total_score / scores.num_ratings,
-          vehicles: vehicles || []
-        });
-      }
-
-      setTopDrivers(driversData);
-
-    } catch (error) {
-      console.error('Error cargando top conductores:', error);
-    }
-  };
-
-  React.useEffect(() => {
-    loadTopDrivers();
-  }, []);
 
   const renderStars = (score: number) => {
     const fullStars = Math.floor(score);
     const hasHalfStar = score % 1 >= 0.5;
-    return '⭐'.repeat(fullStars) + (hasHalfStar ? '½' : '') + '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
+    return (
+      '⭐'.repeat(fullStars) +
+      (hasHalfStar ? '½' : '') +
+      '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0))
+    );
   };
+
+  const renderRankingEntry = (entry: GlobalRankingEntry, index: number) => {
+    // entry.level contiene ratingsGiven, no el nivel calculado
+    const userLevel = getUserLevel(entry.level); // Calcular nivel desde ratingsGiven
+    const isTopThree = index < 3;
+    
+    return (
+      <TouchableOpacity
+        key={entry.user_id}
+        style={[
+          styles.rankingItem,
+          isTopThree && styles.rankingItemTopThree
+        ]}
+        onPress={() => {
+          if (entry.vehicles.length > 0) {
+            router.push(`/conductor/${entry.vehicles[0].plate}`);
+          }
+        }}
+      >
+        {/* Posición */}
+        <View style={styles.positionContainer}>
+          <Text style={[
+            styles.positionText,
+            isTopThree && styles.positionTextTopThree
+          ]}>
+            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${entry.position}`}
+          </Text>
+        </View>
+
+        {/* Avatar */}
+        {entry.avatar_url ? (
+          <Image
+            source={{ uri: entry.avatar_url }}
+            style={styles.rankingAvatar}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.rankingAvatarPlaceholder}>
+            <Text style={styles.rankingAvatarText}>
+              {entry.full_name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+
+        {/* Info */}
+        <View style={styles.rankingInfo}>
+          <View style={styles.rankingNameRow}>
+            <Text style={styles.rankingName}>{entry.full_name}</Text>
+            {/* Nivel visible arriba junto al nombre */}
+            <View style={styles.levelBadgeInline}>
+              <Text style={styles.levelIconInline}>{userLevel.icon}</Text>
+              <Text style={styles.levelTextInline}>Nv.{userLevel.level}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.rankingStats}>
+            <Text style={styles.rankingScore}>
+              {renderStars(entry.average_score)} {entry.average_score.toFixed(1)}
+            </Text>
+            <Text style={styles.rankingRatings}>
+              {entry.total_ratings} valoraciones
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const currentRanking = rankingMode === 'global' ? globalRanking : weeklyRanking;
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Buscar Conductor</Text>
-        <Text style={styles.subtitle}>Por nombre o apellidos</Text>
+        {/* Header de Búsqueda */}
+        <View style={styles.searchHeader}>
+          <Text style={styles.title}>Buscar Conductor</Text>
+          <Text style={styles.subtitle}>Por nombre o apellidos</Text>
 
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: Juan Pérez García"
-            value={searchPlate}
-            onChangeText={handleSearchChange}
-            autoCapitalize="words"
-            onSubmitEditing={handleSearch}
-          />
-          
-          <TouchableOpacity 
-            style={[styles.searchButton, loading && styles.searchButtonDisabled]}
-            onPress={handleSearch}
-            disabled={loading}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej: Juan Pérez García"
+              value={searchPlate}
+              onChangeText={handleSearchChange}
+              autoCapitalize="words"
+              onSubmitEditing={handleSearch}
+            />
+
+            <TouchableOpacity
+              style={[styles.searchButton, loading && styles.searchButtonDisabled]}
+              onPress={handleSearch}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.searchButtonText}>🔍</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Selector de Ranking */}
+        <View style={styles.rankingSelectorContainer}>
+          <TouchableOpacity
+            style={[
+              styles.rankingSelectorButton,
+              rankingMode === 'global' && styles.rankingSelectorButtonActive
+            ]}
+            onPress={() => setRankingMode('global')}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.searchButtonText}>🔍 Buscar</Text>
-            )}
+            <Text style={[
+              styles.rankingSelectorText,
+              rankingMode === 'global' && styles.rankingSelectorTextActive
+            ]}>
+              🌍 Ranking Global
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.rankingSelectorButton,
+              rankingMode === 'weekly' && styles.rankingSelectorButtonActive
+            ]}
+            onPress={() => setRankingMode('weekly')}
+          >
+            <Text style={[
+              styles.rankingSelectorText,
+              rankingMode === 'weekly' && styles.rankingSelectorTextActive
+            ]}>
+              📅 Esta Semana
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* CONDUCTORES MÁS VALORADOS - CENTRADO EN PERSONAS */}
-        {topDrivers.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>👥 Conductores más valorados</Text>
-            
-            {topDrivers.map((driver, index) => (
-              <TouchableOpacity
-                key={driver.user_id}
-                style={styles.driverCard}
-                onPress={() => {
-                  if (driver.vehicles.length > 0) {
-                    router.push(`/conductor/${driver.vehicles[0].plate}`);
-                  }
-                }}
-              >
-                <View style={styles.driverHeader}>
-                  <Text style={styles.medal}>
-                    {index === 0 && '🥇'}
-                    {index === 1 && '🥈'}
-                    {index === 2 && '🥉'}
-                    {index > 2 && `${index + 1}.`}
-                  </Text>
+        {/* Ranking */}
+        <View style={styles.rankingCard}>
+          <Text style={styles.rankingTitle}>
+            {rankingMode === 'global' ? '🏆 Top 10 Global' : '📅 Top 10 Semanal'}
+          </Text>
+          <Text style={styles.rankingSubtitle}>
+            {rankingMode === 'global' 
+              ? 'Los mejores conductores de la comunidad' 
+              : 'Mejores conductores de esta semana'}
+          </Text>
 
-                  {driver.avatar_url ? (
-                    <Image
-                      source={{ uri: driver.avatar_url }}
-                      style={styles.driverAvatar}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.driverAvatarPlaceholder}>
-                      <Text style={styles.driverAvatarText}>
-                        {driver.full_name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+          {loadingRanking ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Cargando ranking...</Text>
+            </View>
+          ) : currentRanking.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {rankingMode === 'weekly'
+                  ? '📅 Aún no hay ranking para esta semana.\n\nEl ranking se calcula cada lunes.'
+                  : '🏆 Aún no hay suficientes conductores para mostrar el ranking.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.rankingList}>
+              {currentRanking.map((entry, index) => renderRankingEntry(entry, index))}
+            </View>
+          )}
+        </View>
 
-                  <View style={styles.driverInfo}>
-                    <Text style={styles.driverName}>{driver.full_name}</Text>
-                    <Text style={styles.driverRatings}>
-                      {driver.num_ratings} valoración{driver.num_ratings !== 1 ? 'es' : ''}
-                    </Text>
-                  </View>
-
-                  <View style={styles.driverScoreSection}>
-                    <Text style={styles.driverScore}>
-                      {driver.average_score.toFixed(1)}
-                    </Text>
-                    <Text style={styles.driverStars}>
-                      {renderStars(driver.average_score)}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>💡</Text>
+        {/* Info adicional */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>ℹ️ ¿Cómo funciona el ranking?</Text>
           <Text style={styles.infoText}>
-            Busca conductores por su nombre o apellidos. Solo puedes consultar conductores registrados en DriveSkore.
+            {rankingMode === 'global'
+              ? '• El ranking global se basa en tu promedio de valoraciones\n• Necesitas mínimo 3 valoraciones para aparecer\n• Se actualiza en tiempo real'
+              : '• El ranking semanal se calcula cada lunes\n• Solo se consideran valoraciones de esa semana\n• Los ganadores del top 3 reciben medallas 🥇🥈🥉'}
           </Text>
         </View>
       </View>
@@ -297,142 +335,231 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F2F2F7',
   },
   content: {
+    padding: 16,
+  },
+  searchHeader: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
     padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 5,
     color: '#000',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   searchContainer: {
-    marginBottom: 30,
+    flexDirection: 'row',
+    gap: 12,
   },
   input: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 15,
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
   },
   searchButton: {
     backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchButtonDisabled: {
-    opacity: 0.6,
+    backgroundColor: '#999',
   },
   searchButtonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 24,
   },
-  section: {
-    marginBottom: 30,
+  rankingSelectorContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#000',
-  },
-  driverCard: {
-    backgroundColor: 'white',
-    padding: 15,
+  rankingSelectorButton: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    padding: 16,
     borderRadius: 12,
-    marginBottom: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  rankingSelectorButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#007AFF',
+  },
+  rankingSelectorText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  rankingSelectorTextActive: {
+    color: '#FFF',
+  },
+  rankingCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 8,
     elevation: 3,
   },
-  driverHeader: {
+  rankingTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  rankingSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  rankingList: {
+    gap: 12,
+  },
+  rankingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    padding: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    gap: 12,
   },
-  medal: {
+  rankingItemTopThree: {
+    backgroundColor: '#FFF9E6',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  positionContainer: {
+    width: 40,
+    alignItems: 'center',
+  },
+  positionText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  positionTextTopThree: {
     fontSize: 24,
-    marginRight: 10,
-    width: 30,
   },
-  driverAvatar: {
+  rankingAvatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#007AFF',
   },
-  driverAvatarPlaceholder: {
+  rankingAvatarPlaceholder: {
     width: 50,
     height: 50,
     borderRadius: 25,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
-  driverAvatarText: {
+  rankingAvatarText: {
     fontSize: 20,
-    color: 'white',
     fontWeight: 'bold',
+    color: '#FFF',
   },
-  driverInfo: {
+  rankingInfo: {
     flex: 1,
   },
-  driverName: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 4,
-  },
-  driverRatings: {
-    fontSize: 13,
-    color: '#666',
-  },
-  driverScoreSection: {
-    alignItems: 'flex-end',
-    marginLeft: 10,
-  },
-  driverScore: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#34C759',
-    marginBottom: 2,
-  },
-  driverStars: {
-    fontSize: 14,
-  },
-  infoBox: {
-    backgroundColor: '#E3F2FD',
-    padding: 20,
-    borderRadius: 10,
+  rankingNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  infoIcon: {
-    fontSize: 30,
-    marginRight: 15,
+  rankingName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    flex: 1,
+  },
+  rankingStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rankingScore: {
+    fontSize: 12,
+    color: '#666',
+  },
+  rankingRatings: {
+    fontSize: 11,
+    color: '#999',
+  },
+  levelBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  levelIconInline: {
+    fontSize: 14,
+  },
+  levelTextInline: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#666',
+  },
+  infoCard: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 32,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1976D2',
+    marginBottom: 8,
   },
   infoText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1976D2',
-    lineHeight: 20,
+    fontSize: 12,
+    color: '#1565C0',
+    lineHeight: 18,
   },
 });

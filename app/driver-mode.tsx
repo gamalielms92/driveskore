@@ -100,7 +100,7 @@ export default function DriverModeScreen() {
     const interval = setInterval(() => {
       console.log('🔄 Actualizando stats...');
       updateStats();
-    }, 15000); // Actualizar cada 5 segundos para ver los cambios más rápido
+    }, 15000); // Actualizar cada 15 segundos para ver los cambios más rápido
     
     // Guardar referencia del interval
     trackingInterval.current = interval;

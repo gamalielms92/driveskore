@@ -164,38 +164,6 @@ export default function MatchingResultsScreen() {
     );
   };
 
-  const handleManualEntry = async () => {
-    console.log('✍️ [MatchingResults] Usuario eligió entrada manual');
-    
-    Alert.alert(
-      'Evaluación Manual',
-      'No has encontrado al conductor. Podrás introducir la matrícula manualmente.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Continuar',
-          onPress: async () => {
-            try {
-              console.log('🗑️ [MatchingResults] Eliminando evento:', eventId);
-              await EventCaptureService.removeEvent(eventId);
-              
-              console.log('🧭 [MatchingResults] Navegando a /rate (manual)...');
-              router.replace({
-                pathname: '/rate',
-                params: {
-                  fromMatching: 'manual',
-                },
-              });
-            } catch (error) {
-              console.error('❌ [MatchingResults] Error:', error);
-              Alert.alert('Error', 'No se pudo continuar');
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const getScoreColor = (score: number) => {
     if (score >= 80) return '#4CAF50';
     if (score >= 60) return '#FFC107';
@@ -398,18 +366,24 @@ export default function MatchingResultsScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.centerContainer}>
-          <Text style={styles.emptyIcon}>🤷</Text>
-          <Text style={styles.emptyTitle}>No se encontraron candidatos</Text>
+          <Text style={styles.emptyIcon}>📱</Text>
+          <Text style={styles.emptyTitle}>Conductor sin DriveSkore</Text>
           <Text style={styles.emptyMessage}>
-            No había conductores activos cerca en ese momento.
+            No había conductores con la app activa cerca en ese momento.
           </Text>
           
-          <TouchableOpacity
-            style={styles.manualButton}
-            onPress={handleManualEntry}
-          >
-            <Text style={styles.manualButtonText}>✍️ Introducir Manualmente</Text>
-          </TouchableOpacity>
+          <View style={styles.sharePrompt}>
+            <Text style={styles.sharePromptIcon}>💡</Text>
+            <Text style={styles.sharePromptTitle}>¿Cómo funciona DriveSkore?</Text>
+            <Text style={styles.sharePromptText}>
+              • Solo evalúas a conductores con la app activa{'\n'}
+              • El matching verifica quién conduce en tiempo real{'\n'}
+              • Garantiza evaluaciones justas y precisas
+            </Text>
+            <Text style={styles.sharePromptCTA}>
+              📲 Comparte la app para que más conductores se unan
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={styles.backButton}
@@ -450,12 +424,13 @@ export default function MatchingResultsScreen() {
             <Text style={styles.footerText}>
               ¿No encuentras al conductor correcto?
             </Text>
-            <TouchableOpacity
-              style={styles.manualButton}
-              onPress={handleManualEntry}
-            >
-              <Text style={styles.manualButtonText}>✍️ Introducir Manualmente</Text>
-            </TouchableOpacity>
+            <View style={styles.shareAppCard}>
+              <Text style={styles.shareAppIcon}>📲</Text>
+              <Text style={styles.shareAppTitle}>El conductor no tiene DriveSkore</Text>
+              <Text style={styles.shareAppMessage}>
+                Solo puedes evaluar a conductores con la app activa. ¡Comparte DriveSkore para que más conductores se unan!
+              </Text>
+            </View>
           </View>
         }
       />
@@ -780,5 +755,60 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#666',
     fontSize: 16,
+  },
+  shareAppCard: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  shareAppIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  shareAppTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1565C0',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  shareAppMessage: {
+    fontSize: 14,
+    color: '#1976D2',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  sharePrompt: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    padding: 24,
+    marginVertical: 20,
+    width: '90%',
+  },
+  sharePromptIcon: {
+    fontSize: 40,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  sharePromptTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  sharePromptText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  sharePromptCTA: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+    textAlign: 'center',
   },
 });

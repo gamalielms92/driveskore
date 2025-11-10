@@ -21,24 +21,12 @@ export default function TabLayout() {
           headerTitle: '🚗 DriveSkore',
         }}
       />
-      
-      {/* ✅ OCULTO EN WEB: Captura de eventos */}
-      <Tabs.Screen
-        name="capture"
-        options={{
-          title: 'Evaluar',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📷</Text>,
-          href: Platform.OS === 'web' ? null : undefined,
-        }}
-      />
 
-      {/* ✅ OCULTO EN WEB: Eventos pendientes (matching) */}
       <Tabs.Screen
         name="pending"
         options={{
           title: 'Pendientes',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⏰</Text>,
-          href: Platform.OS === 'web' ? null : undefined,
         }}
       />
 
@@ -47,15 +35,6 @@ export default function TabLayout() {
         options={{
           title: 'Buscar',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🔍</Text>,
-        }}
-      />
-
-      <Tabs.Screen
-        name="help"
-        options={{
-          title: 'Ayuda',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>💬</Text>,
-          headerTitle: 'Ayuda y Feedback',
         }}
       />
       
@@ -68,13 +47,24 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="help"
+        options={{
+          title: 'Ayuda',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>💬</Text>,
+          headerTitle: 'Ayuda y Feedback',
+        }}
+      />
+
+      <Tabs.Screen
         name="capture-settings"
         options={{
-          title: 'Captura',
+          title: 'Ajustes',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
           href: Platform.OS === 'web' ? null : undefined,
         }}
       />
+
+
 
     </Tabs>
   );

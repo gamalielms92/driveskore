@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { supabase } from '../../src/config/supabase';
-import EventCaptureService from '../../src/services/EventCaptureService';
 import DriverMatchingService from '../../src/services/DriverMatchingService';
+import EventCaptureService from '../../src/services/EventCaptureService';
 import type { CapturedEvent, DriverCandidate } from '../../src/types/events';
 
 export default function PendingScreen() {
@@ -108,24 +108,14 @@ export default function PendingScreen() {
       // ✅ PASO 2: Procesar resultados
       if (candidates.length === 0) {
         Alert.alert(
-          'Sin Resultados',
-          'No se encontraron conductores activos cerca en ese momento.\n\n¿Deseas evaluar manualmente?',
+          '📱 Conductor sin DriveSkore',
+          'No se encontraron conductores con la app activa cerca en ese momento.\n\n💡 Solo puedes evaluar a conductores que tengan DriveSkore activo.\n\n📲 ¡Comparte la app para que más conductores se unan!',
           [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Evaluar Manual',
+            { 
+              text: 'Entendido', 
               onPress: async () => {
                 await EventCaptureService.removeEvent(event.id);
-                router.push({
-                  pathname: '/rate',
-                  params: {
-                    plate: event.plate || '',
-                    photoUri: event.photo_uri || '',
-                    eventId: event.id,
-                    fromPending: 'true',
-                  },
-                });
-              },
+              }
             },
           ]
         );
