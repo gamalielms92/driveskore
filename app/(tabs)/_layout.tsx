@@ -1,10 +1,35 @@
 // app/(tabs)/_layout.tsx
-// ✅ VERSIÓN CORREGIDA: Navegación adaptada para web
+// ✅ VERSIÓN FINAL: Oculta tabs en web si no está logueado
 
 import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Platform, Text } from 'react-native';
+import { supabase } from '../../src/config/supabase';
 
 export default function TabLayout() {
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // Por defecto true para móvil
+
+  useEffect(() => {
+    // Solo en web, verificar autenticación
+    if (Platform.OS === 'web') {
+      checkAuth();
+      
+      // Escuchar cambios de autenticación
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        setIsLoggedIn(!!session?.user);
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setIsLoggedIn(!!user);
+  };
+
   return (
     <Tabs
       screenOptions={{
@@ -12,6 +37,10 @@ export default function TabLayout() {
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
         tabBarActiveTintColor: '#007AFF',
+        // ✅ CLAVE: Ocultar tab bar en web si no está logueado
+        tabBarStyle: Platform.OS === 'web' && !isLoggedIn ? { display: 'none' } : undefined,
+        // ✅ CLAVE: Ocultar header en web si no está logueado
+        headerShown: Platform.OS === 'web' && !isLoggedIn ? false : true,
       }}
     >
       <Tabs.Screen
