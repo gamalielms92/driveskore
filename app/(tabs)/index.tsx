@@ -218,8 +218,17 @@ export default function HomeScreen() {
         minHeight={700}
       >
         <View style={{ alignItems: 'center' }}>
-          <Text style={styles.heroLogo}>🚗</Text>
-          <Text style={styles.heroTitle}>DriveSkore</Text>
+          <img 
+            src="/logo.svg"
+            alt="DriveSkore Logo"
+            style={{
+              width: '1000px',
+              maxWidth: 'auto',
+              height: 'auto',
+              marginBottom: '24px',
+              filter: 'brightness(0) invert(1)',  // Hace el logo blanco
+            }}
+          />
           <Text style={styles.heroSubtitle}>
             Evalúa conductores, mejora la seguridad vial
           </Text>
@@ -255,19 +264,42 @@ export default function HomeScreen() {
 
       {/* ========== 2. ¿QUÉ ES DRIVESKORE? ========== */}
       <ParallaxSection 
-        backgroundImage="https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&q=80"
-        overlayColor="rgba(255, 255, 255, 0.92)"
+        backgroundImage="/whatis.jpeg"
+        overlayColor="rgba(255, 255, 255, 0.8)"
         minHeight={500}
       >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>¿Qué es DriveSkore?</Text>
           <Text style={[styles.sectionText, { color: '#333' }]}>
             DriveSkore es una aplicación móvil que permite a la comunidad evaluar el comportamiento 
-            de conductores mediante reconocimiento de matrículas y GPS en tiempo real.
+            de conductores mediante un algoritmo de proximidad.
           </Text>
           <Text style={[styles.sectionText, { color: '#333' }]}>
-            Nuestro objetivo es crear transparencia en torno al comportamiento al volante, 
-            especialmente útil para carpooling y compartir vehículos de forma segura.
+            Nuestro objetivo es aspirar a transformar la cultura vial mediante la aplicación del concepto de "aldea global digital", donde los conductores son conscientes de que sus acciones son observables y evaluables por la comunidad.
+          </Text>
+          <Text style={[styles.sectionSubTitle, { color: '#333' }]}>
+            Misión
+          </Text>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
+            Aportar los conocimientos tecnológicos y empresariales necesarios para desarrollar e implementar soluciones innovadoras que mejoren la vida de las personas, centrándose en la seguridad vial mediante la aplicación de tecnologías de evaluación social y gamificación.
+          </Text>
+          <Text style={[styles.sectionSubTitle, { color: '#333' }]}>
+            Visión
+          </Text>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
+            Hacer que los ciudadanos del planeta conduzcan de manera más segura, cortés y responsable gracias al concepto de la "aldea global digital", donde las personas no son anónimas y están motivadas intrínsecamente a comportarse de manera ejemplar, creando así una cultura vial global basada en el respeto mutuo y la responsabilidad compartida.
+          </Text>
+          <Text style={[styles.sectionSubTitle, { color: '#333' }]}>
+            Valores Fundamentales
+          </Text>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
+            Honestidad: Transparencia total en el funcionamiento del sistema, protección contra manipulaciones y valoraciones falsas, comunicación clara sobre el uso de datos.
+          </Text>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
+            Cuidado del Planeta: Reducción de accidentes y congestión vehicular que contribuye a menor contaminación. Promoción de conducción eficiente que reduce emisiones.
+          </Text>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
+            Tratar al Prójimo como a Ti Mismo: Fomentar la empatía y cortesía en la carretera. Crear una comunidad que se cuida mutuamente. Promover el respeto por todos los usuarios de la vía (conductores, ciclistas, peatones).
           </Text>
         </View>
       </ParallaxSection>
@@ -275,18 +307,18 @@ export default function HomeScreen() {
       {/* ========== 3. ¿CÓMO FUNCIONA? ========== */}
       <ParallaxSection 
         backgroundImage="/howitwork.jpg"
-        overlayColor="rgba(0, 0, 0, 0.75)"
+        overlayColor="rgba(0, 0, 0, 0.8)"
         minHeight={800}
       >
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: '#FFF' }]}>¿Cómo funciona?</Text>
           
           {[
-            { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android. Regístrate con tu email.' },
-            { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tus matrículas para recibir valoraciones.' },
-            { num: '3', icon: '📸', title: 'Captura Eventos', text: 'Usa el botón flotante o mando Bluetooth.' },
-            { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa del 1 al 5 estrellas.' },
-            { num: '5', icon: '🏆', title: 'Gana Niveles', text: 'Sube de nivel y desbloquea logros.' },
+            { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android e iOS. Regístrate con tu email.' },
+            { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tu vehículo para recibir valoraciones.' },
+            { num: '3', icon: '📸', title: 'Captura Eventos', text: 'Usa el botón flotante o el mando Bluetooth.' },
+            { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa comportamientos entre 1 y 5 estrellas.' },
+            { num: '5', icon: '🏆', title: 'Sube de Nivel', text: 'Sube de nivel y desbloquea logros.' },
           ].map((step) => (
             <View key={step.num} style={styles.stepCard}>
               <Text style={styles.stepNumber}>{step.num}</Text>
@@ -302,25 +334,28 @@ export default function HomeScreen() {
       {/* ========== 4. SORTEO DEL PILOTO ========== */}
       <ParallaxSection 
         backgroundImage="/raffle.jpg"
-        overlayColor="rgba(255, 193, 7, 0.9)"
+        overlayColor="rgba(255, 193, 7, 0.8)"
         minHeight={600}
       >
         <View style={[styles.section, styles.sectionHighlight]}>
-          <Text style={[styles.sectionTitle, { color: '#000' }]}>🎁 Sorteo del Piloto</Text>
+          <Text style={[styles.sectionTitle, { color: '#000' }]}>🎁 Sorteo</Text>
           <Text style={[styles.sectionText, { color: '#000' }]}>
-            Durante nuestro programa piloto en el campus, ¡puedes ganar premios!
+            Durante nuestro programa de pruebas, ¡puedes ganar un premio!
           </Text>
           
           <View style={styles.prizeCard}>
             <Text style={styles.prizeLabel}>📅 Fecha del sorteo:</Text>
-            <Text style={styles.prizeValue}>9-12 de Diciembre 2025</Text>
+            <Text style={styles.prizeValue}>9-12 de Diciembre 2025, aún por concretar.</Text>
           </View>
 
           <View style={styles.prizeCard}>
             <Text style={styles.prizeLabel}>🎟️ Cómo participar:</Text>
             <Text style={styles.prizeValue}>
-              Invita amigos con tu código único. Por cada amigo que verifique su email, 
-              ganas 1 papeleta. ¡Con 10 amigos te conviertes en Embajador y ganas 5 papeletas extra!
+              Invita a tus amigos, con tu código único, durante el periodo de pruebas. 
+              Por cada uno que verifique su email, ganas 1 papeleta. 
+              ¡Con 10 amigos te conviertes en Embajador y ganas 5 papeletas extra!
+              El sorteo estará vigente hasta el 7 de diciembre de 2025. 
+              En cuanto tengamos más información, lo publicaremos en esta sección.
             </Text>
           </View>
 
@@ -328,7 +363,7 @@ export default function HomeScreen() {
             style={styles.ctaButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.ctaButtonText}>Participar en el Sorteo</Text>
+            <Text style={styles.ctaButtonText}>¡Quiero participar!</Text>
           </TouchableOpacity>
         </View>
       </ParallaxSection>
@@ -336,13 +371,13 @@ export default function HomeScreen() {
       {/* ========== 5. SISTEMA DE REFERIDOS ========== */}
       <ParallaxSection 
         backgroundImage="/referral.jpg"
-        overlayColor="rgba(52, 152, 219, 0.9)"
+        overlayColor="rgba(52, 152, 219, 0.8)"
         minHeight={500}
       >
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: '#FFF' }]}>👥 Invita a tus Amigos</Text>
+          <Text style={[styles.sectionTitle, { color: '#FFF' }]}>👥 Invita a tus amigos</Text>
           <Text style={[styles.sectionText, { color: '#FFF' }]}>
-            Cada usuario tiene un código único de invitación. Compártelo con amigos del campus 
+            Cada usuario tiene un código único de invitación. Compártelo con amigos 
             para que se unan a la comunidad.
           </Text>
 
@@ -364,8 +399,8 @@ export default function HomeScreen() {
 
       {/* ========== 6. FAQ ========== */}
       <ParallaxSection 
-        backgroundImage="https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=1920&q=80"
-        overlayColor="rgba(255, 255, 255, 0.95)"
+        backgroundImage="/faq.jpg"
+        overlayColor="rgba(255, 255, 255, 0.8)"
         minHeight={700}
       >
         <View style={styles.section}>
@@ -378,7 +413,7 @@ export default function HomeScreen() {
             },
             {
               q: '¿Cómo se protege mi privacidad?',
-              a: 'Cumplimos con GDPR. Las fotos de perfil son opcionales, no mostramos matrículas en perfiles públicos, y puedes controlar qué información compartes.'
+              a: 'Cumplimos con GDPR. Las fotos de perfil son opcionales, no mostramos matrículas en perfiles públicos sin el consentimiento y puedes controlar qué información compartes.'
             },
             {
               q: '¿Puedo valorar mi propia conducción?',
@@ -386,7 +421,15 @@ export default function HomeScreen() {
             },
             {
               q: '¿Cómo funciona el sistema de niveles?',
-              a: 'Subes de nivel participando activamente: dando valoraciones, invitando amigos, y contribuyendo a la comunidad. Hay 6 niveles desde Novato hasta Leyenda.'
+              a: 'Subes de nivel participando activamente: dando valoraciones, invitando amigos y contribuyendo a la comunidad. Hay 6 niveles desde Novato hasta Leyenda.'
+            },
+            {
+              q: '¿El sistemas de beneficios funciona?',
+              a: 'Actualmente no, porque estamos en periodo de pruebas, pero depende completamente de vosotros que se haga realidad, "Juntos podemos lograrlo" Con una base de usuarios consolidada, los beneficios se convierten en activos negociables con terceros'
+            },
+            {
+              q: '¿Pero el sorteo es real?',
+              a: 'Sí, eso si se llevará a cabo. Lo que no está claro, actualmente, es la fecha exacta y el premio, estamos en proceso de negociación.'
             },
           ].map((faq, idx) => (
             <View key={idx} style={styles.faqItem}>
@@ -419,7 +462,7 @@ export default function HomeScreen() {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 122, 255, 0.85)',
+        backgroundColor: 'rgba(0, 123, 255, 0.8)',
         zIndex: 1,
       }} />
       
@@ -834,6 +877,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
+  sectionSubTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
   sectionText: {
     fontSize: 16,
     color: '#666',
@@ -898,6 +948,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 24,
+    width: 400,
+    alignSelf: 'center',
   },
   ctaButtonText: {
     fontSize: 18,
