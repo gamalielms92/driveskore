@@ -1,4 +1,5 @@
 // app/_layout.tsx
+// ✅ VERSIÓN CORREGIDA: Permite acceso público en web
 declare global {
   var RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS: boolean | undefined;
 }
@@ -24,12 +25,25 @@ export default function RootLayout() {
     initializeAuth();
   }, []);
 
-  // Protección de rutas: redirigir según autenticación
+  // ✅ MODIFICADO: Protección de rutas adaptada para web
   useEffect(() => {
     if (!isReady) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inTabsGroup = segments[0] === '(tabs)';
 
+    // ✅ NUEVO: En web, permitir acceso a tabs sin autenticación
+    if (Platform.OS === 'web') {
+      // En web, solo redirigir si está autenticado y en login
+      if (isAuthenticated && inAuthGroup) {
+        router.replace('(tabs)');
+      }
+      // Si no está autenticado, permitir navegar libremente
+      // La landing page manejará el estado de login internamente
+      return;
+    }
+
+    // En móvil, mantener protección estricta
     if (!isAuthenticated && !inAuthGroup) {
       // Usuario no autenticado intentando acceder a ruta protegida
       router.replace('(auth)/login');
@@ -50,25 +64,29 @@ export default function RootLayout() {
         console.log('🔐 Sesión persistente detectada');
         console.log('👤 Usuario:', session.user.email);
         
-        // Inicializar Analytics
-        await Analytics.initialize();
-        await Analytics.setUserId(session.user.id);
+        // Inicializar Analytics solo si no es web
+        if (Platform.OS !== 'web') {
+          await Analytics.initialize();
+          await Analytics.setUserId(session.user.id);
 
-        // Establecer propiedades del dispositivo
-        await Analytics.setUserProperties({
-          device_model: Constants.deviceName || 'unknown',
-          android_version: Platform.Version?.toString() || 'unknown',
-          app_version: Constants.expoConfig?.version || '1.0.0',
-        });
-        console.log('📊 Analytics configurado');
+          // Establecer propiedades del dispositivo
+          await Analytics.setUserProperties({
+            device_model: Constants.deviceName || 'unknown',
+            android_version: Platform.Version?.toString() || 'unknown',
+            app_version: Constants.expoConfig?.version || '1.0.0',
+          });
+          console.log('📊 Analytics configurado');
+        }
 
-        // Inicializar EventCaptureService
-        await EventCaptureService.initialize(session.user.id);
-        console.log('✅ EventCaptureService inicializado al arranque');
-        
-        // Inicializar ABShutter3Service
-        await ABShutter3Service.initialize(session.user.id);
-        console.log('✅ ABShutter3Service inicializado');
+        // Inicializar EventCaptureService (solo móvil)
+        if (Platform.OS !== 'web') {
+          await EventCaptureService.initialize(session.user.id);
+          console.log('✅ EventCaptureService inicializado al arranque');
+          
+          // Inicializar ABShutter3Service
+          await ABShutter3Service.initialize(session.user.id);
+          console.log('✅ ABShutter3Service inicializado');
+        }
         
         setIsAuthenticated(true);
       } else {
@@ -85,13 +103,16 @@ export default function RootLayout() {
             console.log('🔐 Usuario inició sesión');
             console.log('👤 Usuario:', session.user.email);
             
-            // Inicializar EventCaptureService
-            await EventCaptureService.initialize(session.user.id);
-            console.log('✅ EventCaptureService inicializado');
-            
-            // Inicializar ABShutter3Service
-            await ABShutter3Service.initialize(session.user.id);
-            console.log('✅ ABShutter3Service listo');
+            // Inicializar servicios solo en móvil
+            if (Platform.OS !== 'web') {
+              // Inicializar EventCaptureService
+              await EventCaptureService.initialize(session.user.id);
+              console.log('✅ EventCaptureService inicializado');
+              
+              // Inicializar ABShutter3Service
+              await ABShutter3Service.initialize(session.user.id);
+              console.log('✅ ABShutter3Service listo');
+            }
             
             setIsAuthenticated(true);
           }
@@ -99,13 +120,16 @@ export default function RootLayout() {
           if (event === 'SIGNED_OUT') {
             console.log('🚪 Usuario cerró sesión');
             
-            // Limpiar EventCaptureService
-            EventCaptureService.cleanup();
-            console.log('🧹 EventCaptureService limpiado');
-            
-            // Limpiar ABShutter3Service
-            ABShutter3Service.cleanup();
-            console.log('🧹 ABShutter3Service limpiado');
+            // Limpiar servicios solo en móvil
+            if (Platform.OS !== 'web') {
+              // Limpiar EventCaptureService
+              EventCaptureService.cleanup();
+              console.log('🧹 EventCaptureService limpiado');
+              
+              // Limpiar ABShutter3Service
+              ABShutter3Service.cleanup();
+              console.log('🧹 ABShutter3Service limpiado');
+            }
             
             setIsAuthenticated(false);
           }

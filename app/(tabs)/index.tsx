@@ -22,6 +22,20 @@ export default function HomeScreen() {
     checkAuth();
   }, []);
 
+  // ✅ Re-verificar auth cuando vuelve a la pantalla (navegación)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // En web, escuchar cambios de auth para actualizar UI
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        setIsLoggedIn(!!session?.user);
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
   const checkAuth = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
