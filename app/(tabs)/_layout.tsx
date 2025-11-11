@@ -132,21 +132,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ✅ Ocultar otras rutas que no son tabs principales */}
-      <Tabs.Screen
-        name="vehicles"
-        options={{
-          href: null, // No mostrar en tabs
-        }}
-      />
-
-      <Tabs.Screen
-        name="driver-profile"
-        options={{
-          href: null, // No mostrar en tabs
-        }}
-      />
-
     </Tabs>
   );
 }

@@ -134,12 +134,14 @@ export default function ReferralsScreen() {
   const handleShare = async () => {
     if (!code) return;
 
-    const message = `¡Únete al piloto de DriveSkore! 🚗⭐
+    const message = `¡Únete a la prueba de DriveSkore! 🚗⭐
 
-Soy parte del piloto en el campus. Únete y participa en el sorteo exclusivo.
+Soy parte integrante de la prueba. Únete y participa en el sorteo exclusivo.
 
 🎁 Código: ${code}
 📱 Descarga la app DriveSkore
+
+https://driveskore.vercel.app/
 
 ¡Nos vemos en la carretera! 👋`;
 
@@ -185,7 +187,7 @@ Soy parte del piloto en el campus. Únete y participa en el sorteo exclusivo.
         >
           <Text style={styles.backButtonText}>← Volver</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>🎯 Invita Amigos</Text>
+        <Text style={styles.title}>🎯 Invita Amig@s</Text>
         <Text style={styles.subtitle}>
           Comparte tu código y gana papeletas del sorteo
         </Text>
@@ -224,7 +226,7 @@ Soy parte del piloto en el campus. Únete y participa en el sorteo exclusivo.
       <View style={styles.codeCard}>
         <Text style={styles.codeTitle}>Tu Código de Invitación</Text>
         <Text style={styles.codeDescription}>
-          Comparte este código con tus amigos del campus
+          Comparte este código con tus amig@s
         </Text>
         <View style={styles.codeBox}>
           <Text style={styles.codeText}>{code}</Text>
@@ -320,7 +322,7 @@ Soy parte del piloto en el campus. Únete y participa en el sorteo exclusivo.
           <Text style={styles.emptyIcon}>👥</Text>
           <Text style={styles.emptyTitle}>Aún no has invitado a nadie</Text>
           <Text style={styles.emptyText}>
-            Comparte tu código con amigos del campus para empezar a acumular entradas al sorteo exclusivo del piloto
+            Comparte tu código con amig@s para empezar a acumular papeletas para el sorteo exclusivo del piloto
           </Text>
         </View>
       )}

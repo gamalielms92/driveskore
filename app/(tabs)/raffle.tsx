@@ -132,7 +132,7 @@ export default function RaffleScreen() {
         <Text style={styles.prizeTitle}>📅 Información del Sorteo</Text>
         <View style={styles.prizeInfo}>
           <View style={styles.prizeItem}>
-            <Text style={styles.prizeLabel}>Fecha:</Text>
+            <Text style={styles.prizeLabel}>Fecha orientativa:</Text>
             <Text style={styles.prizeValue}>9~12 de Diciembre de 2025</Text>
           </View>
           <View style={styles.prizeItem}>
@@ -143,12 +143,18 @@ export default function RaffleScreen() {
             <Text style={styles.prizeLabel}>Formato:</Text>
             <Text style={styles.prizeValue}>Streaming en vivo 🎥</Text>
           </View>
+          <View style={styles.prizeItem}>
+            <Text style={styles.prizeLabel}>Duración:</Text>
+            <Text style={styles.prizeValue}>El plazo acabará el 7 de Diciembre🎥</Text>
+          </View>
         </View>
         
         <View style={styles.rulesBox}>
           <Text style={styles.rulesTitle}>⚠️ Importante:</Text>
           <Text style={styles.rulesText}>
-            Solo los amigos que verifiquen su email cuentan para el sorteo.
+            Solo los invitados que verifiquen su email se contabilizarán para el sorteo.
+
+            Para estar al día sobre actualizaciones y novedades, visita https://driveskore.vercel.app/
           </Text>
         </View>
       </View>
@@ -158,13 +164,13 @@ export default function RaffleScreen() {
         <Text style={styles.motivationIcon}>🚀</Text>
         <Text style={styles.motivationTitle}>¡Sigue invitando!</Text>
         <Text style={styles.motivationText}>
-          Cuantos más amigos invites y verifiquen su email, más entradas acumulas para el sorteo exclusivo del piloto.
+          Cuantos más amig@s invites y verifiquen su email, más entradas acumulas para el sorteo.
         </Text>
         <TouchableOpacity 
           style={styles.motivationButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.motivationButtonText}>Invitar Más Amigos</Text>
+          <Text style={styles.motivationButtonText}>Invitar más Amig@s</Text>
         </TouchableOpacity>
       </View>
 
@@ -174,10 +180,10 @@ export default function RaffleScreen() {
         <Text style={styles.ctaTitle}>¿Cómo funciona el sorteo?</Text>
         <View style={styles.ctaList}>
           <Text style={styles.ctaItem}>1. Comparte tu código único</Text>
-          <Text style={styles.ctaItem}>2. Tus amigos se registran con el código</Text>
+          <Text style={styles.ctaItem}>2. Tus amig@s se registran con el código</Text>
           <Text style={styles.ctaItem}>3. Verifican su email ✅</Text>
-          <Text style={styles.ctaItem}>4. ¡Ganas 1 entrada al sorteo por cada amigo!</Text>
-          <Text style={styles.ctaItem}>5. Con 10 amigos → Badge Embajador 👑 + 5 entradas extra</Text>
+          <Text style={styles.ctaItem}>4. ¡Ganas 1 entrada al sorteo por cada amig@!</Text>
+          <Text style={styles.ctaItem}>5. Con 10 amig@s → logro Embajador 👑 + 5 entradas extra</Text>
         </View>
       </View>
 
@@ -185,7 +191,7 @@ export default function RaffleScreen() {
       {pendingReferrals > 0 && (
         <View style={styles.reminderCard}>
           <Text style={styles.reminderIcon}>💡</Text>
-          <Text style={styles.reminderTitle}>Recuerda a tus amigos</Text>
+          <Text style={styles.reminderTitle}>Recuerda a tus amig@s</Text>
           <Text style={styles.reminderText}>
             Tienes {pendingReferrals} invitación{pendingReferrals !== 1 ? 'es' : ''} pendiente{pendingReferrals !== 1 ? 's' : ''} de verificar email.
             ¡Recuérdales que revisen su correo para que cuenten en el sorteo!

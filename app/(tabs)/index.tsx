@@ -1,5 +1,6 @@
 // app/(tabs)/index.tsx
 // ✅ LANDING PAGE COMPLETA para Web + Home para Móvil
+// ✅ PARALLAX FUNCIONANDO CORRECTAMENTE
 
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -10,6 +11,14 @@ interface ActiveVehicle {
   id: string;
   plate: string;
   nickname: string | null;
+}
+
+// Componente helper para crear secciones con parallax
+interface ParallaxSectionProps {
+  children: React.ReactNode;
+  backgroundImage: string;
+  overlayColor?: string;
+  minHeight?: number;
 }
 
 export default function HomeScreen() {
@@ -36,6 +45,49 @@ export default function HomeScreen() {
     }
   }, []);
 
+  // ✅ CLAVE: CSS para parallax real
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // Añadir estilos CSS para parallax
+      const style = document.createElement('style');
+      style.innerHTML = `
+        .parallax-section {
+          position: relative;
+          min-height: 600px;
+          background-attachment: fixed !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          background-size: cover !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .parallax-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+        }
+        
+        .parallax-content {
+          position: relative;
+          z-index: 2;
+          max-width: 1000px;
+          width: 100%;
+          padding: 60px 20px;
+        }
+      `;
+      document.head.appendChild(style);
+      
+      return () => {
+        document.head.removeChild(style);
+      };
+    }
+  }, []);
+
   const checkAuth = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -58,6 +110,39 @@ export default function HomeScreen() {
       setLoading(false);
     }
   };
+
+  // ✅ COMPONENTE PARALLAX CORREGIDO - USA className en vez de style inline
+  const ParallaxSection: React.FC<ParallaxSectionProps> = ({ 
+    children, 
+    backgroundImage, 
+    overlayColor = 'rgba(0, 0, 0, 0.5)', 
+    minHeight = 600 
+    }) => {
+      if (Platform.OS !== 'web') {
+        return <View style={{ padding: 60 }}>{children}</View>;
+      }
+    return (
+      <div 
+        className="parallax-section"
+        style={{
+          backgroundImage: `url(${backgroundImage})`,
+          minHeight: `${minHeight}px`,
+        }}
+      >
+        <div 
+          className="parallax-overlay"
+          style={{
+            backgroundColor: overlayColor,
+          }} 
+        />
+        
+        <div className="parallax-content">
+          {children}
+        </div>
+      </div>
+    );
+  };
+
 
   // ========================================
   // VERSIÓN WEB - LANDING PAGE
@@ -118,47 +203,21 @@ export default function HomeScreen() {
       );
     }
 
-    // Si NO está logueado, mostrar landing page
-    return (
-      <ScrollView style={styles.landingContainer}>
-      {/* ========== HERO SECTION CON IMAGEN DE FONDO ========== */}
-      <View style={styles.heroSection}>
-        {/* ✅ IMAGEN DE FONDO - Solo en Web */}
-        {Platform.OS === 'web' && (
-          <>
-            {/* Capa 1: Imagen de fondo */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: 'url(/assets/images/hero-background.jpg)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                filter: 'brightness(0.6)',
-                zIndex: 0,
-              }}
-            />
-            
-            {/* Capa 2: Overlay azul */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'rgba(0, 122, 255, 0.75)',
-                zIndex: 1,
-              }}
-            />
-          </>
-        )}
-        
-        {/* ✅ CONTENIDO DEL HERO - Sobre las capas */}
-        <View style={{ zIndex: 2, alignItems: 'center', width: '100%', maxWidth: 800 }}>
+  // ========================================
+  // 🏠 LANDING PAGE CON PARALLAX
+  // ========================================
+
+  // Sino está logueado, muestra el landing page:
+  return (
+    <ScrollView style={styles.landingContainer}>
+      
+      {/* ========== 1. HERO SECTION ========== */}
+      <ParallaxSection 
+        backgroundImage="/hero-background.jpg"
+        overlayColor="rgba(0, 122, 255, 0.75)"
+        minHeight={700}
+      >
+        <View style={{ alignItems: 'center' }}>
           <Text style={styles.heroLogo}>🚗</Text>
           <Text style={styles.heroTitle}>DriveSkore</Text>
           <Text style={styles.heroSubtitle}>
@@ -173,14 +232,11 @@ export default function HomeScreen() {
             <View style={styles.qrPlaceholder}>
               <Text style={styles.qrIcon}>📱</Text>
               <Text style={styles.qrText}>Escanea para descargar</Text>
-              <Text style={styles.qrSubtext}>
-                O usa el enlace de descarga
-              </Text>
+              <Text style={styles.qrSubtext}>O usa el enlace de descarga</Text>
             </View>
             <TouchableOpacity 
               style={styles.downloadButton}
               onPress={() => {
-                // TODO: Reemplazar con tu link real de EAS Build o Play Store
                 alert('Link de descarga: Configura tu URL de EAS Build aquí');
               }}
             >
@@ -188,7 +244,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Botón Login */}
           <TouchableOpacity 
             style={styles.loginButton}
             onPress={() => router.push('/(auth)/login')}
@@ -196,80 +251,63 @@ export default function HomeScreen() {
             <Text style={styles.loginButtonText}>🔐 Acceder a Estadísticas</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ParallaxSection>
 
-        {/* QUÉ ES DRIVESKORE */}
+      {/* ========== 2. ¿QUÉ ES DRIVESKORE? ========== */}
+      <ParallaxSection 
+        backgroundImage="https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&q=80"
+        overlayColor="rgba(255, 255, 255, 0.92)"
+        minHeight={500}
+      >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>¿Qué es DriveSkore?</Text>
-          <Text style={styles.sectionText}>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
             DriveSkore es una aplicación móvil que permite a la comunidad evaluar el comportamiento 
             de conductores mediante reconocimiento de matrículas y GPS en tiempo real.
           </Text>
-          <Text style={styles.sectionText}>
+          <Text style={[styles.sectionText, { color: '#333' }]}>
             Nuestro objetivo es crear transparencia en torno al comportamiento al volante, 
             especialmente útil para carpooling y compartir vehículos de forma segura.
           </Text>
         </View>
+      </ParallaxSection>
 
-        {/* CÓMO FUNCIONA */}
+      {/* ========== 3. ¿CÓMO FUNCIONA? ========== */}
+      <ParallaxSection 
+        backgroundImage="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1920&q=80"
+        overlayColor="rgba(0, 0, 0, 0.75)"
+        minHeight={800}
+      >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>¿Cómo funciona?</Text>
+          <Text style={[styles.sectionTitle, { color: '#FFF' }]}>¿Cómo funciona?</Text>
           
-          <View style={styles.stepCard}>
-            <Text style={styles.stepNumber}>1</Text>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>📱 Descarga la App</Text>
-              <Text style={styles.stepText}>
-                Disponible para Android. Regístrate con tu email.
-              </Text>
+          {[
+            { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android. Regístrate con tu email.' },
+            { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tus matrículas para recibir valoraciones.' },
+            { num: '3', icon: '📸', title: 'Captura Eventos', text: 'Usa el botón flotante o mando Bluetooth.' },
+            { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa del 1 al 5 estrellas.' },
+            { num: '5', icon: '🏆', title: 'Gana Niveles', text: 'Sube de nivel y desbloquea logros.' },
+          ].map((step) => (
+            <View key={step.num} style={styles.stepCard}>
+              <Text style={styles.stepNumber}>{step.num}</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>{step.icon} {step.title}</Text>
+                <Text style={styles.stepText}>{step.text}</Text>
+              </View>
             </View>
-          </View>
-
-          <View style={styles.stepCard}>
-            <Text style={styles.stepNumber}>2</Text>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>🚗 Registra tu Vehículo</Text>
-              <Text style={styles.stepText}>
-                Añade tus matrículas para recibir valoraciones en tu perfil.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.stepCard}>
-            <Text style={styles.stepNumber}>3</Text>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>📸 Captura Eventos</Text>
-              <Text style={styles.stepText}>
-                Usa el botón flotante o mando Bluetooth mientras conduces para registrar comportamientos.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.stepCard}>
-            <Text style={styles.stepNumber}>4</Text>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>⭐ Valora Conductores</Text>
-              <Text style={styles.stepText}>
-                Puntúa del 1 al 5 estrellas y añade comentarios sobre la conducción observada.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.stepCard}>
-            <Text style={styles.stepNumber}>5</Text>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>🏆 Gana Niveles</Text>
-              <Text style={styles.stepText}>
-                Participa en la comunidad, sube de nivel y desbloquea logros.
-              </Text>
-            </View>
-          </View>
+          ))}
         </View>
+      </ParallaxSection>
 
-        {/* SORTEO DEL PILOTO */}
+      {/* ========== 4. SORTEO DEL PILOTO ========== */}
+      <ParallaxSection 
+        backgroundImage="https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=1920&q=80"
+        overlayColor="rgba(255, 193, 7, 0.9)"
+        minHeight={600}
+      >
         <View style={[styles.section, styles.sectionHighlight]}>
-          <Text style={styles.sectionTitle}>🎁 Sorteo del Piloto</Text>
-          <Text style={styles.sectionText}>
+          <Text style={[styles.sectionTitle, { color: '#000' }]}>🎁 Sorteo del Piloto</Text>
+          <Text style={[styles.sectionText, { color: '#000' }]}>
             Durante nuestro programa piloto en el campus, ¡puedes ganar premios!
           </Text>
           
@@ -286,13 +324,6 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View style={styles.prizeCard}>
-            <Text style={styles.prizeLabel}>🎥 Streaming en vivo:</Text>
-            <Text style={styles.prizeValue}>
-              El sorteo se realizará en directo para total transparencia
-            </Text>
-          </View>
-
           <TouchableOpacity 
             style={styles.ctaButton}
             onPress={() => router.push('/(auth)/login')}
@@ -300,132 +331,103 @@ export default function HomeScreen() {
             <Text style={styles.ctaButtonText}>Participar en el Sorteo</Text>
           </TouchableOpacity>
         </View>
+      </ParallaxSection>
 
-        {/* SISTEMA DE REFERIDOS */}
+      {/* ========== 5. SISTEMA DE REFERIDOS ========== */}
+      <ParallaxSection 
+        backgroundImage="https://images.unsplash.com/photo-1556761175-4b46a572b786?w=1920&q=80"
+        overlayColor="rgba(52, 152, 219, 0.9)"
+        minHeight={500}
+      >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👥 Invita a tus Amigos</Text>
-          <Text style={styles.sectionText}>
+          <Text style={[styles.sectionTitle, { color: '#FFF' }]}>👥 Invita a tus Amigos</Text>
+          <Text style={[styles.sectionText, { color: '#FFF' }]}>
             Cada usuario tiene un código único de invitación. Compártelo con amigos del campus 
             para que se unan a la comunidad.
           </Text>
 
           <View style={styles.benefitsList}>
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>✅</Text>
-              <Text style={styles.benefitText}>
-                Gana papeletas para el sorteo del piloto
-              </Text>
-            </View>
-
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>👑</Text>
-              <Text style={styles.benefitText}>
-                Conviértete en Embajador con 10 referidos
-              </Text>
-            </View>
-
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>🏆</Text>
-              <Text style={styles.benefitText}>
-                Desbloquea insignias especiales
-              </Text>
-            </View>
-
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>📊</Text>
-              <Text style={styles.benefitText}>
-                Sube posiciones en el ranking global
-              </Text>
-            </View>
+            {[
+              { icon: '✅', text: 'Gana papeletas para el sorteo del piloto' },
+              { icon: '👑', text: 'Conviértete en Embajador con 10 referidos' },
+              { icon: '🏆', text: 'Desbloquea insignias especiales' },
+              { icon: '📊', text: 'Sube posiciones en el ranking global' },
+            ].map((benefit, idx) => (
+              <View key={idx} style={styles.benefitItem}>
+                <Text style={styles.benefitIcon}>{benefit.icon}</Text>
+                <Text style={[styles.benefitText, { color: '#FFF' }]}>{benefit.text}</Text>
+              </View>
+            ))}
           </View>
         </View>
+      </ParallaxSection>
 
-        {/* FAQ */}
+      {/* ========== 6. FAQ ========== */}
+      <ParallaxSection 
+        backgroundImage="https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=1920&q=80"
+        overlayColor="rgba(255, 255, 255, 0.95)"
+        minHeight={700}
+      >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>❓ Preguntas Frecuentes</Text>
 
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Es gratis DriveSkore?</Text>
-            <Text style={styles.faqAnswer}>
-              Sí, DriveSkore es completamente gratuito para todos los usuarios.
-            </Text>
-          </View>
-
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Cómo se protege mi privacidad?</Text>
-            <Text style={styles.faqAnswer}>
-              Cumplimos con GDPR. Las fotos de perfil son opcionales, no mostramos matrículas 
-              en perfiles públicos, y puedes controlar qué información compartes.
-            </Text>
-          </View>
-
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Puedo valorar mi propia conducción?</Text>
-            <Text style={styles.faqAnswer}>
-              No. El sistema bloquea autoevaluaciones para garantizar valoraciones imparciales.
-            </Text>
-          </View>
-
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Cómo funciona el sistema de niveles?</Text>
-            <Text style={styles.faqAnswer}>
-              Subes de nivel participando activamente: dando valoraciones, invitando amigos, 
-              y contribuyendo a la comunidad. Hay 6 niveles desde Novato hasta Leyenda.
-            </Text>
-          </View>
-
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Qué hago si recibo una valoración injusta?</Text>
-            <Text style={styles.faqAnswer}>
-              Puedes reportar valoraciones mediante el sistema de ayuda. Cada caso se revisa 
-              individualmente. Además, las valoraciones extremas se promedian con el tiempo.
-            </Text>
-          </View>
-
-          <View style={styles.faqItem}>
-            <Text style={styles.faqQuestion}>¿Por qué necesito verificar mi email?</Text>
-            <Text style={styles.faqAnswer}>
-              La verificación de email ayuda a prevenir cuentas falsas y spam, manteniendo 
-              la comunidad segura y confiable.
-            </Text>
-          </View>
+          {[
+            {
+              q: '¿Es gratis DriveSkore?',
+              a: 'Sí, DriveSkore es completamente gratuito para todos los usuarios.'
+            },
+            {
+              q: '¿Cómo se protege mi privacidad?',
+              a: 'Cumplimos con GDPR. Las fotos de perfil son opcionales, no mostramos matrículas en perfiles públicos, y puedes controlar qué información compartes.'
+            },
+            {
+              q: '¿Puedo valorar mi propia conducción?',
+              a: 'No. El sistema bloquea autoevaluaciones para garantizar valoraciones imparciales.'
+            },
+            {
+              q: '¿Cómo funciona el sistema de niveles?',
+              a: 'Subes de nivel participando activamente: dando valoraciones, invitando amigos, y contribuyendo a la comunidad. Hay 6 niveles desde Novato hasta Leyenda.'
+            },
+          ].map((faq, idx) => (
+            <View key={idx} style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>{faq.q}</Text>
+              <Text style={styles.faqAnswer}>{faq.a}</Text>
+            </View>
+          ))}
         </View>
+      </ParallaxSection>
 
-        {/* FOOTER */}
-        <View style={styles.footer}>
-          <Text style={styles.footerTitle}>¿Listo para empezar?</Text>
-          <TouchableOpacity 
-            style={styles.footerButton}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Text style={styles.footerButtonText}>Crear Cuenta Gratis</Text>
+      {/* ========== FOOTER ========== */}
+      <View style={styles.footer}>
+        <Text style={styles.footerTitle}>¿Listo para empezar?</Text>
+        <TouchableOpacity 
+          style={styles.footerButton}
+          onPress={() => router.push('/(auth)/login')}
+        >
+          <Text style={styles.footerButtonText}>Crear Cuenta Gratis</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.footerLinks}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
+            <Text style={styles.footerLink}>Ayuda</Text>
           </TouchableOpacity>
-          
-          <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
-              <Text style={styles.footerLink}>Ayuda</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerSeparator}>•</Text>
-            <TouchableOpacity onPress={() => {
-              // TODO: Añadir link a política de privacidad
-              alert('Política de Privacidad');
-            }}>
-              <Text style={styles.footerLink}>Privacidad</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerSeparator}>•</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
-              <Text style={styles.footerLink}>Contacto</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.footerCopyright}>
-            © 2025 DriveSkore - TFM Universidad de Huelva
-          </Text>
+          <Text style={styles.footerSeparator}>•</Text>
+          <Text style={styles.footerLink}>Privacidad</Text>
+          <Text style={styles.footerSeparator}>•</Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
+            <Text style={styles.footerLink}>Contacto</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-    );
-  }
 
+        <Text style={styles.footerCopyright}>
+          © 2025 DriveSkore - TFM Universidad de Huelva
+        </Text>
+      </View>
+
+    </ScrollView>
+  );
+  }
+  
   // ========================================
   // VERSIÓN MÓVIL - HOME SCREEN
   // ========================================
@@ -701,11 +703,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     padding: 60,
     alignItems: 'center',
-    // ✅ Imagen de fondo local
-    ...(Platform.OS === 'web' && {
-      minHeight: 600,
-      position: 'relative',
-    }),
   },
   heroLogo: {
     fontSize: 80,
@@ -794,7 +791,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sectionHighlight: {
-    backgroundColor: '#FFF9E6',
+    backgroundColor: 'transparent',
   },
   sectionTitle: {
     fontSize: 36,
@@ -880,7 +877,7 @@ const styles = StyleSheet.create({
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     padding: 16,
     borderRadius: 8,
   },
