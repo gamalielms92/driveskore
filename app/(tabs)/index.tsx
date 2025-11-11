@@ -121,8 +121,44 @@ export default function HomeScreen() {
     // Si NO está logueado, mostrar landing page
     return (
       <ScrollView style={styles.landingContainer}>
-        {/* HERO SECTION */}
-        <View style={styles.heroSection}>
+      {/* ========== HERO SECTION CON IMAGEN DE FONDO ========== */}
+      <View style={styles.heroSection}>
+        {/* ✅ IMAGEN DE FONDO - Solo en Web */}
+        {Platform.OS === 'web' && (
+          <>
+            {/* Capa 1: Imagen de fondo */}
+            <div 
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: 'url(/assets/images/hero-background.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                filter: 'brightness(0.6)',
+                zIndex: 0,
+              }}
+            />
+            
+            {/* Capa 2: Overlay azul */}
+            <div 
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 122, 255, 0.75)',
+                zIndex: 1,
+              }}
+            />
+          </>
+        )}
+        
+        {/* ✅ CONTENIDO DEL HERO - Sobre las capas */}
+        <View style={{ zIndex: 2, alignItems: 'center', width: '100%', maxWidth: 800 }}>
           <Text style={styles.heroLogo}>🚗</Text>
           <Text style={styles.heroTitle}>DriveSkore</Text>
           <Text style={styles.heroSubtitle}>
@@ -160,6 +196,7 @@ export default function HomeScreen() {
             <Text style={styles.loginButtonText}>🔐 Acceder a Estadísticas</Text>
           </TouchableOpacity>
         </View>
+      </View>
 
         {/* QUÉ ES DRIVESKORE */}
         <View style={styles.section}>
