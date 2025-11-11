@@ -213,7 +213,7 @@ export default function HomeScreen() {
       
       {/* ========== 1. HERO SECTION ========== */}
       <ParallaxSection 
-        backgroundImage="/hero-background.jpg"
+        backgroundImage="/hero.jpg"
         overlayColor="rgba(0, 122, 255, 0.75)"
         minHeight={700}
       >
@@ -248,7 +248,7 @@ export default function HomeScreen() {
             style={styles.loginButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.loginButtonText}>🔐 Acceder a Estadísticas</Text>
+            <Text style={styles.loginButtonText}>🔐 Login</Text>
           </TouchableOpacity>
         </View>
       </ParallaxSection>
@@ -274,7 +274,7 @@ export default function HomeScreen() {
 
       {/* ========== 3. ¿CÓMO FUNCIONA? ========== */}
       <ParallaxSection 
-        backgroundImage="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1920&q=80"
+        backgroundImage="/howitwork.jpg"
         overlayColor="rgba(0, 0, 0, 0.75)"
         minHeight={800}
       >
@@ -301,7 +301,7 @@ export default function HomeScreen() {
 
       {/* ========== 4. SORTEO DEL PILOTO ========== */}
       <ParallaxSection 
-        backgroundImage="https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=1920&q=80"
+        backgroundImage="/raffle.jpg"
         overlayColor="rgba(255, 193, 7, 0.9)"
         minHeight={600}
       >
@@ -335,7 +335,7 @@ export default function HomeScreen() {
 
       {/* ========== 5. SISTEMA DE REFERIDOS ========== */}
       <ParallaxSection 
-        backgroundImage="https://images.unsplash.com/photo-1556761175-4b46a572b786?w=1920&q=80"
+        backgroundImage="/referral.jpg"
         overlayColor="rgba(52, 152, 219, 0.9)"
         minHeight={500}
       >
@@ -397,33 +397,66 @@ export default function HomeScreen() {
         </View>
       </ParallaxSection>
 
-      {/* ========== FOOTER ========== */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>¿Listo para empezar?</Text>
+      {/* ========== FOOTER CON IMAGEN ========== */}
+    <div style={{
+      position: 'relative',
+      height: '400px',  // ✅ Altura fija pequeña
+      width: '100%',    // ✅ Ancho completo
+      padding: '80px 20px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundImage: 'url("/header.jpg")',
+      backgroundSize: 'cover',
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'center',
+    }}>
+      {/* Overlay azul */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 122, 255, 0.85)',
+        zIndex: 1,
+      }} />
+      
+      {/* Contenido */}
+      <div style={{
+        position: 'relative',
+        zIndex: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        maxWidth: '800px',
+      }}>
+        <Text style={[styles.footerTitle, { color: '#FFF' }]}>¿Listo para empezar?</Text>
         <TouchableOpacity 
-          style={styles.footerButton}
+          style={[styles.footerButton, { backgroundColor: '#FFF', borderWidth: 0 }]}
           onPress={() => router.push('/(auth)/login')}
         >
-          <Text style={styles.footerButtonText}>Crear Cuenta Gratis</Text>
+          <Text style={[styles.footerButtonText, { color: '#007AFF' }]}>Crear Cuenta Gratis</Text>
         </TouchableOpacity>
         
         <View style={styles.footerLinks}>
           <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
-            <Text style={styles.footerLink}>Ayuda</Text>
+            <Text style={[styles.footerLink, { color: '#FFF' }]}>Ayuda</Text>
           </TouchableOpacity>
-          <Text style={styles.footerSeparator}>•</Text>
-          <Text style={styles.footerLink}>Privacidad</Text>
-          <Text style={styles.footerSeparator}>•</Text>
+          <Text style={[styles.footerSeparator, { color: 'rgba(255,255,255,0.6)' }]}>•</Text>
+          <Text style={[styles.footerLink, { color: '#FFF' }]}>Privacidad</Text>
+          <Text style={[styles.footerSeparator, { color: 'rgba(255,255,255,0.6)' }]}>•</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
-            <Text style={styles.footerLink}>Contacto</Text>
+            <Text style={[styles.footerLink, { color: '#FFF' }]}>Contacto</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footerCopyright}>
-          © 2025 DriveSkore - TFM Universidad de Huelva
+        <Text style={[styles.footerCopyright, { color: 'rgba(255,255,255,0.9)' }]}>
+          © 2025 DriveSkore - TFM Ingeniería Informática - Universidad de Huelva
         </Text>
-      </View>
-
+      </div>
+    </div>
     </ScrollView>
   );
   }
@@ -728,9 +761,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   downloadSection: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 30,
+    gap: 20,
     marginBottom: 20,
   },
   qrPlaceholder: {
@@ -765,6 +798,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
+    width: 250,
   },
   downloadButtonText: {
     fontSize: 18,
