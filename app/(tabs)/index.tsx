@@ -222,8 +222,8 @@ export default function HomeScreen() {
             src="/logo.svg"
             alt="DriveSkore Logo"
             style={{
-              width: '1000px',
-              maxWidth: 'auto',
+              width: 'auto',
+              maxWidth: '1000px',
               height: 'auto',
               marginBottom: '24px',
               filter: 'brightness(0) invert(1)',  // Hace el logo blanco
