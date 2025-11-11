@@ -701,6 +701,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     padding: 60,
     alignItems: 'center',
+    // ✅ Imagen de fondo local
+    ...(Platform.OS === 'web' && {
+      minHeight: 600,
+      position: 'relative',
+    }),
   },
   heroLogo: {
     fontSize: 80,
