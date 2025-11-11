@@ -222,7 +222,7 @@ export default function HomeScreen() {
             src="/logo.svg"
             alt="DriveSkore Logo"
             style={{
-              width: 'auto',
+              width: '100%',
               maxWidth: '1000px',
               height: 'auto',
               marginBottom: '24px',
@@ -948,7 +948,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 24,
-    width: 400,
+    maxWidth: 400,
     alignSelf: 'center',
   },
   ctaButtonText: {
