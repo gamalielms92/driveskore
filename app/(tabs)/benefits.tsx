@@ -256,8 +256,8 @@ export default function BenefitsScreen() {
       locked.push({
         id: 'parking',
         icon: '🅿️',
-        title: 'Parking Gratis Zona Azul',
-        description: '1h gratis al día',
+        title: 'Zona Azul Gratis',
+        description: '1 día completo',
         status: 'coming_soon',
         action: 'Proximamente'
       });

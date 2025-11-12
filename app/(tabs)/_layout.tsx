@@ -98,7 +98,7 @@ export default function TabLayout() {
         options={{
           title: 'Referidos',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👥</Text>,
-          headerTitle: '👥 Invita Amigos',
+          headerTitle: '👥 Invita a amigos',
           href: Platform.OS === 'web' ? undefined : null,
         }}
       />

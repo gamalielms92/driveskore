@@ -145,7 +145,7 @@ export default function RaffleScreen() {
           </View>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Duración:</Text>
-            <Text style={styles.prizeValue}>El plazo acabará el 7 de Diciembre🎥</Text>
+            <Text style={styles.prizeValue}>El plazo acabará el 7 de Diciembre</Text>
           </View>
         </View>
         
@@ -154,7 +154,7 @@ export default function RaffleScreen() {
           <Text style={styles.rulesText}>
             Solo los invitados que verifiquen su email se contabilizarán para el sorteo.
 
-            Para estar al día sobre actualizaciones y novedades, visita https://driveskore.vercel.app/
+            Para estar al día sobre actualizaciones y novedades, visita: https://driveskore.vercel.app/
           </Text>
         </View>
       </View>
@@ -170,7 +170,7 @@ export default function RaffleScreen() {
           style={styles.motivationButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.motivationButtonText}>Invitar más Amig@s</Text>
+          <Text style={styles.motivationButtonText}>Invitar más amig@s</Text>
         </TouchableOpacity>
       </View>
 
@@ -183,7 +183,7 @@ export default function RaffleScreen() {
           <Text style={styles.ctaItem}>2. Tus amig@s se registran con el código</Text>
           <Text style={styles.ctaItem}>3. Verifican su email ✅</Text>
           <Text style={styles.ctaItem}>4. ¡Ganas 1 entrada al sorteo por cada amig@!</Text>
-          <Text style={styles.ctaItem}>5. Con 10 amig@s → logro Embajador 👑 + 5 entradas extra</Text>
+          <Text style={styles.ctaItem}>5. Con 10 amig@s → logro Embajador 👑 + 5 papeletas extra</Text>
         </View>
       </View>
 

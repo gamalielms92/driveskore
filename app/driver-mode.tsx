@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -420,8 +421,11 @@ const updateStats = async () => {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerIcon}>🚗</Text>
-          <Text style={styles.title}>Modo Conducción</Text>
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>
             Activa el seguimiento mientras conduces
           </Text>
@@ -672,6 +676,12 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#666',
+  },
+  logoImage: {
+    width: 280,
+    height: 80,
+    marginTop: 20,
+    alignSelf: 'center',
   },
   startButton: {
     backgroundColor: '#34C759',

@@ -4,7 +4,7 @@
 
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 
 interface ActiveVehicle {
@@ -512,8 +512,11 @@ export default function HomeScreen() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>🚗</Text>
-          <Text style={styles.title}>DriveSkore</Text>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>Evalúa conductores, mejora las carreteras</Text>
         </View>
 
@@ -526,43 +529,46 @@ export default function HomeScreen() {
               <Text style={styles.activeVehicleNickname}>{activeVehicle.nickname}</Text>
             )}
             <Text style={styles.activeVehicleSubtext}>
-              Apareces en búsquedas con esta matrícula
+              Las valoraciones irán a tu perfil de conductor
             </Text>
           </View>
         )}
 
-        {/* Acciones Rápidas */}
+        {/* BOTÓN MODO CONDUCTOR */}
+        <TouchableOpacity
+          style={styles.drivingModeButton}
+          onPress={() => router.push('/driver-mode')}
+        >
+          <Text style={styles.drivingModeIcon}>🚗</Text>
+          <View style={styles.drivingModeContent}>
+            <Text style={styles.drivingModeTitle}>MODO CONDUCCIÓN</Text>
+            <Text style={styles.drivingModeSubtitle}>
+              Activa GPS y botón de captura
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Acciones principales */}
         <View style={styles.actionsGrid}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => router.push('/driver-mode')}
+            onPress={() => router.push('/raffle')}
           >
-            <Text style={styles.actionIcon}>🚗</Text>
-            <Text style={styles.actionTitle}>Modo Conductor</Text>
+            <Text style={styles.actionIcon}>📣</Text>
+            <Text style={styles.actionTitle}>¡Sorteo!</Text>
             <Text style={styles.actionDescription}>
-              Activa tracking y captura
+              Participa con el sistema de referidos
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/pending')}
+            onPress={() => router.push('/referrals')}
           >
-            <Text style={styles.actionIcon}>⏳</Text>
-            <Text style={styles.actionTitle}>Eventos</Text>
+            <Text style={styles.actionIcon}>👥</Text>
+            <Text style={styles.actionTitle}>Invitar</Text>
             <Text style={styles.actionDescription}>
-              Valora capturas pendientes
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/search')}
-          >
-            <Text style={styles.actionIcon}>🔍</Text>
-            <Text style={styles.actionTitle}>Buscar</Text>
-            <Text style={styles.actionDescription}>
-              Consulta conductores
+              Construyamos la comunidad
             </Text>
           </TouchableOpacity>
         </View>
@@ -576,7 +582,7 @@ export default function HomeScreen() {
           <View style={styles.vehicleManagementContent}>
             <Text style={styles.vehicleManagementTitle}>Gestionar Vehículos</Text>
             <Text style={styles.vehicleManagementDescription}>
-              Añade o activa tus matrículas
+              Añade o activa tus vehículos
             </Text>
           </View>
           <Text style={styles.vehicleManagementArrow}>→</Text>
@@ -589,14 +595,14 @@ export default function HomeScreen() {
             1. Activa el Modo Conductor cuando empieces a circular{'\n'}
             2. Captura eventos con el botón flotante o mando Bluetooth{'\n'}
             3. Valora los eventos pendientes cuando termines{'\n'}
-            4. Consulta perfiles de conductores antes de compartir vehículo
+            4. Ayuda a crear una comunidad de conductores responsables
           </Text>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Versión 1.0.0 - Piloto Campus UHU
+            DriveSkore - Conducción colaborativa y segura
           </Text>
         </View>
       </View>
@@ -628,15 +634,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  logo: {
-    fontSize: 60,
+  logoImage: {
+    width: 280,
+    height: 80,
     marginBottom: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 5,
   },
   subtitle: {
     fontSize: 14,
@@ -740,6 +741,36 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#007AFF',
     fontWeight: 'bold',
+  },
+  drivingModeButton: {
+    backgroundColor: '#007AFF',
+    padding: 25,
+    borderRadius: 20,
+    marginBottom: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  drivingModeIcon: {
+    fontSize: 50,
+    marginRight: 20,
+  },
+  drivingModeContent: {
+    flex: 1,
+  },
+  drivingModeTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 5,
+  },
+  drivingModeSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
   },
   infoCard: {
     backgroundColor: '#E3F2FD',

@@ -340,43 +340,17 @@ export default function RateScreen() {
               numRatings={driverProfile?.num_ratings || 0}
               vehicles={vehicles}
               size="medium"
-              showVehicles={true}
+              showVehicles={false}
               showBadges={true}
             />
-            
-            {currentVehicle && (
-              <View style={styles.currentVehicleInfo}>
-                <Text style={styles.currentVehicleText}>
-                  🚗 Conduciendo: {currentVehicle.brand} {currentVehicle.model}
-                </Text>
-                <Text style={styles.currentVehiclePlate}>
-                  Matrícula: {currentVehicle.plate}
-                </Text>
-              </View>
-            )}
           </View>
         ) : (
           <View style={styles.unknownDriverSection}>
             <Text style={styles.plateLabel}>Evaluando a:</Text>
             <Text style={styles.plate}>{displayPlate}</Text>
-            
-            {plateValidation.isValid && (
-              <View style={styles.plateInfo}>
-                <Text style={styles.plateInfoText}>
-                  📋 {plateValidation.format === 'current' 
-                    ? 'Formato actual' 
-                    : 'Formato provincial'}
-                </Text>
-              </View>
-            )}
-            
-            <View style={styles.unknownDriverInfo}>
-              <Text style={styles.unknownDriverIcon}>👤</Text>
               <Text style={styles.unknownDriverText}>
-                Este conductor no tiene perfil en DriveSkore.{'\n'}
-                Tu evaluación ayudará a crear su reputación.
+                Este conductor no tiene perfil en DriveSkore.
               </Text>
-            </View>
           </View>
         )}
 

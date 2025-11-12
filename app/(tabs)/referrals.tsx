@@ -215,7 +215,7 @@ https://driveskore.vercel.app/
           </View>
           <Text style={styles.progressText}>
             {remaining > 0 
-              ? `${remaining} más para Badge Embajador`
+              ? `${remaining} más para obtener el logro "Embajador"`
               : '¡Ya eres Embajador!'
             }
           </Text>
@@ -249,7 +249,7 @@ https://driveskore.vercel.app/
         <View style={styles.raffleContent}>
           <Text style={styles.raffleIcon}>🎁</Text>
           <View style={styles.raffleInfo}>
-            <Text style={styles.raffleTitle}>Ver Sorteo del Piloto</Text>
+            <Text style={styles.raffleTitle}>Ver Sorteo</Text>
             <Text style={styles.raffleSubtitle}>
               Tus papeletas y premio del sorteo
             </Text>
@@ -322,7 +322,7 @@ https://driveskore.vercel.app/
           <Text style={styles.emptyIcon}>👥</Text>
           <Text style={styles.emptyTitle}>Aún no has invitado a nadie</Text>
           <Text style={styles.emptyText}>
-            Comparte tu código con amig@s para empezar a acumular papeletas para el sorteo exclusivo del piloto
+            Comparte tu código con amig@s para empezar a acumular papeletas para el sorteo y lo más importante, hacer realidad que este proyecto siga adelante.
           </Text>
         </View>
       )}

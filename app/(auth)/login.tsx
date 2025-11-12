@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import { Analytics } from '../../src/services/Analytics';
 import EventCaptureService from '../../src/services/EventCaptureService';
@@ -110,8 +110,11 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.logo}>🚗</Text>
-        <Text style={styles.title}>DriveSkore</Text>
+        <Image
+          source={require('../../assets/images/logo.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         <Text style={styles.subtitle}>
           {isSignUp ? 'Crea tu cuenta' : 'Evalúa conductores, mejora las carreteras'}
         </Text>
@@ -119,6 +122,7 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#999"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -129,6 +133,7 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder="Contraseña"
+          placeholderTextColor="#999"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -140,6 +145,7 @@ export default function LoginScreen() {
           <TextInput
             style={[styles.input, styles.referralInput]}
             placeholder="Código de invitación (opcional)"
+            placeholderTextColor="#999"
             value={referralCode}
             onChangeText={(text) => setReferralCode(text.toUpperCase())}
             autoCapitalize="characters"
@@ -185,17 +191,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  logo: {
-    fontSize: 80,
-    textAlign: 'center',
+  logoImage: {
+    width: 280,
+    height: 80,
     marginBottom: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#007AFF',
+    alignSelf: 'center',
   },
   subtitle: {
     fontSize: 16,
