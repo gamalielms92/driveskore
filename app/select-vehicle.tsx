@@ -166,7 +166,7 @@ export default function SelectVehicleScreen() {
     } else {
       Alert.alert(
         'Sin vehículo activo',
-        '¿Quieres continuar sin activar ningún vehículo?\n\nSi no activas un vehículo, las valoraciones que recibas irán al perfil genérico de la matrícula.',
+        '¿Continuar sin activar ningún vehículo?\n\nSi no activas ningún vehículo, no podrás recibir ni enviar valoraciones.',
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Continuar', onPress: () => router.replace('/(tabs)') }
@@ -213,7 +213,7 @@ export default function SelectVehicleScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>🚗 Mis Vehículos</Text>
+        <Text style={styles.title}>🏢 Mi Garaje</Text>
         <Text style={styles.subtitle}>
           Activa el vehículo que vas a conducir para que las valoraciones vayan a tu perfil.
         </Text>
@@ -221,10 +221,11 @@ export default function SelectVehicleScreen() {
         {/* Lista de vehículos */}
         {vehicles.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🚗</Text>
+            <Text style={styles.emptyIcon}>🚗 🏍️ </Text>
+            <Text style={styles.emptyIcon}>🚲 🛴 </Text>
             <Text style={styles.emptyText}>No tienes vehículos registrados</Text>
             <Text style={styles.emptySubtext}>
-              Añade tu vehículo para recibir valoraciones en tu perfil de conductor
+              Añade tu vehículo para recibir valoraciones en tu perfil
             </Text>
           </View>
         ) : (
@@ -572,7 +573,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   continueButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#FFFFFF',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   continueButtonText: {
-    color: 'white',
+    color: 'black',
     fontSize: 16,
     fontWeight: 'bold',
   },

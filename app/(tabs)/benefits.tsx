@@ -475,9 +475,9 @@ export default function BenefitsScreen() {
       {/* CTA final */}
       <View style={styles.ctaCard}>
         <Text style={styles.ctaIcon}>🚀</Text>
-        <Text style={styles.ctaTitle}>¿Quieres más beneficios?</Text>
+        <Text style={styles.ctaTitle}>¿Deseas ventajas reales?</Text>
         <Text style={styles.ctaDescription}>
-          Activa el Modo Conductor, conduce de forma segura y cortés, y mejora tu score para desbloquear más ventajas
+          Comparte la APP con todos tus conocidos y en redes sociales 🔥 ¡Viralicemos! 🔥 Con la voluntad de todos podemos conseguirlo.
         </Text>
       </View>
 
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#007AFF',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 30,
   },
   headerTitle: {

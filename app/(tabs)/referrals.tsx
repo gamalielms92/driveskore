@@ -181,13 +181,7 @@ https://driveskore.vercel.app/
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>← Volver</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>🎯 Invita Amig@s</Text>
+        <Text style={styles.title}>🎯 Invita amig@s</Text>
         <Text style={styles.subtitle}>
           Comparte tu código y gana papeletas del sorteo
         </Text>
@@ -349,7 +343,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#007AFF',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 30,
   },
   backButton: {

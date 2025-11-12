@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 // ✅ IMPORTANTE: Usar los componentes de Settings, NO los Control
-import ABShutterSettings from '../../src/components/CaptureSettingsControls/ABShutterSettings';
-import FloatingButtonSettings from '../../src/components/CaptureSettingsControls/FloatingButtonSettings';
+import ABShutterSettings from '../src/components/CaptureSettingsControls/ABShutterSettings';
+import FloatingButtonSettings from '../src/components/CaptureSettingsControls/FloatingButtonSettings';
 
 export default function CaptureSettingsScreen() {
   const router = useRouter();

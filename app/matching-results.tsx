@@ -122,11 +122,15 @@ export default function MatchingResultsScreen() {
   const handleSelectCandidate = async (candidate: EnrichedCandidate) => {
     console.log('👆 [MatchingResults] Candidate seleccionado:', candidate.plate);
     
-    const driverName = candidate.userProfile?.full_name || candidate.plate;
+    const driverName = candidate.userProfile?.full_name || 'Conductor';
+    const activeVehicle = candidate.vehicles?.find(v => v.plate === candidate.plate);
+    const vehicleInfo = activeVehicle?.brand && activeVehicle?.model 
+      ? `${activeVehicle.brand} ${activeVehicle.model}`
+      : 'Vehículo';
     
-    Alert.alert(
-      '✅ Confirmar Conductor',
-      `¿Evaluar a ${driverName}?\n\nMatrícula: ${candidate.plate}\nConfianza: ${candidate.match_score}/100`,
+      Alert.alert(
+        '✅ Confirmar Conductor',
+        `¿Evaluar a este conductor?\n\n${vehicleInfo}\nConfianza: ${candidate.match_score}/100`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {

@@ -1,14 +1,16 @@
 // app/conductor/[plate].tsx
 
-import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import WeeklyRankingService from '../../src/services/WeeklyRankingService';
 import {
   calculateAttributeStats,
   DRIVING_ATTRIBUTES,
   getDriverRank,
   getEarnedBadges,
+  getUserLevel,
   type AttributeStats,
   type UserStats
 } from '../../src/utils/gamification';
@@ -19,6 +21,13 @@ interface Rating {
   comment: string;
   created_at: string;
   plate: string;
+  rater_name: string; 
+  respects_lights?: boolean | null;
+  keeps_distance?: boolean | null;
+  uses_signals?: boolean | null;
+  yields_right?: boolean | null;
+  appropriate_speed?: boolean | null;
+  parks_well?: boolean | null;
 }
 
 interface UserProfile {
@@ -65,10 +74,14 @@ export default function ConductorProfileScreen() {
   const [vehicleProfiles, setVehicleProfiles] = useState<VehicleProfile[]>([]);
   const [allRatings, setAllRatings] = useState<Rating[]>([]);
   const [aggregatedProfile, setAggregatedProfile] = useState<VehicleProfile | null>(null);
-
-  useEffect(() => {
-    loadPersonData();
-  }, [plate]);
+  const [userRatingsGivenCount, setUserRatingsGivenCount] = useState(0);
+  const [globalPosition, setGlobalPosition] = useState<number | null>(null);
+  
+  useFocusEffect(
+    useCallback(() => {
+      loadPersonData();
+    }, [plate])
+  );
 
   const loadPersonData = async () => {
     try {
@@ -124,6 +137,21 @@ export default function ConductorProfileScreen() {
 
       setVehicles(userVehicles || []);
 
+      // Cargar cuántas valoraciones ha hecho este usuario
+      const { count: userRatingsGiven } = await supabase
+      .from('ratings')
+      .select('*', { count: 'exact', head: true })
+      .eq('rater_id', userId);
+      setUserRatingsGivenCount(userRatingsGiven || 0);
+
+      // Cargar posición global
+      try {
+        const position = await WeeklyRankingService.getUserGlobalPosition(userId);
+        setGlobalPosition(position === 9999 ? null : position);
+      } catch (error) {
+        console.error('Error cargando posición global:', error);
+      }
+
       // 4. Cargar perfiles de valoraciones de cada vehículo
       const profiles: VehicleProfile[] = [];
       let allUserRatings: Rating[] = [];
@@ -147,22 +175,67 @@ export default function ConductorProfileScreen() {
           });
         }
 
-        // Cargar valoraciones del vehículo
-        const { data: ratings } = await supabase
-          .from('ratings')
-          .select('*')
-          .eq('plate', vehicle.plate)
-          .order('created_at', { ascending: false });
+        // Cargar valoraciones del vehículo con nombre del valorador
+        // Cargar valoraciones del vehículo (SIN nombre del valorador por ahora)
+      const { data: ratings, error: ratingsError } = await supabase
+      .from('ratings')
+      .select('*')
+      .eq('plate', vehicle.plate)
+      .order('created_at', { ascending: false });
 
-        if (ratings) {
-          allUserRatings = [...allUserRatings, ...ratings];
-        }
-      }
+      console.log('📊 Ratings cargadas:', ratings?.length || 0);
+      console.log('❌ Error:', ratingsError);
+
+      if (ratings) {
+      // Cargar nombres de valoradores después (uno por uno si hace falta)
+      const ratingsWithNames = await Promise.all(
+        ratings.map(async (r) => {
+          const { data: raterProfile } = await supabase
+            .from('user_profiles')
+            .select('full_name')
+            .eq('user_id', r.rater_id)
+            .maybeSingle();
+          
+          return {
+            ...r,
+            rater_name: raterProfile?.full_name || 'Usuario anónimo'
+          };
+        })
+      );
+
+      console.log('✅ Ratings procesadas:', ratingsWithNames.length);
+      allUserRatings = [...allUserRatings, ...ratingsWithNames];
+      }}
 
       setVehicleProfiles(profiles);
       setAllRatings(allUserRatings.sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       ));
+
+      for (const vehicle of userVehicles || []) {
+        console.log('🔍 Cargando ratings para vehículo:', vehicle.plate);
+        
+        // Cargar valoraciones del vehículo con nombre del valorador
+        const { data: ratings, error: ratingsError } = await supabase
+          .from('ratings')
+          .select('*, rater:user_profiles!ratings_rater_id_fkey(full_name)')
+          .eq('plate', vehicle.plate)
+          .order('created_at', { ascending: false });
+      
+        console.log('📊 Ratings cargadas:', ratings?.length || 0);
+        console.log('❌ Error:', ratingsError);
+        
+        if (ratings) {
+          const ratingsWithNames = ratings.map(r => ({
+            ...r,
+            rater_name: r.rater?.full_name || 'Usuario anónimo'
+          }));
+          console.log('✅ Ratings procesadas:', ratingsWithNames.length);
+          allUserRatings = [...allUserRatings, ...ratingsWithNames];
+        }
+      }
+      
+      console.log('📦 Total allUserRatings acumuladas:', allUserRatings.length);
 
       // 5. Agregar todas las valoraciones de todos los vehículos
       const aggregated = aggregateProfiles(profiles);
@@ -274,7 +347,7 @@ export default function ConductorProfileScreen() {
   const driverRank = getDriverRank(average);
 
   const userStats: UserStats = {
-    ratingsGiven: 0,
+    ratingsGiven: userRatingsGivenCount,
     ratingsReceived: aggregatedProfile.num_ratings,
     averageScore: aggregatedProfile.num_ratings > 0 
       ? aggregatedProfile.total_score / aggregatedProfile.num_ratings 
@@ -284,6 +357,7 @@ export default function ConductorProfileScreen() {
   };
   
   const earnedBadges = getEarnedBadges(userStats);
+  const userLevel = getUserLevel(userRatingsGivenCount);
   const attributeStats: AttributeStats = calculateAttributeStats(
     aggregatedProfile.positive_attributes,
     aggregatedProfile.total_votes
@@ -407,7 +481,7 @@ export default function ConductorProfileScreen() {
 
                 {vehicle.plate === plate && (
                   <View style={styles.currentVehicleBadge}>
-                    <Text style={styles.currentVehicleText}>👁️ Viendo ahora</Text>
+                    <Text style={styles.currentVehicleText}>👁️ Mostrado para recibir valoraciones</Text>
                   </View>
                 )}
               </View>
@@ -415,6 +489,25 @@ export default function ConductorProfileScreen() {
           })}
         </View>
       )}
+      
+      {/* Actividad  en driveskore */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>📊 Actividad en DriveSkore</Text>
+        
+        {/* Nivel */}
+        <View style={styles.levelDisplayCard}>
+          <Text style={styles.levelDisplayIcon}>{userLevel.icon}</Text>
+          <View style={styles.levelDisplayInfo}>
+            <Text style={styles.levelDisplayTitle}>
+              Nivel {userLevel.level}: {userLevel.name}
+            </Text>
+            <Text style={styles.levelDisplayDesc}>{userLevel.description}</Text>
+            <Text style={styles.levelDisplayCount}>
+              {userRatingsGivenCount} valoraciones realizadas
+            </Text>
+          </View>
+        </View>
+      </View>
 
       {/* Rango del conductor */}
       <View style={[styles.rankCard, { backgroundColor: driverRank.color + '15' }]}>
@@ -432,10 +525,18 @@ export default function ConductorProfileScreen() {
         <Text style={styles.scoreValue}>{average.toFixed(1)}</Text>
         <Text style={styles.scoreStars}>{renderStars(Math.round(average))}</Text>
         <Text style={styles.scoreLabel}>
-          Basado en {aggregatedProfile.num_ratings} valoración{aggregatedProfile.num_ratings !== 1 ? 'es' : ''}
+          Basado en {aggregatedProfile.num_ratings} voto{aggregatedProfile.num_ratings !== 1 ? 's' : ''}
           {vehicles.length > 1 && ` en ${vehicles.length} vehículos`}
         </Text>
       </View>
+
+        {/* 🆕 POSICIÓN GLOBAL */}
+        {globalPosition && (
+          <View style={styles.globalPositionCard}>
+            <Text style={styles.globalPositionTitle}>🌍 Posición Global</Text>
+            <Text style={styles.globalPositionNumber}>#{globalPosition}</Text>
+          </View>
+        )}
 
       {/* Insignias */}
       {earnedBadges.length > 0 && (
@@ -453,64 +554,85 @@ export default function ConductorProfileScreen() {
         </View>
       )}
 
-      {/* Todos los atributos */}
-      {aggregatedProfile.total_votes > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📊 Estadísticas Detalladas</Text>
-          {DRIVING_ATTRIBUTES.map(attr => {
-            const stat = attributeStats[attr.id];
-            if (!stat) return null;
-            
-            const negativeVotes = aggregatedProfile.total_votes - stat.votes;
-            const negativePercentage = aggregatedProfile.total_votes > 0 
-              ? Math.round((negativeVotes / aggregatedProfile.total_votes) * 100) 
-              : 0;
-            
-            return (
-              <View key={attr.id} style={styles.attributeBidirectionalRow}>
-                <View style={styles.attributeLabelContainer}>
-                  <Text style={styles.attributeIcon}>{attr.icon}</Text>
-                  <Text style={styles.attributeLabel}>{attr.label}</Text>
-                </View>
+{/* Calcular votos reales desde ratings */}
+{(() => {
+  // Contar votos por atributo directamente desde allRatings
+// 🔍 DEBUG - Ver qué datos tenemos
+console.log('=== DEBUG ESTADÍSTICAS ===');
+console.log('Total ratings:', allRatings.length);
+console.log('Primera rating:', allRatings[0]);
+console.log('DRIVING_ATTRIBUTES[0].id:', DRIVING_ATTRIBUTES[0]?.id);
 
-                <View style={styles.bidirectionalBarContainer}>
-                  <View style={styles.negativeBarSection}>
-                    <Text style={styles.negativePercentageText}>{negativePercentage}%</Text>
-                    <View style={styles.negativeBarWrapper}>
-                      <View 
-                        style={[
-                          styles.negativeBar,
-                          { width: `${negativePercentage}%` }
-                        ]}
-                      />
-                    </View>
-                  </View>
+  const realAttributeVotes = DRIVING_ATTRIBUTES.map(attr => {
+    const positive = allRatings.filter(r => r[attr.id as keyof Rating] === true).length;
+    const negative = allRatings.filter(r => r[attr.id as keyof Rating] === false).length;
+    const total = positive + negative;
+    
+    return {
+      id: attr.id,
+      label: attr.label,
+      icon: attr.icon,
+      positive,
+      negative,
+      total,
+      percentage: total > 0 ? Math.round((positive / total) * 100) : 0
+    };
+  }).filter(stat => stat.total > 0); // Solo mostrar atributos con votos
 
-                  <View style={styles.centerDivider} />
+  if (realAttributeVotes.length === 0) return null;
 
-                  <View style={styles.positiveBarSection}>
-                    <View style={styles.positiveBarWrapper}>
-                      <View 
-                        style={[
-                          styles.positiveBar,
-                          { width: `${stat.percentage}%` }
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.positivePercentageText}>{stat.percentage}%</Text>
-                  </View>
-                </View>
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>📊 Estadísticas Detalladas</Text>
+      {realAttributeVotes.map(stat => (
+        <View key={stat.id} style={styles.attributeBidirectionalRow}>
+          <View style={styles.attributeLabelContainer}>
+            <Text style={styles.attributeIcon}>{stat.icon}</Text>
+            <Text style={styles.attributeLabel}>{stat.label}</Text>
+          </View>
 
-                <View style={styles.votesCounter}>
-                  <Text style={styles.votesText}>
-                    {negativeVotes} ❌ | ✅ {stat.votes}
-                  </Text>
-                </View>
+          <View style={styles.bidirectionalBarContainer}>
+            {/* Lado Negativo */}
+            <View style={styles.negativeBarSection}>
+              <Text style={styles.negativePercentageText}>
+                {Math.round((stat.negative / stat.total) * 100)}%
+              </Text>
+              <View style={styles.negativeBarWrapper}>
+                <View 
+                  style={[
+                    styles.negativeBar,
+                    { width: `${(stat.negative / stat.total) * 100}%` }
+                  ]}
+                />
               </View>
-            );
-          })}
+            </View>
+
+            <View style={styles.centerDivider} />
+
+            {/* Lado Positivo */}
+            <View style={styles.positiveBarSection}>
+              <View style={styles.positiveBarWrapper}>
+                <View 
+                  style={[
+                    styles.positiveBar,
+                    { width: `${stat.percentage}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.positivePercentageText}>{stat.percentage}%</Text>
+            </View>
+          </View>
+
+          <View style={styles.votesCounter}>
+            <Text style={styles.votesText}>
+              {stat.negative} ❌ | ✅ {stat.positive}
+            </Text>
+          </View>
         </View>
-      )}
+      ))}
+    </View>
+  );
+})()}
 
       {/* Distribución de puntuaciones */}
       <View style={styles.section}>
@@ -556,9 +678,21 @@ export default function ConductorProfileScreen() {
                     <Text style={styles.commentStars}>
                       {renderStars(rating.score)}
                     </Text>
-                    {vehicles.length > 1 && (
-                      <Text style={styles.commentPlate}>Sobre {rating.plate}</Text>
-                    )}
+                    {/* NUEVO: Mostrar quién valoró */}
+                    <Text style={styles.commentRater}>
+                      Por {rating.rater_name || 'Usuario anónimo'}
+                    </Text>
+                    {vehicles.length > 1 && (() => {
+                      // Buscar el vehículo que coincide con la matrícula del rating
+                      const ratingVehicle = vehicles.find(v => v.plate === rating.plate);
+                      const vehicleInfo = ratingVehicle?.brand && ratingVehicle?.model
+                        ? `${ratingVehicle.brand} ${ratingVehicle.model}`
+                        : rating.plate;
+                      
+                      return (
+                        <Text style={styles.commentPlate}>Sobre {vehicleInfo}</Text>
+                      );
+                    })()}
                   </View>
                   <Text style={styles.commentDate}>
                     {formatDate(rating.created_at)}
@@ -573,7 +707,6 @@ export default function ConductorProfileScreen() {
       <View style={styles.footer}>
         <Text style={styles.footerText}>
           Los datos reflejan la opinión de la comunidad DriveSkore
-          {vehicles.length > 1 && `\nAgregado de ${vehicles.length} vehículos`}
         </Text>
       </View>
     </ScrollView>
@@ -773,7 +906,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-
+  levelDisplayCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  levelDisplayIcon: {
+    fontSize: 48,
+    marginRight: 15,
+  },
+  levelDisplayInfo: {
+    flex: 1,
+  },
+  levelDisplayTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  levelDisplayDesc: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 4,
+  },
+  levelDisplayCount: {
+    fontSize: 12,
+    color: '#999',
+  },
   section: {
     padding: 20,
     paddingTop: 0,
@@ -872,6 +1039,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     textAlign: 'center',
+  },
+  // 🆕 Posición Global
+  globalPositionCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    marginHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  globalPositionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  globalPositionNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 12,
   },
   topAttributeCard: {
     backgroundColor: 'white',
@@ -974,6 +1167,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 8,
+  },
+  commentRater: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginTop: 2,
   },
   commentStars: {
     fontSize: 20,

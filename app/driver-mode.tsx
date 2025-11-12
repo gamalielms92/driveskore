@@ -241,7 +241,7 @@ const updateStats = async () => {
       Alert.alert(
         'Iniciar Modo Conductor',
         `Se activará el seguimiento para el vehículo ${userPlate}.\n\n` +
-        '• Se capturará tu ubicación automáticamente\n' +
+        '• Podrás recibir valoraciones\n' +
         '• Podrás evaluar otros conductores\n' +
         '• El modo funciona en segundo plano',
         [
@@ -275,13 +275,13 @@ const updateStats = async () => {
 
                   // ✅ NUEVO: Activar AB Shutter 3 si está en preferencias
                   if (preferences.abShutter3Enabled) {
-                    console.log('🎮 Activando AB Shutter 3...');
+                    console.log('🎮 Activando botón físico...');
                     ABShutter3Service.startListening();
                   }
 
                   // ✅ NUEVO: Activar Botón Flotante si está en preferencias
                   if (preferences.floatingButtonEnabled && Platform.OS === 'android') {
-                    console.log('🔘 Activando Botón Flotante...');
+                    console.log('🔘 Activando botón virtual...');
     
                     // Verificar permiso
                     const hasPermission = await FloatingButtonNative.checkPermission();
@@ -348,12 +348,12 @@ const updateStats = async () => {
               console.log('⏸️ Deteniendo tracking...');
               
               // ✅ NUEVO: Detener AB Shutter 3
-              console.log('🛑 Deteniendo AB Shutter 3...');
+              console.log('🛑 Deteniendo botón físico...');
               ABShutter3Service.stopListening();
 
               // ✅ NUEVO: Detener Botón Flotante
               if (Platform.OS === 'android') {
-                console.log('🛑 Deteniendo Botón Flotante...');
+                console.log('🛑 Deteniendo botón virtual...');
                 await FloatingButtonNative.stop();
               }
               // ✅ NUEVO: Usar duración de las stats existentes
@@ -427,7 +427,7 @@ const updateStats = async () => {
             resizeMode="contain"
           />
           <Text style={styles.subtitle}>
-            Activa el seguimiento mientras conduces
+            Activa el seguimiento mientras conduces para poder evaluar y ser evaluado.
           </Text>
         </View>
 
@@ -436,7 +436,7 @@ const updateStats = async () => {
             styles.vehicleCard,
             isTracking && styles.vehicleCardActive
           ]}>
-          <Text style={styles.cardTitle}>Vehículo emparejado</Text>
+          <Text style={styles.cardTitle}>Vehículo activo</Text>
           {userPlate ? (
             <>
               <Text style={[
@@ -516,15 +516,42 @@ const updateStats = async () => {
           )}
         </View>
 
+        {/* Ajustes */}
+        <View style={styles.actionsGrid}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/select-vehicle')}
+          >
+            <Text style={styles.actionIcon}>🏢</Text>
+            <Text style={styles.actionTitle}>Garaje</Text>
+            <Text style={styles.actionDescription}>
+              Añade o cambia tu vehículo
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/capture-settings')}
+          >
+            <Text style={styles.actionIcon}>⚙️</Text>
+            <Text style={styles.actionTitle}>Ajustes</Text>
+            <Text style={styles.actionDescription}>
+              Selecciona la forma de evaluar
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+
         {/* Información */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>
           <Text style={styles.infoText}>
-            1. Activa un vehículo en "Mis Vehículos"{'\n'}
+            1. Activa un vehículo si no lo está{'\n'}
             2. Inicia el seguimiento antes de conducir{'\n'}
             3. Tu ubicación se registra automáticamente{'\n'}
-            4. Otros conductores pueden valorarte{'\n'}
-            5. Detén el seguimiento al terminar tu viaje
+            4. Puedes capturar para posterior valoración{'\n'}
+            5. Otros conductores pueden valorarte{'\n'}
+            6. Detén el seguimiento al terminar tu viaje
           </Text>
         </View>
 
@@ -535,7 +562,8 @@ const updateStats = async () => {
             - Al activar el seguimiento:{'\n'}
             • El gps consume ~3-5% batería/hora{'\n'}
             • La app funciona en segundo plano{'\n'}
-            • Los datos se envían de forma segura
+            • Los datos se envían de forma segura{'\n'}
+            • Solo almacenamos ubicación actual.
           </Text>
         </View>
       </View>
@@ -597,6 +625,40 @@ const styles = StyleSheet.create({
   vehicleCardActive: {
     borderWidth: 2,
     borderColor: '#34C759', // Borde verde cuando está activo
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 15,
+    marginBottom: 20,
+  },
+  actionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionIcon: {
+    fontSize: 50,
+    marginBottom: 10,
+  },
+  actionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#000',
+  },
+  actionDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
   cardTitle: {
     fontSize: 18,

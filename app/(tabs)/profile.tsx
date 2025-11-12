@@ -285,6 +285,20 @@ export default function ProfileScreen() {
           {userProfile?.bio && (
             <Text style={styles.bio}>{userProfile.bio}</Text>
           )}
+
+          <TouchableOpacity
+              style={styles.viewDetailsButton}
+              onPress={() => {
+                if (vehicles.length > 0 && vehicles[0].online) {
+                  router.push(`/conductor/${vehicles[0].plate}`);
+                } else if (vehicles.length > 0) {
+                  router.push(`/conductor/${vehicles[0].plate}`);
+                }
+              }}
+            >
+              <Text style={styles.viewDetailsButtonText}>Ver perfil público →</Text>
+          </TouchableOpacity>
+
         </View>
 
         {/* Botón editar perfil */}
@@ -383,19 +397,6 @@ export default function ProfileScreen() {
                 <Text style={styles.driverScoreLabel}>Valoraciones{'\n'}recibidas</Text>
               </View>
             </View>
-
-            <TouchableOpacity
-              style={styles.viewDetailsButton}
-              onPress={() => {
-                if (vehicles.length > 0 && vehicles[0].online) {
-                  router.push(`/conductor/${vehicles[0].plate}`);
-                } else if (vehicles.length > 0) {
-                  router.push(`/conductor/${vehicles[0].plate}`);
-                }
-              }}
-            >
-              <Text style={styles.viewDetailsButtonText}>Ver perfil completo →</Text>
-            </TouchableOpacity>
           </View>
         )}
 

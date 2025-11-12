@@ -89,7 +89,7 @@ export default function RaffleScreen() {
         >
           <Text style={styles.backButtonText}>← Volver</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>🎁 Sorteo del Piloto</Text>
+        <Text style={styles.title}>🎁 Sorteo</Text>
         <Text style={styles.subtitle}>
           Tus papeletas y estado de invitaciones
         </Text>
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#FF9500',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 30,
   },
   backButton: {

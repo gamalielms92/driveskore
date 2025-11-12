@@ -523,13 +523,13 @@ export default function HomeScreen() {
         {/* Vehículo activo */}
         {!loading && activeVehicle && (
           <View style={styles.activeVehicleCard}>
-            <Text style={styles.activeVehicleTitle}>🟢 Vehículo emparejado</Text>
+            <Text style={styles.activeVehicleTitle}>🟢 Vehículo activo</Text>
             <Text style={styles.activeVehiclePlate}>{activeVehicle.plate}</Text>
             {activeVehicle.nickname && (
               <Text style={styles.activeVehicleNickname}>{activeVehicle.nickname}</Text>
             )}
             <Text style={styles.activeVehicleSubtext}>
-              Las valoraciones irán a tu perfil de conductor
+              Necesario para recibir valoraciones en tu perfil
             </Text>
           </View>
         )}
@@ -539,50 +539,25 @@ export default function HomeScreen() {
           style={styles.drivingModeButton}
           onPress={() => router.push('/driver-mode')}
         >
-          <Text style={styles.drivingModeIcon}>🚗</Text>
+          <Text style={styles.drivingModeIcon}>🔘</Text>
           <View style={styles.drivingModeContent}>
-            <Text style={styles.drivingModeTitle}>MODO CONDUCCIÓN</Text>
+            <Text style={styles.drivingModeTitle}>MODO CONDUCTOR</Text>
             <Text style={styles.drivingModeSubtitle}>
               Activa GPS y botón de captura
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* Acciones principales */}
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/raffle')}
-          >
-            <Text style={styles.actionIcon}>📣</Text>
-            <Text style={styles.actionTitle}>¡Sorteo!</Text>
-            <Text style={styles.actionDescription}>
-              Participa con el sistema de referidos
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/referrals')}
-          >
-            <Text style={styles.actionIcon}>👥</Text>
-            <Text style={styles.actionTitle}>Invitar</Text>
-            <Text style={styles.actionDescription}>
-              Construyamos la comunidad
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Gestión de Vehículos */}
         <TouchableOpacity 
           style={styles.vehicleManagementCard}
-          onPress={() => router.push('/vehicles')}
+          onPress={() => router.push('/raffle')}
         >
-          <Text style={styles.vehicleManagementIcon}>🚙</Text>
+          <Text style={styles.vehicleManagementIcon}>📣</Text>
           <View style={styles.vehicleManagementContent}>
-            <Text style={styles.vehicleManagementTitle}>Gestionar Vehículos</Text>
+            <Text style={styles.vehicleManagementTitle}>¡Novedades!</Text>
             <Text style={styles.vehicleManagementDescription}>
-              Añade o activa tus vehículos
+              ¡Sorteo en juego!
             </Text>
           </View>
           <Text style={styles.vehicleManagementArrow}>→</Text>

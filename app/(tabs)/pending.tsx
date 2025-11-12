@@ -321,9 +321,9 @@ export default function PendingScreen() {
         </Text>
         <TouchableOpacity
           style={styles.captureButton}
-          onPress={() => router.push('/(tabs)/capture')}
+          onPress={() => router.push('/driver-mode')}
         >
-          <Text style={styles.captureButtonText}>📸 Capturar Evento</Text>
+          <Text style={styles.captureButtonText}>📸 Captura eventos conduciendo</Text>
         </TouchableOpacity>
       </View>
     );

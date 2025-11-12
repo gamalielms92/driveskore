@@ -48,7 +48,7 @@ export default function TabLayout() {
         options={{
           title: 'Inicio',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🏠</Text>,
-          headerTitle: '🚗 DriveSkore',
+          headerTitle: 'DriveSkore',
         }}
       />
 
@@ -87,19 +87,17 @@ export default function TabLayout() {
         options={{
           title: 'Sorteo',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🎁</Text>,
-          headerTitle: '🎁 Sorteo del Piloto',
+          headerTitle: '🎁 Sorteo',
           href: Platform.OS === 'web' ? undefined : null,
         }}
       />
 
-      {/* ✅ NUEVO - Mostrar Referidos solo en WEB */}
       <Tabs.Screen
         name="referrals"
         options={{
-          title: 'Referidos',
+          title: 'Invitar',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>👥</Text>,
-          headerTitle: '👥 Invita a amigos',
-          href: Platform.OS === 'web' ? undefined : null,
+          headerTitle: '👥 Construyamos la comunidad',
         }}
       />
 
@@ -112,23 +110,12 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ✅ OCULTAR en web - Ajustes de captura (solo móvil) */}
-      <Tabs.Screen
-        name="capture-settings"
-        options={{
-          title: 'Ajustes',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
-          headerTitle: '⚙️ Ajustes',
-          href: Platform.OS === 'web' ? null : undefined,
-        }}
-      />
-
       <Tabs.Screen
         name="benefits"
         options={{
-          title: 'Beneficios',
+          title: 'Ventajas',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🎁</Text>,
-          headerTitle: '🎁 Beneficios',
+          headerTitle: '🎁 Ventajas',
         }}
       />
 

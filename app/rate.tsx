@@ -239,6 +239,13 @@ export default function RateScreen() {
           plate: displayPlateForInsert,
           score: score,
           comment: comment.trim() || null,
+          // AÑADIR ATRIBUTOS INDIVIDUALES
+          respects_lights: attributes.respects_lights ?? null,
+          keeps_distance: attributes.keeps_distance ?? null,
+          uses_signals: attributes.uses_signals ?? null,
+          yields_right: attributes.yields_right ?? null,
+          appropriate_speed: attributes.appropriate_speed ?? null,
+          parks_well: attributes.parks_well ?? null,
         });
 
       if (ratingError) throw ratingError;
@@ -343,6 +350,7 @@ export default function RateScreen() {
               showVehicles={false}
               showBadges={true}
             />
+            
           </View>
         ) : (
           <View style={styles.unknownDriverSection}>
@@ -354,6 +362,18 @@ export default function RateScreen() {
           </View>
         )}
 
+        {/* Mostrar marca y modelo FUERA del UserCard */}
+        {currentVehicle && (
+          <View style={styles.currentVehicleInfo}>
+            <Text style={styles.currentVehicleText}>
+              🚗 {currentVehicle.brand} {currentVehicle.model}
+            </Text>
+            {currentVehicle.year && (
+              <Text style={styles.currentVehiclePlate}>Año {currentVehicle.year}</Text>
+            )}
+          </View>
+        )}
+        
         {/* Resumen de evaluación */}
         {total > 0 && (
           <View style={styles.summaryCard}>
