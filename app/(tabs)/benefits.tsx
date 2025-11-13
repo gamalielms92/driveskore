@@ -187,7 +187,7 @@ export default function BenefitsScreen() {
         title: 'Descuento Combustible',
         description: '5¢/litro en Repsol',
         status: 'locked',
-        requirement: 'Score 3.5 necesario',
+        requirement: 'Skore 3.5 necesario',
         progress: score / 3.5
       });
     }
@@ -230,7 +230,7 @@ export default function BenefitsScreen() {
         title: 'Descuento Seguros',
         description: '10% descuento en Mapfre',
         status: 'locked',
-        requirement: 'Score 3.5 necesario',
+        requirement: 'Skore 3.5 necesario',
         progress: score / 3.5
       });
     }
@@ -249,7 +249,7 @@ export default function BenefitsScreen() {
         title: 'Parking Gratis Zona Azul',
         description: '1h gratis al día',
         status: 'locked',
-        requirement: `Score 4.5 necesario (Te faltan ${(4.5 - score).toFixed(1)} puntos)`,
+        requirement: `Skore 4.5 necesario (Te faltan ${(4.5 - score).toFixed(1)} puntos)`,
         progress: score / 4.5
       });
     } else {
@@ -318,13 +318,13 @@ export default function BenefitsScreen() {
     if (benefit.status === 'locked') {
       Alert.alert(
         '🔒 Beneficio Bloqueado',
-        benefit.requirement || 'Mejora tu score para desbloquear este beneficio',
+        benefit.requirement || 'Mejora tu skore para desbloquear este beneficio',
         [{ text: 'Entendido' }]
       );
     } else if (benefit.status === 'coming_soon') {
       Alert.alert(
         '⏳ Próximamente',
-        'Este beneficio estará disponible muy pronto. ¡Mantén tu buen score!',
+        'Este beneficio estará disponible muy pronto. ¡Mantén tu buen skore!',
         [{ text: 'OK' }]
       );
     }
@@ -384,7 +384,7 @@ export default function BenefitsScreen() {
         <View style={styles.scoreCard}>
           <View style={styles.scoreRow}>
             <View style={styles.scoreItem}>
-              <Text style={styles.scoreLabel}>Tu Score</Text>
+              <Text style={styles.scoreLabel}>Tu Skore</Text>
               <Text style={styles.scoreValue}>
                 {userStats.numRatings > 0 ? `⭐ ${userStats.score.toFixed(1)}` : '⭐ -'}
               </Text>
@@ -483,7 +483,7 @@ export default function BenefitsScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          💡 Los beneficios se actualizan según tu score y actividad en tiempo real
+          💡 Los beneficios se actualizan según tu skore y actividad en tiempo real
         </Text>
       </View>
     </ScrollView>

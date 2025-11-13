@@ -91,26 +91,44 @@ export default function ReferralsScreen() {
       setIsAmbassador(profile?.is_ambassador || false);
 
       // Cargar lista completa de referidos
-      const { data: list } = await supabase
-        .from('user_referrals')
-        .select(`
-          id,
-          created_at,
-          status,
-          user_profiles!user_referrals_referred_id_fkey(full_name)
-        `)
-        .eq('referrer_id', user.id)
-        .order('created_at', { ascending: false });
+// Cargar lista completa de referidos
+const { data: list, error: listError } = await supabase
+  .from('user_referrals')
+  .select('id, created_at, status, referred_id')
+  .eq('referrer_id', user.id)
+  .order('created_at', { ascending: false });
 
-      // Mapear respuesta
-      const formattedList = (list || []).map(item => ({
-        id: item.id,
-        created_at: item.created_at,
-        status: item.status as 'pending' | 'completed',
-        referred: Array.isArray(item.user_profiles) && item.user_profiles.length > 0
-          ? { full_name: item.user_profiles[0].full_name }
-          : null
-      }));
+console.log('📋 Referrals cargados:', list?.length || 0);
+console.log('❌ Error:', listError);
+
+if (listError) {
+  console.error('Error cargando referrals:', listError);
+}
+
+      // Cargar nombres de los referidos manualmente
+      const formattedList: Referral[] = [];
+      if (list && list.length > 0) {
+        for (const item of list) {
+          let referredName = 'Usuario';
+          
+          if (item.referred_id) {
+            const { data: profile } = await supabase
+              .from('user_profiles')
+              .select('full_name')
+              .eq('user_id', item.referred_id)
+              .maybeSingle();
+            
+            referredName = profile?.full_name || 'Usuario';
+          }
+          
+          formattedList.push({
+            id: item.id,
+            created_at: item.created_at,
+            status: item.status as 'pending' | 'completed',
+            referred: { full_name: referredName }
+          });
+        }
+      }
 
       setReferrals(formattedList);
 

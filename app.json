@@ -89,6 +89,13 @@
           "cameraPermission": "DriveSkore necesita acceso a la cámara para capturar matrículas de vehículos (opcional)."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DriveSkore necesita acceso a tus fotos para añadir imágenes al perfil.",
+          "cameraPermission": "DriveSkore necesita acceso a la cámara para añadir imagen en el perfil."
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "expo-router"
