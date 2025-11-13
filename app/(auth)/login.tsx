@@ -9,7 +9,6 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -23,7 +22,7 @@ export default function LoginScreen() {
 
     try {
       if (isSignUp) {
-        // REGISTRO
+        // REGISTRO SIMPLE
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -34,42 +33,14 @@ export default function LoginScreen() {
 
         if (error) throw error;
 
-        // Si hay código de referido, guardarlo en el perfil
-        if (referralCode.trim() && data.user) {
-          try {
-            // Guardar el código en el perfil del usuario
-            // El trigger se encargará automáticamente de procesar el referido
-            const { error: profileError } = await supabase
-              .from('user_profiles')
-              .update({ 
-                invited_by_code: referralCode.toUpperCase().trim() 
-              })
-              .eq('user_id', data.user.id);
-
-            if (profileError) {
-              console.error('Error guardando código de referido:', profileError);
-            } else {
-              console.log('✅ Código de referido guardado, el trigger lo procesará automáticamente');
-            }
-          } catch (error) {
-            console.error('Error processing referral code:', error);
-            // No bloquear el registro si falla el referido
-          }
-        }
-
-        // Trackear registro
         await Analytics.trackSignUp('email');
 
         Alert.alert(
           '🎉 ¡Registro exitoso!',
-          referralCode.trim() 
-            ? 'Gracias por usar un código de invitación. Por favor verifica tu email.'
-            : 'Por favor verifica tu email antes de iniciar sesión.',
-          [{ text: 'OK', onPress: () => {
-            setIsSignUp(false);
-            setReferralCode('');
-          }}]
+          'Por favor verifica tu email antes de iniciar sesión.',
+          [{ text: 'OK', onPress: () => setIsSignUp(false) }]
         );
+        
       } else {
         // LOGIN
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -131,20 +102,6 @@ export default function LoginScreen() {
           editable={!loading}
         />
 
-        {/* Campo de código de referido - solo en registro */}
-        {isSignUp && (
-          <TextInput
-            style={[styles.input, styles.referralInput]}
-            placeholder="Código de invitación (opcional)"
-            placeholderTextColor="#999"
-            value={referralCode}
-            onChangeText={(text) => setReferralCode(text.toUpperCase())}
-            autoCapitalize="characters"
-            maxLength={11}
-            editable={!loading}
-          />
-        )}
-
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleAuth}
@@ -157,10 +114,7 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.switchButton}
-          onPress={() => {
-            setIsSignUp(!isSignUp);
-            setReferralCode(''); // Limpiar código al cambiar
-          }}
+          onPress={() => setIsSignUp(!isSignUp)}
           disabled={loading}
         >
           <Text style={styles.switchText}>
@@ -202,11 +156,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#ddd',
-  },
-  referralInput: {
-    borderColor: '#007AFF',
-    borderWidth: 2,
-    borderStyle: 'dashed',
   },
   button: {
     backgroundColor: '#007AFF',

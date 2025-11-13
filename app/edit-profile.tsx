@@ -3,17 +3,17 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { supabase } from '../src/config/supabase';
 import ImageCompressionService from '../src/services/ImageCompressionService';
@@ -23,6 +23,7 @@ interface UserProfileData {
   avatar_url: string;
   bio: string;
   phone: string;
+  invited_by_code: string; // ✅ NUEVO
 }
 
 export default function EditProfileScreen() {
@@ -37,7 +38,8 @@ export default function EditProfileScreen() {
     full_name: '',
     avatar_url: '',
     bio: '',
-    phone: ''
+    phone: '',
+    invited_by_code: '' // ✅ NUEVO
   });
 
   useEffect(() => {
@@ -73,7 +75,8 @@ export default function EditProfileScreen() {
           full_name: profile.full_name || '',
           avatar_url: profile.avatar_url || '',
           bio: profile.bio || '',
-          phone: profile.phone || ''
+          phone: profile.phone || '',
+          invited_by_code: profile.invited_by_code || '' // ✅ NUEVO
         });
       }
 
@@ -121,10 +124,37 @@ export default function EditProfileScreen() {
       // Verificar si ya existe un perfil
       const { data: existingProfile } = await supabase
         .from('user_profiles')
-        .select('user_id')
+        .select('user_id, invited_by_code')
         .eq('user_id', userId)
         .maybeSingle();
 
+      // ✅ Si hay código nuevo y no tenía código antes
+      const hasNewReferralCode = profileData.invited_by_code.trim() 
+        && (!existingProfile?.invited_by_code || existingProfile.invited_by_code === '');
+
+      if (hasNewReferralCode) {
+        // Procesar código de referido usando la función SQL
+        const { data: result, error: referralError } = await supabase
+          .rpc('process_referral_code', {
+            p_user_id: userId,
+            p_referral_code: profileData.invited_by_code.trim()
+          });
+
+        if (referralError) {
+          console.error('Error procesando código:', referralError);
+          Alert.alert('Error', 'Error al procesar código de invitación');
+          return;
+        }
+
+        if (result && result.length > 0 && !result[0].success) {
+          Alert.alert('Código inválido', result[0].message);
+          return;
+        }
+
+        console.log('✅ Código de referido aplicado');
+      }
+
+      // Guardar perfil
       if (existingProfile) {
         // Actualizar
         const { error } = await supabase
@@ -139,7 +169,7 @@ export default function EditProfileScreen() {
 
         if (error) throw error;
       } else {
-        // Crear
+        // Crear (no debería pasar, pero por si acaso)
         const { error } = await supabase
           .from('user_profiles')
           .insert({
@@ -148,6 +178,7 @@ export default function EditProfileScreen() {
             avatar_url: profileData.avatar_url || null,
             bio: profileData.bio.trim() || null,
             phone: profileData.phone.trim() || null,
+            invited_by_code: profileData.invited_by_code.trim() || null,
           });
 
         if (error) throw error;
@@ -155,7 +186,9 @@ export default function EditProfileScreen() {
 
       Alert.alert(
         '✅ Perfil guardado',
-        'Tu perfil se ha actualizado correctamente',
+        hasNewReferralCode 
+          ? 'Tu perfil se ha actualizado y el código de invitación se ha aplicado correctamente'
+          : 'Tu perfil se ha actualizado correctamente',
         [
           {
             text: 'OK',
@@ -293,6 +326,31 @@ export default function EditProfileScreen() {
               keyboardType="phone-pad"
               maxLength={20}
             />
+          </View>
+
+          {/* ✅ NUEVO: Código de invitación */}
+          <View style={styles.section}>
+            <Text style={styles.label}>🎁 Código de Invitación (opcional)</Text>
+            <TextInput
+              style={[
+                styles.input, 
+                profileData.invited_by_code ? styles.inputDisabled : null
+              ]}
+              placeholder="DRIVE-XXXXX"
+              value={profileData.invited_by_code}
+              onChangeText={(text) => setProfileData(prev => ({ 
+                ...prev, 
+                invited_by_code: text.toUpperCase() 
+              }))}
+              maxLength={11}
+              autoCapitalize="characters"
+              editable={!profileData.invited_by_code}
+            />
+            <Text style={styles.hint}>
+              {profileData.invited_by_code 
+                ? '✅ Ya usaste un código de invitación' 
+                : 'Si tienes un código de invitación, ingrésalo aquí'}
+            </Text>
           </View>
 
           {/* Botones */}
@@ -439,6 +497,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 15,
     fontSize: 16,
+  },
+  inputDisabled: { // ✅ NUEVO
+    backgroundColor: '#f0f0f0',
+    color: '#999',
   },
   textArea: {
     height: 100,
