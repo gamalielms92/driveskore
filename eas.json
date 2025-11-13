@@ -15,14 +15,9 @@
     },
     "production": {
       "autoIncrement": true,
-      "prebuildCommand": "node scripts/setup-google-services.js"
-    },
-    
-    "production-apk": {
-      "distribution": "internal",
-        "android": {
-          "buildType": "apk"
-        },
+      "android": {
+        "buildType": "apk"
+      },
       "prebuildCommand": "node scripts/setup-google-services.js"
     }
   },
