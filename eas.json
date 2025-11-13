@@ -7,18 +7,18 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "prebuildCommand": "node scripts/setup-google-services.js"
+      "prebuildCommand": "cd $EAS_BUILD_WORKINGDIR && node scripts/setup-google-services.js"
     },
     "preview": {
       "distribution": "internal",
-      "prebuildCommand": "node scripts/setup-google-services.js"
+      "prebuildCommand": "cd $EAS_BUILD_WORKINGDIR && node scripts/setup-google-services.js"
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "apk"
       },
-      "prebuildCommand": "node scripts/setup-google-services.js"
+      "prebuildCommand": "cd $EAS_BUILD_WORKINGDIR && node scripts/setup-google-services.js"
     }
   },
   "submit": {
