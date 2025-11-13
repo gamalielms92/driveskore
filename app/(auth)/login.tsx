@@ -27,6 +27,9 @@ export default function LoginScreen() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: 'https://driveskore.vercel.app/auth/success',
+          }
         });
 
         if (error) throw error;
