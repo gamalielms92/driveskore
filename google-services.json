@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "823528477219",
+    "project_id": "driveskore-a76ae",
+    "storage_bucket": "driveskore-a76ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:823528477219:android:4c6cbb246d12edfa19d796",
+        "android_client_info": {
+          "package_name": "com.driveskore.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWgbCVnP-MVunWKVq2vUfu4A0gOGdmikk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
