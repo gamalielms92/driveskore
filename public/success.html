@@ -15,7 +15,7 @@
     <h1 id="title" style="font-size: 32px; margin-bottom: 16px; color: #1a1a1a;">Verificando email...</h1>
     <p id="message" style="font-size: 16px; color: #666; margin-bottom: 30px;">Por favor espera un momento...</p>
     <div id="actions" style="display: none;">
-      <a href="driveskore://" style="display: inline-block; background: #007AFF; color: white; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 10px;">Abrir DriveSkore</a>
+      <a id="openApp" href="driveskore://" style="display: inline-block; background: #007AFF; color: white; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 10px;">Abrir DriveSkore</a>
     </div>
     <p style="font-size: 13px; color: #999; margin-top: 25px;">¿No tienes la app? <a href="https://driveskore.vercel.app" style="color: #007AFF;">Descárgala aquí</a></p>
   </div>
@@ -23,7 +23,6 @@
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
     
-    // Inicializar Supabase
     const supabase = createClient(
       'https://dfpwfkeeapdbnetkyzwi.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmcHdma2VlYXBkYm5ldGt5endpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxMzcyMTAsImV4cCI6MjA3NTcxMzIxMH0.P6ENMwmG4dju4CeHcWoOWZELtSIYWIEpKiqbSjsrQ98'
@@ -31,20 +30,74 @@
 
     async function handleEmailVerification() {
       try {
-        console.log('🔍 Verificando email...')
+        console.log('🔍 Iniciando verificación de email...')
+        console.log('📍 URL completa:', window.location.href)
         
-        // Obtener parámetros de la URL
+        // MÉTODO 1: Intentar con verifyOtp (para el flujo PKCE con token en URL)
+        const urlParams = new URLSearchParams(window.location.search)
+        const token = urlParams.get('token')
+        const type = urlParams.get('type')
+        
+        console.log('📋 Parámetros de URL:')
+        console.log('  - token:', token ? 'Presente ('+token.substring(0,20)+'...)' : 'AUSENTE')
+        console.log('  - type:', type)
+
+        if (token && type === 'signup') {
+          console.log('✅ Flujo PKCE detectado, verificando token...')
+          
+          // Verificar el token con Supabase
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'signup'
+          })
+
+          if (error) {
+            console.error('❌ Error verificando OTP:', error)
+            throw error
+          }
+
+          console.log('✅ Email verificado exitosamente:', data)
+          
+          // Actualizar UI
+          document.getElementById('checkmark').textContent = '✅'
+          document.getElementById('title').textContent = '¡Email Confirmado!'
+          document.getElementById('message').textContent = 'Tu cuenta ha sido verificada. Ya puedes iniciar sesión en DriveSkore.'
+          document.getElementById('actions').style.display = 'block'
+          
+          // Intentar abrir la app después de 2 segundos
+          setTimeout(() => {
+            console.log('📱 Abriendo app...')
+            window.location.href = 'driveskore://'
+          }, 2000)
+          
+          return
+        }
+
+        // MÉTODO 2: Intentar con tokens en el hash (flujo legacy)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         const accessToken = hashParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token')
-        const type = hashParams.get('type')
+        const hashType = hashParams.get('type')
 
-        console.log('📋 Tipo:', type)
-        console.log('🔑 Access Token:', accessToken ? 'Presente' : 'Ausente')
+        console.log('📋 Parámetros de hash:')
+        console.log('  - type:', hashType)
+        console.log('  - accessToken:', accessToken ? 'Presente' : 'AUSENTE')
+        console.log('  - refreshToken:', refreshToken ? 'Presente' : 'AUSENTE')
 
-        // Verificar si es confirmación de signup
-        if (type === 'signup' && accessToken && refreshToken) {
-          console.log('✅ Email verificado exitosamente')
+        if (hashType === 'signup' && accessToken && refreshToken) {
+          console.log('✅ Flujo legacy detectado, estableciendo sesión...')
+          
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+
+          if (error) {
+            console.error('❌ Error estableciendo sesión:', error)
+            throw error
+          }
+
+          console.log('✅ Sesión establecida:', data)
           
           // Actualizar UI
           document.getElementById('checkmark').textContent = '✅'
@@ -52,42 +105,30 @@
           document.getElementById('message').textContent = 'Tu cuenta ha sido verificada. Ya puedes usar DriveSkore.'
           document.getElementById('actions').style.display = 'block'
           
-          // Intentar abrir la app automáticamente después de 2 segundos
+          // Abrir app
           setTimeout(() => {
-            console.log('📱 Intentando abrir la app...')
+            console.log('📱 Abriendo app...')
             window.location.href = 'driveskore://'
-            
-            // Fallback: si no se abre la app en 3 segundos, mostrar mensaje
-            setTimeout(() => {
-              alert('Si la app no se abrió automáticamente, haz clic en el botón "Abrir DriveSkore"')
-            }, 3000)
           }, 2000)
           
-        } else if (type === 'recovery') {
-          // Caso de recuperación de contraseña
-          console.log('🔄 Recuperación de contraseña')
-          document.getElementById('checkmark').textContent = '🔑'
-          document.getElementById('title').textContent = 'Recuperación de contraseña'
-          document.getElementById('message').textContent = 'Por favor, abre la app para restablecer tu contraseña.'
-          document.getElementById('actions').style.display = 'block'
-          
-        } else {
-          // Error o link inválido
-          console.error('❌ Link inválido o expirado')
-          document.getElementById('checkmark').textContent = '❌'
-          document.getElementById('title').textContent = 'Error'
-          document.getElementById('message').textContent = 'El enlace de verificación no es válido o ya expiró. Por favor, intenta registrarte de nuevo.'
+          return
         }
+
+        // Si llegamos aquí, no se pudo verificar con ningún método
+        console.error('❌ No se encontraron parámetros válidos en la URL')
+        document.getElementById('checkmark').textContent = '❌'
+        document.getElementById('title').textContent = 'Link inválido'
+        document.getElementById('message').textContent = 'El enlace de verificación no es válido o ya expiró. Por favor, regístrate de nuevo.'
         
       } catch (error) {
-        console.error('❌ Error:', error)
+        console.error('❌ Error completo:', error)
         document.getElementById('checkmark').textContent = '❌'
         document.getElementById('title').textContent = 'Error'
-        document.getElementById('message').textContent = 'Ocurrió un error al verificar tu email. Por favor, contacta con soporte.'
+        document.getElementById('message').textContent = error.message || 'Error al verificar email. Por favor, intenta registrarte de nuevo.'
       }
     }
 
-    // Ejecutar verificación al cargar
+    // Ejecutar verificación al cargar la página
     handleEmailVerification()
   </script>
 </body>
