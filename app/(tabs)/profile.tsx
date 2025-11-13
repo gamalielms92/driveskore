@@ -28,6 +28,7 @@ interface Vehicle {
   plate: string;
   nickname: string | null;
   online: boolean;
+  vehicle_type?: string;
 }
 
 interface DriverProfile {
@@ -465,22 +466,37 @@ export default function ProfileScreen() {
             </Text>
           ) : (
             <View style={styles.vehiclesList}>
-              {vehicles.slice(0, 3).map(vehicle => (
-                <View key={vehicle.id} style={styles.vehicleItem}>
-                  <Text style={styles.vehicleIcon}>🚗</Text>
-                  <View style={styles.vehicleInfo}>
-                    <Text style={styles.vehiclePlate}>{vehicle.plate}</Text>
-                    {vehicle.nickname && (
-                      <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
+              {vehicles.slice(0, 3).map(vehicle => {
+                // Determinar icono según tipo
+                const vehicleIcon = vehicle.vehicle_type === 'motorcycle' ? '🏍️'
+                  : vehicle.vehicle_type === 'bike' ? '🚲'
+                  : vehicle.vehicle_type === 'scooter' ? '🛴'
+                  : '🚗';
+                
+                // Determinar qué mostrar (matrícula, nickname o tipo)
+                const displayText = vehicle.plate 
+                  || vehicle.nickname 
+                  || (vehicle.vehicle_type === 'bike' ? 'Bicicleta' 
+                    : vehicle.vehicle_type === 'scooter' ? 'Patinete' 
+                    : 'Vehículo');
+                
+                return (
+                  <View key={vehicle.id} style={styles.vehicleItem}>
+                    <Text style={styles.vehicleIcon}>{vehicleIcon}</Text>
+                    <View style={styles.vehicleInfo}>
+                      <Text style={styles.vehiclePlate}>{displayText}</Text>
+                      {vehicle.nickname && vehicle.plate && (
+                        <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
+                      )}
+                    </View>
+                    {vehicle.online && (
+                      <View style={styles.onlineBadge}>
+                        <Text style={styles.onlineBadgeText}>Activo</Text>
+                      </View>
                     )}
                   </View>
-                  {vehicle.online && (
-                    <View style={styles.onlineBadge}>
-                      <Text style={styles.onlineBadgeText}>Activo</Text>
-                    </View>
-                  )}
-                </View>
-              ))}
+                );
+              })}
               
               {vehicles.length > 3 && (
                 <Text style={styles.moreVehicles}>+{vehicles.length - 3} más</Text>

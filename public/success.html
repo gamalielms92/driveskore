@@ -11,11 +11,84 @@
 <body style="min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; padding: 20px;">
   <div style="background: white; border-radius: 20px; padding: 40px; max-width: 500px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
     <img src="/logo.png" style="width: 280px; height: auto; margin-bottom: 20px;">
-    <div style="font-size: 60px; margin-bottom: 20px;">✅</div>
-    <h1 style="font-size: 32px; margin-bottom: 16px; color: #1a1a1a;">¡Email Confirmado!</h1>
-    <p style="font-size: 16px; color: #666; margin-bottom: 30px;">Tu cuenta ha sido verificada.<br>Ya puedes usar DriveSkore.</p>
-    <a href="driveskore://" style="display: inline-block; background: #007AFF; color: white; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 18px;">Abrir DriveSkore</a>
+    <div id="checkmark" style="font-size: 60px; margin-bottom: 20px;">⏳</div>
+    <h1 id="title" style="font-size: 32px; margin-bottom: 16px; color: #1a1a1a;">Verificando email...</h1>
+    <p id="message" style="font-size: 16px; color: #666; margin-bottom: 30px;">Por favor espera un momento...</p>
+    <div id="actions" style="display: none;">
+      <a href="driveskore://" style="display: inline-block; background: #007AFF; color: white; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 10px;">Abrir DriveSkore</a>
+    </div>
     <p style="font-size: 13px; color: #999; margin-top: 25px;">¿No tienes la app? <a href="https://driveskore.vercel.app" style="color: #007AFF;">Descárgala aquí</a></p>
   </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+    
+    // Inicializar Supabase
+    const supabase = createClient(
+      'https://dfpwfkeeapdbnetkyzwi.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmcHdma2VlYXBkYm5ldGt5endpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAxMzcyMTAsImV4cCI6MjA3NTcxMzIxMH0.P6ENMwmG4dju4CeHcWoOWZELtSIYWIEpKiqbSjsrQ98'
+    )
+
+    async function handleEmailVerification() {
+      try {
+        console.log('🔍 Verificando email...')
+        
+        // Obtener parámetros de la URL
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+        const type = hashParams.get('type')
+
+        console.log('📋 Tipo:', type)
+        console.log('🔑 Access Token:', accessToken ? 'Presente' : 'Ausente')
+
+        // Verificar si es confirmación de signup
+        if (type === 'signup' && accessToken && refreshToken) {
+          console.log('✅ Email verificado exitosamente')
+          
+          // Actualizar UI
+          document.getElementById('checkmark').textContent = '✅'
+          document.getElementById('title').textContent = '¡Email Confirmado!'
+          document.getElementById('message').textContent = 'Tu cuenta ha sido verificada. Ya puedes usar DriveSkore.'
+          document.getElementById('actions').style.display = 'block'
+          
+          // Intentar abrir la app automáticamente después de 2 segundos
+          setTimeout(() => {
+            console.log('📱 Intentando abrir la app...')
+            window.location.href = 'driveskore://'
+            
+            // Fallback: si no se abre la app en 3 segundos, mostrar mensaje
+            setTimeout(() => {
+              alert('Si la app no se abrió automáticamente, haz clic en el botón "Abrir DriveSkore"')
+            }, 3000)
+          }, 2000)
+          
+        } else if (type === 'recovery') {
+          // Caso de recuperación de contraseña
+          console.log('🔄 Recuperación de contraseña')
+          document.getElementById('checkmark').textContent = '🔑'
+          document.getElementById('title').textContent = 'Recuperación de contraseña'
+          document.getElementById('message').textContent = 'Por favor, abre la app para restablecer tu contraseña.'
+          document.getElementById('actions').style.display = 'block'
+          
+        } else {
+          // Error o link inválido
+          console.error('❌ Link inválido o expirado')
+          document.getElementById('checkmark').textContent = '❌'
+          document.getElementById('title').textContent = 'Error'
+          document.getElementById('message').textContent = 'El enlace de verificación no es válido o ya expiró. Por favor, intenta registrarte de nuevo.'
+        }
+        
+      } catch (error) {
+        console.error('❌ Error:', error)
+        document.getElementById('checkmark').textContent = '❌'
+        document.getElementById('title').textContent = 'Error'
+        document.getElementById('message').textContent = 'Ocurrió un error al verificar tu email. Por favor, contacta con soporte.'
+      }
+    }
+
+    // Ejecutar verificación al cargar
+    handleEmailVerification()
+  </script>
 </body>
 </html>

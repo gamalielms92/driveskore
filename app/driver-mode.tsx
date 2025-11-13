@@ -1,4 +1,4 @@
-// app/(tabs)/driver-mode.tsx
+// app/driver-mode.tsx
 
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -24,13 +24,21 @@ import EventCaptureService from '../src/services/EventCaptureService';
 import FloatingButtonNative from '../src/services/FloatingButtonNative';
 import LocationTrackingService from '../src/services/LocationTrackingService';
 
+interface ActiveVehicleData {
+  plate: string | null;
+  serial_number: string | null;
+  brand: string | null;
+  model: string | null;
+  vehicle_type: 'car' | 'motorcycle' | 'bike' | 'scooter';
+  nickname: string | null;
+}
 
 export default function DriverModeScreen() {
   const router = useRouter();
   const [isTracking, setIsTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
-  const [userPlate, setUserPlate] = useState<string | null>(null);
+  const [activeVehicle, setActiveVehicle] = useState<ActiveVehicleData | null>(null);
   const [stats, setStats] = useState({
     duration: 0,
     distance: 0,
@@ -48,21 +56,21 @@ export default function DriverModeScreen() {
       
       if (!user) {
         setUserId('');
-        setUserPlate(null);
+        setActiveVehicle(null);
         return;
       }
 
       setUserId(user.id);
 
-      const { data: activeVehicle } = await supabase
+      const { data: vehicle } = await supabase
         .from('user_vehicles')
-        .select('plate')
+        .select('plate, serial_number, brand, model, vehicle_type, nickname')
         .eq('user_id', user.id)
         .eq('online', true)
         .maybeSingle();
 
-      setUserPlate(activeVehicle?.plate || null);
-      console.log('🚗 Vehículo emparejado cargado:', activeVehicle?.plate || 'ninguno');
+      setActiveVehicle(vehicle || null);
+      console.log('🚗 Vehículo activo cargado:', vehicle || 'ninguno');
       
       // Verificar si el tracking ya está activo
       const trackingActive = LocationTrackingService.isActive();
@@ -70,8 +78,8 @@ export default function DriverModeScreen() {
       console.log('📍 Tracking activo:', trackingActive);
       
     } catch (error) {
-      console.error('Error cargando vehículo emparejado:', error);
-      setUserPlate(null);
+      console.error('Error cargando vehículo activo:', error);
+      setActiveVehicle(null);
     } finally {
       setLoading(false);
     }
@@ -101,7 +109,7 @@ export default function DriverModeScreen() {
     const interval = setInterval(() => {
       console.log('🔄 Actualizando stats...');
       updateStats();
-    }, 15000); // Actualizar cada 15 segundos para ver los cambios más rápido
+    }, 5000); // Actualizar cada 5 segundos para ver los cambios más rápido
     
     // Guardar referencia del interval
     trackingInterval.current = interval;
@@ -154,31 +162,31 @@ export default function DriverModeScreen() {
     }
   };
 
-// También, asegúrate de que updateStats tenga logs para debug:
-const updateStats = async () => {
-  console.log('📊 updateStats() llamado');
-  
-  try {
-    // Obtener datos reales del servicio de tracking
-    const trackingData = await LocationTrackingService.getTrackingStats();
-    console.log('📊 Datos recibidos:', trackingData);
+  // También, asegúrate de que updateStats tenga logs para debug:
+  const updateStats = async () => {
+    console.log('📊 updateStats() llamado');
     
-    if (trackingData) {
-      const newStats = {
-        duration: trackingData.duration || 0,
-        distance: trackingData.distance || 0,
-        lastUpdate: new Date()
-      };
+    try {
+      // Obtener datos reales del servicio de tracking
+      const trackingData = await LocationTrackingService.getTrackingStats();
+      console.log('📊 Datos recibidos:', trackingData);
       
-      console.log('📊 Actualizando estado con:', newStats);
-      setStats(newStats);
-    } else {
-      console.log('⚠️ No hay datos de tracking');
+      if (trackingData) {
+        const newStats = {
+          duration: trackingData.duration || 0,
+          distance: trackingData.distance || 0,
+          lastUpdate: new Date()
+        };
+        
+        console.log('📊 Actualizando estado con:', newStats);
+        setStats(newStats);
+      } else {
+        console.log('⚠️ No hay datos de tracking');
+      }
+    } catch (error) {
+      console.error('❌ Error actualizando stats:', error);
     }
-  } catch (error) {
-    console.error('❌ Error actualizando stats:', error);
-  }
-};
+  };
 
   const handleStartTracking = async () => {
     try {
@@ -195,9 +203,9 @@ const updateStats = async () => {
       await loadActiveVehicle();
       
       console.log('📋 User ID:', userId);
-      console.log('📋 User Plate:', userPlate);
+      console.log('📋 Active Vehicle:', activeVehicle);
       
-      if (!userPlate || userPlate.trim() === '') {
+      if (!activeVehicle) {
         Alert.alert(
           'Sin vehículo activo',
           'Debes activar un vehículo en la pantalla "Mis Vehículos" para poder usar el Modo Conductor.',
@@ -237,10 +245,16 @@ const updateStats = async () => {
         }
       }
 
+      // Preparar identificador del vehículo
+      const vehicleIdentifier = activeVehicle.plate || activeVehicle.serial_number || 'unknown';
+      const vehicleName = activeVehicle.brand && activeVehicle.model 
+        ? `${activeVehicle.brand} ${activeVehicle.model}`
+        : activeVehicle.nickname || vehicleIdentifier;
+
       // Iniciar tracking
       Alert.alert(
         'Iniciar Modo Conductor',
-        `Se activará el seguimiento para el vehículo ${userPlate}.\n\n` +
+        `Se activará el seguimiento para el vehículo ${vehicleName}.\n\n` +
         '• Podrás recibir valoraciones\n' +
         '• Podrás evaluar otros conductores\n' +
         '• El modo funciona en segundo plano',
@@ -253,8 +267,8 @@ const updateStats = async () => {
                 console.log('✅ Validaciones pasadas');
                 console.log('🚀 Iniciando LocationTrackingService...');
                 
-                // Inicializar servicio
-                await LocationTrackingService.initialize(userId, userPlate);
+                // Inicializar servicio con el identificador correcto
+                await LocationTrackingService.initialize(userId, vehicleIdentifier);
                 console.log('✅ LocationTrackingService inicializado');
 
                 // ✅ Asegurar que EventCaptureService está inicializado
@@ -436,14 +450,24 @@ const updateStats = async () => {
             styles.vehicleCard,
             isTracking && styles.vehicleCardActive
           ]}>
-          <Text style={styles.cardTitle}>Vehículo activo</Text>
-          {userPlate ? (
+          <Text style={styles.cardTitle}>
+            {activeVehicle?.vehicle_type === 'car' ? '🚗' : 
+             activeVehicle?.vehicle_type === 'motorcycle' ? '🏍️' :
+             activeVehicle?.vehicle_type === 'bike' ? '🚲' : 
+             activeVehicle?.vehicle_type === 'scooter' ? '🛴' : '🚗'} Vehículo activo
+          </Text>
+          {activeVehicle ? (
             <>
               <Text style={[
                 styles.vehiclePlate,
                 isTracking && styles.vehiclePlateTracking
               ]}>
-                {isTracking ? '🟢' : '🔵'} {userPlate}
+                {isTracking ? '🟢' : '🔵'} {activeVehicle.brand && activeVehicle.model 
+                  ? `${activeVehicle.brand} ${activeVehicle.model}`
+                  : activeVehicle.nickname || 'Mi vehículo'}
+              </Text>
+              <Text style={styles.vehicleIdentifier}>
+                {activeVehicle.plate || (activeVehicle.serial_number ? `Serie: ${activeVehicle.serial_number}` : 'Sin identificador')}
               </Text>
               <Text style={styles.vehicleStatus}>
                 {isTracking ? 'Estado: Online' : 'Listo para conducir'}
@@ -494,10 +518,10 @@ const updateStats = async () => {
             <TouchableOpacity
               style={[
                 styles.startButton,
-                !userPlate && styles.startButtonDisabled
+                !activeVehicle && styles.startButtonDisabled
               ]}
               onPress={handleStartTracking}
-              disabled={!userPlate}
+              disabled={!activeVehicle}
             >
               <Text style={styles.startButtonText}>▶️ Iniciar Seguimiento</Text>
             </TouchableOpacity>
@@ -556,7 +580,7 @@ const updateStats = async () => {
         </View>
       </View>
       {/* Listener del botón flotante (invisible) */}
-    <FloatingButtonListener />
+      <FloatingButtonListener />
     </ScrollView>
   );
 }
@@ -612,7 +636,7 @@ const styles = StyleSheet.create({
   },
   vehicleCardActive: {
     borderWidth: 2,
-    borderColor: '#34C759', // Borde verde cuando está activo
+    borderColor: '#34C759',
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -657,12 +681,19 @@ const styles = StyleSheet.create({
   vehiclePlate: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF', // Cambiado de #34C759 (verde) a #007AFF (azul)
+    color: '#007AFF',
     marginBottom: 5,
     textAlign: 'center',
   },
   vehiclePlateTracking: {
-    color: '#34C759', // Verde cuando está tracking
+    color: '#34C759',
+  },
+  vehicleIdentifier: {
+    fontSize: 14,
+    color: '#007AFF',
+    marginBottom: 5,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   vehicleStatus: {
     fontSize: 14,

@@ -6,12 +6,8 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
+import type { Vehicle } from '../../src/types/vehicle';
 
-interface ActiveVehicle {
-  id: string;
-  plate: string;
-  nickname: string | null;
-}
 
 // Componente helper para crear secciones con parallax
 interface ParallaxSectionProps {
@@ -23,7 +19,7 @@ interface ParallaxSectionProps {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [activeVehicle, setActiveVehicle] = useState<ActiveVehicle | null>(null);
+  const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -520,19 +516,30 @@ export default function HomeScreen() {
           <Text style={styles.subtitle}>Evalúa conductores, mejora las carreteras</Text>
         </View>
 
-        {/* Vehículo activo */}
-        {!loading && activeVehicle && (
-          <View style={styles.activeVehicleCard}>
-            <Text style={styles.activeVehicleTitle}>🟢 Vehículo activo</Text>
-            <Text style={styles.activeVehiclePlate}>{activeVehicle.plate}</Text>
-            {activeVehicle.nickname && (
-              <Text style={styles.activeVehicleNickname}>{activeVehicle.nickname}</Text>
-            )}
-            <Text style={styles.activeVehicleSubtext}>
-              Necesario para recibir valoraciones en tu perfil
-            </Text>
-          </View>
-        )}
+{/* Vehículo activo */}
+{!loading && activeVehicle && (
+  <View style={styles.activeVehicleCard}>
+    <Text style={styles.activeVehicleTitle}>
+      {activeVehicle.vehicle_type === 'car' ? '🚗' : 
+       activeVehicle.vehicle_type === 'motorcycle' ? '🏍️' :
+       activeVehicle.vehicle_type === 'bike' ? '🚲' : '🛴'} Vehículo activo
+    </Text>
+    <Text style={styles.activeVehiclePlate}>
+      {activeVehicle.brand && activeVehicle.model 
+        ? `${activeVehicle.brand} ${activeVehicle.model}` 
+        : activeVehicle.nickname || 'Mi vehículo'}
+    </Text>
+    <Text style={styles.activeVehicleIdentifier}>
+      {activeVehicle.plate || (activeVehicle.serial_number ? `Serie: ${activeVehicle.serial_number}` : '')}
+    </Text>
+    {activeVehicle.nickname && activeVehicle.brand && (
+      <Text style={styles.activeVehicleNickname}>"{activeVehicle.nickname}"</Text>
+    )}
+    <Text style={styles.activeVehicleSubtext}>
+      Necesario para recibir valoraciones en tu perfil
+    </Text>
+  </View>
+)}
 
         {/* BOTÓN MODO CONDUCTOR */}
         <TouchableOpacity
@@ -716,6 +723,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#007AFF',
     fontWeight: 'bold',
+  },
+  activeVehicleIdentifier: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginTop: 4,
   },
   drivingModeButton: {
     backgroundColor: '#007AFF',

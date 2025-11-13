@@ -133,7 +133,7 @@ export default function RaffleScreen() {
         <View style={styles.prizeInfo}>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Fecha orientativa:</Text>
-            <Text style={styles.prizeValue}>9~12 de Diciembre de 2025</Text>
+            <Text style={styles.prizeValue}>9~12 de Diciembre</Text>
           </View>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Premio:</Text>
@@ -145,7 +145,7 @@ export default function RaffleScreen() {
           </View>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Duración:</Text>
-            <Text style={styles.prizeValue}>El plazo acabará el 7 de Diciembre</Text>
+            <Text style={styles.prizeValue}>Finalizará el 7 de Diciembre</Text>
           </View>
         </View>
         
@@ -168,7 +168,7 @@ export default function RaffleScreen() {
         </Text>
         <TouchableOpacity 
           style={styles.motivationButton}
-          onPress={() => router.back()}
+          onPress={() => router.push('/(tabs)/referrals')}
         >
           <Text style={styles.motivationButtonText}>Invitar más amig@s</Text>
         </TouchableOpacity>
