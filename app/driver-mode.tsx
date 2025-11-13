@@ -482,18 +482,6 @@ const updateStats = async () => {
 
           {isTracking ? (
             <>
-              {/* Stats - SOLO 2 valores */}
-              <View style={styles.statsContainer}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{formatDuration(stats.duration)}</Text>
-                  <Text style={styles.statLabel}>Duración</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{formatDistance(stats.distance)}</Text>
-                  <Text style={styles.statLabel}>Distancia</Text>
-                </View>
-              </View>
-
               {/* Botón detener */}
               <TouchableOpacity
                 style={styles.stopButton}
