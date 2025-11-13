@@ -34,34 +34,22 @@ export default function LoginScreen() {
 
         if (error) throw error;
 
-        // Si hay código de referido, procesarlo
+        // Si hay código de referido, guardarlo en el perfil
         if (referralCode.trim() && data.user) {
           try {
-            // Validar que el código existe y obtener el referrer
-            const { data: codeData } = await supabase
-              .from('user_referral_codes')
-              .select('user_id')
-              .eq('referral_code', referralCode.toUpperCase().trim())
-              .maybeSingle();
+            // Guardar el código en el perfil del usuario
+            // El trigger se encargará automáticamente de procesar el referido
+            const { error: profileError } = await supabase
+              .from('user_profiles')
+              .update({ 
+                invited_by_code: referralCode.toUpperCase().trim() 
+              })
+              .eq('user_id', data.user.id);
 
-            // Si el código es válido y no es el mismo usuario
-            if (codeData && codeData.user_id !== data.user.id) {
-              // Crear relación de referido
-              const { error: referralError } = await supabase
-                .from('user_referrals')
-                .insert({
-                  referrer_id: codeData.user_id,
-                  referred_id: data.user.id,
-                  referral_code: referralCode.toUpperCase().trim()
-                });
-
-              if (!referralError) {
-                console.log('✅ Referral registered successfully');
-              }
-            } else if (codeData && codeData.user_id === data.user.id) {
-              console.log('⚠️ User tried to use their own referral code');
+            if (profileError) {
+              console.error('Error guardando código de referido:', profileError);
             } else {
-              console.log('⚠️ Invalid referral code:', referralCode);
+              console.log('✅ Código de referido guardado, el trigger lo procesará automáticamente');
             }
           } catch (error) {
             console.error('Error processing referral code:', error);

@@ -26,7 +26,7 @@ import type {
 class DriverMatchingService {
   // Configuración del algoritmo
   private readonly MAX_SEARCH_RADIUS = 100; // metros
-  private readonly MIN_SEARCH_RADIUS = 20; // metros
+  private readonly MIN_SEARCH_RADIUS = 0; // metros
   private readonly TIME_WINDOW = 30; // segundos
 
   // Pesos del scoring

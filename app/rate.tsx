@@ -245,7 +245,6 @@ export default function RateScreen() {
           uses_signals: attributes.uses_signals ?? null,
           yields_right: attributes.yields_right ?? null,
           appropriate_speed: attributes.appropriate_speed ?? null,
-          parks_well: attributes.parks_well ?? null,
         });
 
       if (ratingError) throw ratingError;

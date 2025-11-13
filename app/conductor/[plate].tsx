@@ -6,13 +6,13 @@ import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } f
 import { supabase } from '../../src/config/supabase';
 import WeeklyRankingService from '../../src/services/WeeklyRankingService';
 import {
-  calculateAttributeStats,
-  DRIVING_ATTRIBUTES,
-  getDriverRank,
-  getEarnedBadges,
-  getUserLevel,
-  type AttributeStats,
-  type UserStats
+    calculateAttributeStats,
+    DRIVING_ATTRIBUTES,
+    getDriverRank,
+    getEarnedBadges,
+    getUserLevel,
+    type AttributeStats,
+    type UserStats
 } from '../../src/utils/gamification';
 
 interface Rating {
@@ -27,7 +27,6 @@ interface Rating {
   uses_signals?: boolean | null;
   yields_right?: boolean | null;
   appropriate_speed?: boolean | null;
-  parks_well?: boolean | null;
 }
 
 interface UserProfile {
