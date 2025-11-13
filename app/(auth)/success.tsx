@@ -1,88 +1,106 @@
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+
 export default function AuthSuccess() {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px'
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '20px',
-          padding: '40px',
-          maxWidth: '500px',
-          width: '100%',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-          textAlign: 'center'
-        }}>
-          {/* Logo o imagen */}
-          <img 
-            src="/logo.png" 
-            alt="DriveSkore"
-            style={{
-              width: '400px',
-              height: 'auto',
-              marginBottom: '20px',
-              objectFit: 'contain'
-            }}
-          />
-          
-          <div style={{ fontSize: '60px', marginBottom: '20px' }}>✅</div>
-          
-          <h1 style={{ 
-            fontSize: '32px', 
-            marginBottom: '16px',
-            color: '#1a1a1a',
-            fontWeight: 'bold'
-          }}>
-            ¡Email Confirmado!
-          </h1>
-          
-          <p style={{ 
-            fontSize: '16px', 
-            color: '#666', 
-            marginBottom: '30px',
-            lineHeight: '1.6'
-          }}>
-            Tu cuenta ha sido verificada correctamente.<br/>
-            Ya puedes empezar a usar DriveSkore.
-          </p>
-          
-          <a 
-            href="driveskore://"
-            style={{
-              display: 'inline-block',
-              backgroundColor: '#007AFF',
-              color: 'white',
-              padding: '16px 40px',
-              borderRadius: '12px',
-              textDecoration: 'none',
-              fontWeight: 'bold',
-              fontSize: '18px',
-              boxShadow: '0 4px 15px rgba(0,122,255,0.3)',
-              transition: 'transform 0.2s'
-            }}
-          >
-            Abrir DriveSkore
-          </a>
-          
-          <p style={{ 
-            fontSize: '13px', 
-            color: '#999', 
-            marginTop: '25px',
-            lineHeight: '1.5'
-          }}>
-            ¿No tienes la app instalada?<br/>
-            <a 
-              href="https://driveskore.vercel.app" 
-              style={{ color: '#007AFF', textDecoration: 'none' }}
-            >
-              Descárgala aquí
-            </a>
-          </p>
-        </div>
-      </div>
-    );
-  }
+  return (
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Image 
+          source={require('../../assets/images/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        
+        <Text style={styles.emoji}>✅</Text>
+        
+        <Text style={styles.title}>¡Email Confirmado!</Text>
+        
+        <Text style={styles.description}>
+          Tu cuenta ha sido verificada correctamente.{'\n'}
+          Ya puedes empezar a usar DriveSkore.
+        </Text>
+        
+        <Pressable 
+          style={styles.button}
+          onPress={() => Linking.openURL('driveskore://')}
+        >
+          <Text style={styles.buttonText}>Abrir DriveSkore</Text>
+        </Pressable>
+        
+        <Text style={styles.footerText}>
+          ¿No tienes la app instalada?
+        </Text>
+        <Pressable onPress={() => Linking.openURL('https://driveskore.vercel.app')}>
+          <Text style={styles.link}>Descárgala aquí</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#667eea', // Fallback para mobile
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 40,
+    maxWidth: 500,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 60,
+    elevation: 10,
+  },
+  logo: {
+    width: 280,
+    height: 80,
+    marginBottom: 20,
+  },
+  emoji: {
+    fontSize: 60,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 30,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    marginBottom: 25,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#999',
+    marginBottom: 5,
+  },
+  link: {
+    fontSize: 13,
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+});
