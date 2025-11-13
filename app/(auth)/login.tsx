@@ -28,7 +28,7 @@ export default function LoginScreen() {
           email,
           password,
           options: {
-            emailRedirectTo: 'https://driveskore.vercel.app/auth/success',
+            emailRedirectTo: 'https://driveskore.vercel.app/success',
           }
         });
 
