@@ -1,9 +1,14 @@
 // src/services/LocationTrackingService.ts
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
+import WorkManager from '../components/work-manager/WorkManagerModule';
 import { supabase } from '../config/supabase';
 
 // ============================================================================
@@ -84,7 +89,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 }
 
 // ============================================================================
-// 🔥 DEFINICIÓN GLOBAL DEL BACKGROUND TASK (FUERA DE LA CLASE)
+// 🔥 DEFINICIÓN GLOBAL DEL BACKGROUND TASK CON WORKMANAGER
 // ============================================================================
 
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
@@ -123,66 +128,54 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
       const { locations } = data;
       await logToStorage(`📍 ${locations.length} ubicaciones capturadas en background`);
       
-      // 🔥 GUARDAR DIRECTAMENTE EN BD CON FETCH + TOKEN DE USUARIO
+      // 🔥 USAR WORKMANAGER EN LUGAR DE FETCH DIRECTO
       let successCount = 0;
       let failCount = 0;
       
       for (const location of locations) {
         try {
-          const payload = {
-            user_id: userId,
+          await logToStorage('🔧 Programando insert con WorkManager');
+          
+          // 🔥 Llamar a WorkManager nativo
+          const workId = await WorkManager.scheduleLocationSync({
+            supabaseUrl: SUPABASE_URL!,
+            accessToken: session.access_token,
+            anonKey: SUPABASE_ANON_KEY!,
+            userId: userId,
             plate: plate,
-            session_id: sessionId,
+            sessionId: sessionId,
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
-            location: `POINT(${location.coords.longitude} ${location.coords.latitude})`,
             accuracy: location.coords.accuracy || 0,
             speed: location.coords.speed ? location.coords.speed * 3.6 : 0,
             heading: location.coords.heading || 0,
-            bluetooth_mac_hash: 'background-task',
-            captured_at: new Date(location.timestamp).toISOString()
-          };
+            timestamp: new Date(location.timestamp).toISOString()
+          });
           
-          const response = await fetchWithTimeout(
-            `${SUPABASE_URL}/rest/v1/driver_locations`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${session.access_token}`,
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify(payload)
-            },
-            10000
-          );
-          
-          if (response.ok) {
-            successCount++;
-          } else {
-            failCount++;
-            const errorText = await response.text();
-            await logToStorage('❌ INSERT individual falló', { status: response.status, error: errorText });
-          }
+          await logToStorage('✅ WorkManager job programado', { workId });
+          successCount++;
           
         } catch (err: any) {
           failCount++;
-          await logToStorage('💥 EXCEPCIÓN EN INSERT', { message: err?.message });
+          await logToStorage('💥 Error programando WorkManager', { message: err?.message });
         }
       }
       
-      await logToStorage('📊 Resultado inserts', { success: successCount, fail: failCount, total: locations.length });
+      await logToStorage('📊 WorkManager jobs programados', { 
+        success: successCount, 
+        fail: failCount, 
+        total: locations.length 
+      });
       
       // Actualizar estadísticas de la sesión
       try {
-        // Primero obtener la sesión actual
+        // Obtener sesión actual
         const getResponse = await fetchWithTimeout(
           `${SUPABASE_URL}/rest/v1/driving_sessions?id=eq.${sessionId}&select=*`,
           {
             method: 'GET',
             headers: {
-              'apikey': SUPABASE_ANON_KEY,
+              'apikey': SUPABASE_ANON_KEY!,
               'Authorization': `Bearer ${session.access_token}`
             }
           },
@@ -204,7 +197,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
                 method: 'PATCH',
                 headers: {
                   'Content-Type': 'application/json',
-                  'apikey': SUPABASE_ANON_KEY,
+                  'apikey': SUPABASE_ANON_KEY!,
                   'Authorization': `Bearer ${session.access_token}`,
                   'Prefer': 'return=minimal'
                 },
@@ -218,7 +211,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
             );
             
             if (updateResponse.ok) {
-              await logToStorage('✅ Sesión actualizada', { duration: durationSeconds, newLocations: successCount });
+              await logToStorage('✅ Sesión actualizada', { 
+                duration: durationSeconds, 
+                newLocations: successCount 
+              });
             } else {
               const errorText = await updateResponse.text();
               await logToStorage('❌ Error actualizando sesión', { error: errorText });
@@ -437,8 +433,30 @@ class LocationTrackingService {
 
       console.log('✅ Permisos otorgados');
 
+      // 🔥 NUEVO: Solicitar exención de optimización de batería (solo Android)
+      if (Platform.OS === 'android') {
+        try {
+          console.log('🔋 Solicitando exención de optimización de batería...');
+          await IntentLauncher.startActivityAsync(
+            'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+            { data: `package:${Application.applicationId}` }
+          );
+          console.log('✅ Diálogo de batería mostrado');
+        } catch (error) {
+          console.log('⚠️ No se pudo solicitar exención de batería:', error);
+        }
+      }
+
       // Iniciar foreground service
       await this.startForegroundService();
+
+      // 🔥 NUEVO: Activar wake lock para mantener CPU activa
+      try {
+        await activateKeepAwakeAsync();
+        console.log('✅ Keep awake activado - CPU permanecerá activa');
+      } catch (error) {
+        console.error('⚠️ Error activando keep awake:', error);
+      }
 
       // Iniciar tracking
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
@@ -487,6 +505,10 @@ class LocationTrackingService {
         name: 'Tracking de Ubicación',
         importance: Notifications.AndroidImportance.MAX,
         sound: 'default',
+        enableVibrate: true,
+        vibrationPattern: [0, 250, 250, 250],
+        enableLights: true,
+        lightColor: '#007AFF',
       });
 
       await Notifications.scheduleNotificationAsync({
@@ -499,7 +521,7 @@ class LocationTrackingService {
         trigger: null,
       });
       
-      console.log('✅ Foreground service iniciado');
+      console.log('✅ Foreground service iniciado con prioridad MAX');
     } catch (error) {
       console.error('❌ Error iniciando foreground service:', error);
     }
@@ -516,6 +538,22 @@ class LocationTrackingService {
       }
 
       console.log('⏸️ Deteniendo tracking...');
+
+      // 🔥 Cancelar todos los trabajos pendientes de WorkManager
+      try {
+        await WorkManager.cancelAllWork();
+        console.log('✅ Trabajos de WorkManager cancelados');
+      } catch (error) {
+        console.error('⚠️ Error cancelando WorkManager:', error);
+      }
+
+      // 🔥 Desactivar wake lock
+      try {
+        deactivateKeepAwake();
+        console.log('✅ Keep awake desactivado');
+      } catch (error) {
+        console.error('⚠️ Error desactivando keep awake:', error);
+      }
 
       // Finalizar sesión
       if (this.sessionId && this.startTime) {
