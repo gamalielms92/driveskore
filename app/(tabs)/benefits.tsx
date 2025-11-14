@@ -114,7 +114,11 @@ export default function BenefitsScreen() {
         }))
         .sort((a, b) => b.average - a.average);
 
-      const userRanking = usersWithScores.findIndex(u => u.user_id === user.id) + 1;
+      // Solo calcular ranking si tiene 3+ valoraciones
+        let userRanking = 0;
+        if (totalRatings >= 3) {
+          userRanking = usersWithScores.findIndex(u => u.user_id === user.id) + 1;
+        }
 
       // Calcular puntos
       const { count: ratingsGiven } = await supabase
@@ -263,8 +267,8 @@ export default function BenefitsScreen() {
       });
     }
 
-    // Carsharing (necesita Top 100)
-    if (ranking > 100 || ranking === 0) {
+    // Carsharing (necesita Top 100) y score mínimo
+    if (ranking > 100 || ranking === 0 || score < 3.5) {  
       locked.push({
         id: 'carsharing',
         icon: '🚗',
@@ -392,11 +396,20 @@ export default function BenefitsScreen() {
             <View style={styles.scoreDivider} />
             <View style={styles.scoreItem}>
               <Text style={styles.scoreLabel}>Ranking</Text>
-              <Text style={styles.scoreValue}>
-                {userStats.ranking > 0 ? `#${userStats.ranking}` : '-'}
-              </Text>
-              {userStats.totalUsers > 0 && (
-                <Text style={styles.scoreSubtext}>de {userStats.totalUsers}</Text>
+              {userStats.numRatings >= 3 ? (
+                <>
+                  <Text style={styles.scoreValue}>
+                    {userStats.ranking > 0 ? `#${userStats.ranking}` : '-'}
+                  </Text>
+                  {userStats.totalUsers > 0 && (
+                    <Text style={styles.scoreSubtext}>de {userStats.totalUsers}</Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.scoreValue}>-</Text>
+                  <Text style={styles.scoreSubtext}>Min. 3 valoraciones</Text>
+                </>
               )}
             </View>
           </View>
