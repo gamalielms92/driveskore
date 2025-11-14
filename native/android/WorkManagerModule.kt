@@ -2,28 +2,30 @@ package com.driveskore.app
 
 import android.content.Context
 import androidx.work.*
-import expo.modules.kotlin.modules.Module
-import expo.modules.kotlin.modules.ModuleDefinition
+import com.facebook.react.bridge.*
 import java.util.concurrent.TimeUnit
 
-class WorkManagerModule : Module() {
-    override fun definition() = ModuleDefinition {
-        Name("WorkManager")
+class WorkManagerModule(reactContext: ReactApplicationContext) : 
+    ReactContextBaseJavaModule(reactContext) {
 
-        AsyncFunction("scheduleLocationSync") { data: Map<String, Any> ->
+    override fun getName(): String = "WorkManager"
+
+    @ReactMethod
+    fun scheduleLocationSync(data: ReadableMap, promise: Promise) {
+        try {
             val workData = Data.Builder()
-                .putString("supabase_url", data["supabaseUrl"] as? String)
-                .putString("access_token", data["accessToken"] as? String)
-                .putString("user_id", data["userId"] as? String)
-                .putString("plate", data["plate"] as? String)
-                .putString("session_id", data["sessionId"] as? String)
-                .putDouble("latitude", data["latitude"] as? Double ?: 0.0)
-                .putDouble("longitude", data["longitude"] as? Double ?: 0.0)
-                .putDouble("accuracy", data["accuracy"] as? Double ?: 0.0)
-                .putDouble("speed", data["speed"] as? Double ?: 0.0)
-                .putDouble("heading", data["heading"] as? Double ?: 0.0)
-                .putString("timestamp", data["timestamp"] as? String)
-                .putString("anon_key", data["anonKey"] as? String)
+                .putString("supabase_url", data.getString("supabaseUrl"))
+                .putString("access_token", data.getString("accessToken"))
+                .putString("user_id", data.getString("userId"))
+                .putString("plate", data.getString("plate"))
+                .putString("session_id", data.getString("sessionId"))
+                .putDouble("latitude", data.getDouble("latitude"))
+                .putDouble("longitude", data.getDouble("longitude"))
+                .putDouble("accuracy", data.getDouble("accuracy"))
+                .putDouble("speed", data.getDouble("speed"))
+                .putDouble("heading", data.getDouble("heading"))
+                .putString("timestamp", data.getString("timestamp"))
+                .putString("anon_key", data.getString("anonKey"))
                 .build()
 
             val constraints = Constraints.Builder()
@@ -40,15 +42,23 @@ class WorkManagerModule : Module() {
                 )
                 .build()
 
-            val workManager = WorkManager.getInstance(appContext.reactContext as Context)
+            val workManager = WorkManager.getInstance(reactApplicationContext)
             workManager.enqueue(workRequest)
 
-            workRequest.id.toString()
+            promise.resolve(workRequest.id.toString())
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message, e)
         }
+    }
 
-        AsyncFunction("cancelAllWork") {
-            val workManager = WorkManager.getInstance(appContext.reactContext as Context)
+    @ReactMethod
+    fun cancelAllWork(promise: Promise) {
+        try {
+            val workManager = WorkManager.getInstance(reactApplicationContext)
             workManager.cancelAllWork()
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message, e)
         }
     }
 }
