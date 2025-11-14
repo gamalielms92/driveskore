@@ -78,7 +78,7 @@
       ],
       "expo-notifications",
       [
-        "./plugin/withFloatingButton.js"
+        "./plugin/withNativeModules"
       ],
       [
         "./plugin/withReactNativeKeyEvent.js"
@@ -106,7 +106,6 @@
           }
         }
       ],
-      ["./plugin/withWorkManager.js"],
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "expo-router"
