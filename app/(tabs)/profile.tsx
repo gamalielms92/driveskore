@@ -15,7 +15,7 @@ import {
   getUserLevel,
   type UserStats
 } from '../../src/utils/gamification';
-import { getVehicleDisplayName, getVehicleIcon } from '../../src/utils/vehicleHelpers';
+import { getVehicleDisplayName, getVehicleIcon, isVirtualPlate } from '../../src/utils/vehicleHelpers';
 
 interface UserRating {
   id: string;
@@ -129,12 +129,13 @@ export default function ProfileScreen() {
 
       setDriverProfiles(driverProfilesData);
 
-      // Calcular posición global
+      // Cargar posición global
       try {
         const position = await WeeklyRankingService.getUserGlobalPosition(user.id);
         setGlobalPosition(position === 9999 ? null : position);
       } catch (error) {
         console.error('Error cargando posición global:', error);
+        setGlobalPosition(null);
       }
 
       // Calcular estadísticas
@@ -182,7 +183,6 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     if (Platform.OS === 'web') {
-      // ✅ En web usamos window.confirm
       const confirmed = window.confirm('¿Estás seguro de que quieres cerrar sesión?');
       if (confirmed) {
         try {
@@ -195,23 +195,24 @@ export default function ProfileScreen() {
         }
       }
     } else {
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro de que quieres salir?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Salir',
-          style: 'destructive',
-          onPress: async () => {
-            await EventCaptureService.cleanup();
-            await supabase.auth.signOut();
-            router.replace('/(auth)/login');
+      Alert.alert(
+        'Cerrar Sesión',
+        '¿Estás seguro de que quieres salir?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Salir',
+            style: 'destructive',
+            onPress: async () => {
+              await EventCaptureService.cleanup();
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            }
           }
-        }
-      ]
-    );
-  }};
+        ]
+      );
+    }
+  };
 
   const renderStars = (score: number) => {
     return '⭐'.repeat(Math.round(score)) + '☆'.repeat(5 - Math.round(score));
@@ -282,18 +283,17 @@ export default function ProfileScreen() {
           )}
 
           <TouchableOpacity
-              style={styles.viewDetailsButton}
-              onPress={() => {
-                if (vehicles.length > 0 && vehicles[0].online) {
-                  router.push(`/conductor/${vehicles[0].plate}`);
-                } else if (vehicles.length > 0) {
-                  router.push(`/conductor/${vehicles[0].plate}`);
-                }
-              }}
-            >
-              <Text style={styles.viewDetailsButtonText}>Ver perfil público →</Text>
+            style={styles.viewDetailsButton}
+            onPress={() => {
+              if (vehicles.length > 0 && vehicles[0].online) {
+                router.push(`/conductor/${vehicles[0].plate}`);
+              } else if (vehicles.length > 0) {
+                router.push(`/conductor/${vehicles[0].plate}`);
+              }
+            }}
+          >
+            <Text style={styles.viewDetailsButtonText}>Ver perfil público →</Text>
           </TouchableOpacity>
-
         </View>
 
         {/* Botón editar perfil */}
@@ -306,7 +306,7 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* 🆕 SISTEMA DE NIVELES */}
+        {/* SISTEMA DE NIVELES */}
         <View style={styles.levelCard}>
           <View style={styles.levelHeader}>
             <Text style={styles.levelIcon}>{userLevel.icon}</Text>
@@ -346,19 +346,47 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* 🆕 POSICIÓN GLOBAL */}
-        {globalPosition && (
-          <View style={styles.globalPositionCard}>
-            <Text style={styles.globalPositionTitle}>🌍 Posición Global</Text>
-            <Text style={styles.globalPositionNumber}>#{globalPosition}</Text>
-            <TouchableOpacity 
-              style={styles.viewRankingButton}
-              onPress={() => router.push('/(tabs)/search')}
-            >
-              <Text style={styles.viewRankingButtonText}>Ver Ranking Completo →</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* POSICIÓN GLOBAL */}
+        {(() => {
+          const totalRatings = driverProfiles.reduce((sum, profile) => sum + profile.num_ratings, 0);
+          
+          if (globalPosition && globalPosition !== 9999) {
+            return (
+              <View style={styles.rankingCard}>
+                <Text style={styles.rankingTitle}>🌍 Posición Global</Text>
+                {totalRatings >= 3 ? (
+                  <>
+                    <Text style={styles.rankingPosition}>#{globalPosition}</Text>
+                    <TouchableOpacity 
+                      style={styles.viewRankingButton}
+                      onPress={() => router.push('/(tabs)/search')}
+                    >
+                      <Text style={styles.viewRankingButtonText}>Ver Ranking Completo →</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.rankingPending}>Sin clasificar</Text>
+                    <Text style={styles.rankingRequirement}>
+                      Necesitas {3 - totalRatings} valoración{3 - totalRatings !== 1 ? 'es' : ''} más
+                    </Text>
+                  </>
+                )}
+              </View>
+            );
+          } else if (totalRatings > 0 && totalRatings < 3) {
+            return (
+              <View style={styles.rankingCard}>
+                <Text style={styles.rankingTitle}>🌍 Posición Global</Text>
+                <Text style={styles.rankingPending}>Sin clasificar</Text>
+                <Text style={styles.rankingRequirement}>
+                  Necesitas {3 - totalRatings} valoración{3 - totalRatings !== 1 ? 'es' : ''} más
+                </Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
 
         {/* Reputación como conductor */}
         {stats.totalRatingsReceived > 0 && driverRank && (
@@ -406,7 +434,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* 🆕 INSIGNIAS */}
+        {/* INSIGNIAS */}
         <View style={styles.badgesCard}>
           <Text style={styles.sectionTitle}>🏅 Mis Insignias</Text>
           
@@ -460,17 +488,17 @@ export default function ProfileScreen() {
             </Text>
           ) : (
             <View style={styles.vehiclesList}>
-{vehicles.slice(0, 3).map(vehicle => {
-  const vehicleIcon = getVehicleIcon(vehicle.vehicle_type || 'car');
-  const displayText = getVehicleDisplayName(vehicle);
+              {vehicles.slice(0, 3).map(vehicle => {
+                const vehicleIcon = getVehicleIcon(vehicle.vehicle_type || 'car');
+                const displayText = getVehicleDisplayName(vehicle);
                 
                 return (
                   <View key={vehicle.id} style={styles.vehicleItem}>
                     <Text style={styles.vehicleIcon}>{vehicleIcon}</Text>
                     <View style={styles.vehicleInfo}>
                       <Text style={styles.vehiclePlate}>{displayText}</Text>
-                      {vehicle.nickname && vehicle.plate && (
-                        <Text style={styles.vehicleNickname}>{vehicle.nickname}</Text>
+                      {vehicle.nickname && vehicle.plate && !isVirtualPlate(vehicle.plate) && (
+                        <Text style={styles.vehicleNickname}>{vehicle.plate}</Text>
                       )}
                     </View>
                     {vehicle.online && (
@@ -595,7 +623,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  // 🆕 Estilos de Niveles
   levelCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -658,7 +685,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  // 🆕 Posición Global
   globalPositionCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -691,6 +717,41 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  rankingCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  rankingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 12,
+  },
+  rankingPosition: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  rankingPending: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#999',
+    marginBottom: 8,
+  },
+  rankingRequirement: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
   driverReputationCard: {
     backgroundColor: '#FFF',
@@ -791,7 +852,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  // 🆕 Badges
   badgesCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
