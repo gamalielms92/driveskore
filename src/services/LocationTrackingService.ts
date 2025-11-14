@@ -10,31 +10,6 @@ import { supabase } from '../config/supabase';
 // INTERFACES Y TIPOS
 // ============================================================================
 
-interface QueuedLocation {
-  user_id: string;
-  plate: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  speed: number;
-  heading: number;
-  timestamp: string;
-}
-
-interface DriverLocationInsert {
-  user_id: string;
-  plate: string;
-  session_id: string | null;
-  latitude: number;
-  longitude: number;
-  location: string;
-  accuracy: number;
-  speed: number;
-  heading: number;
-  bluetooth_mac_hash: string;
-  captured_at: string;
-}
-
 interface TrackingStats {
   duration: number;
   distance: number;
@@ -45,10 +20,220 @@ interface TrackingStats {
 // ============================================================================
 
 const LOCATION_TASK_NAME = 'background-location-task';
-const SYNC_INTERVAL = 5000; // 5 segundos
-const GPS_UPDATE_INTERVAL = 1000; // 1 segundos
-const GPS_DISTANCE_INTERVAL = 10; // 10 metros
+const GPS_UPDATE_INTERVAL = 5000; // 5 segundos
 const MIN_DISTANCE_THRESHOLD = 50; // 🎯 Umbral mínimo para contar distancia
+
+// 🔥 CONFIGURACIÓN DE SUPABASE PARA FETCH DIRECTO
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+// Validación
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('❌ Faltan variables de entorno de Supabase');
+}
+
+// ============================================================================
+// HELPER PARA LOGGING EN BACKGROUND
+// ============================================================================
+
+async function logToStorage(message: string, data?: any) {
+  try {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      message,
+      data: data ? JSON.stringify(data) : undefined
+    };
+    
+    const existingLogs = await AsyncStorage.getItem('background_logs');
+    const logs = existingLogs ? JSON.parse(existingLogs) : [];
+    logs.push(logEntry);
+    
+    // Mantener solo los últimos 100 logs
+    const trimmedLogs = logs.slice(-100);
+    
+    await AsyncStorage.setItem('background_logs', JSON.stringify(trimmedLogs));
+    console.log(message, data);
+  } catch (err) {
+    console.error('Error guardando log:', err);
+  }
+}
+
+// ============================================================================
+// HELPER PARA FETCH CON TIMEOUT
+// ============================================================================
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 10000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Fetch timeout after ' + timeoutMs + 'ms');
+    }
+    throw error;
+  }
+}
+
+// ============================================================================
+// 🔥 DEFINICIÓN GLOBAL DEL BACKGROUND TASK (FUERA DE LA CLASE)
+// ============================================================================
+
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
+  await logToStorage('🔵 BACKGROUND TASK EJECUTADO');
+  
+  if (error) {
+    await logToStorage('❌ Error en background task', error);
+    return;
+  }
+
+  if (data) {
+    try {
+      // Recuperar datos de tracking guardados
+      const trackingDataStr = await AsyncStorage.getItem('active_tracking_session');
+      
+      if (!trackingDataStr) {
+        await logToStorage('⚠️ No hay sesión activa en AsyncStorage');
+        return;
+      }
+      
+      const trackingData = JSON.parse(trackingDataStr);
+      const { userId, plate, sessionId } = trackingData;
+      
+      await logToStorage('📦 Sesión activa', { userId, plate, sessionId });
+      
+      // 🔥 OBTENER TOKEN DE SUPABASE
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        await logToStorage('❌ No hay access_token de Supabase');
+        return;
+      }
+      
+      await logToStorage('✅ Access token obtenido');
+      
+      const { locations } = data;
+      await logToStorage(`📍 ${locations.length} ubicaciones capturadas en background`);
+      
+      // 🔥 GUARDAR DIRECTAMENTE EN BD CON FETCH + TOKEN DE USUARIO
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const location of locations) {
+        try {
+          const payload = {
+            user_id: userId,
+            plate: plate,
+            session_id: sessionId,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            location: `POINT(${location.coords.longitude} ${location.coords.latitude})`,
+            accuracy: location.coords.accuracy || 0,
+            speed: location.coords.speed ? location.coords.speed * 3.6 : 0,
+            heading: location.coords.heading || 0,
+            bluetooth_mac_hash: 'background-task',
+            captured_at: new Date(location.timestamp).toISOString()
+          };
+          
+          const response = await fetchWithTimeout(
+            `${SUPABASE_URL}/rest/v1/driver_locations`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${session.access_token}`,
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify(payload)
+            },
+            10000
+          );
+          
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+            const errorText = await response.text();
+            await logToStorage('❌ INSERT individual falló', { status: response.status, error: errorText });
+          }
+          
+        } catch (err: any) {
+          failCount++;
+          await logToStorage('💥 EXCEPCIÓN EN INSERT', { message: err?.message });
+        }
+      }
+      
+      await logToStorage('📊 Resultado inserts', { success: successCount, fail: failCount, total: locations.length });
+      
+      // Actualizar estadísticas de la sesión
+      try {
+        // Primero obtener la sesión actual
+        const getResponse = await fetchWithTimeout(
+          `${SUPABASE_URL}/rest/v1/driving_sessions?id=eq.${sessionId}&select=*`,
+          {
+            method: 'GET',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          },
+          10000
+        );
+        
+        if (getResponse.ok) {
+          const sessions = await getResponse.json();
+          if (sessions && sessions.length > 0) {
+            const sessionData = sessions[0];
+            const now = new Date();
+            const startTime = new Date(sessionData.start_time);
+            const durationSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+            
+            // Actualizar la sesión
+            const updateResponse = await fetchWithTimeout(
+              `${SUPABASE_URL}/rest/v1/driving_sessions?id=eq.${sessionId}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                  duration_seconds: durationSeconds,
+                  locations_count: (sessionData.locations_count || 0) + successCount,
+                  updated_at: now.toISOString()
+                })
+              },
+              10000
+            );
+            
+            if (updateResponse.ok) {
+              await logToStorage('✅ Sesión actualizada', { duration: durationSeconds, newLocations: successCount });
+            } else {
+              const errorText = await updateResponse.text();
+              await logToStorage('❌ Error actualizando sesión', { error: errorText });
+            }
+          }
+        }
+      } catch (error: any) {
+        await logToStorage('❌ Error en actualización de sesión', { message: error?.message });
+      }
+      
+    } catch (err: any) {
+      await logToStorage('💥 Error general en background task', { message: err?.message });
+    }
+  }
+});
 
 // ============================================================================
 // SERVICIO
@@ -56,7 +241,6 @@ const MIN_DISTANCE_THRESHOLD = 50; // 🎯 Umbral mínimo para contar distancia
 
 class LocationTrackingService {
   private isTracking: boolean = false;
-  private syncTimer: NodeJS.Timeout | null = null;
   private currentUserId: string | null = null;
   private currentPlate: string | null = null;
   
@@ -83,9 +267,6 @@ class LocationTrackingService {
     console.log('🔧 LocationTrackingService inicializado');
     console.log('👤 User ID:', userId);
     console.log('🚗 Plate:', plate);
-    
-    // Definir tarea de background
-    await this.defineBackgroundTask();
   }
 
   /**
@@ -96,7 +277,6 @@ class LocationTrackingService {
       return null;
     }
 
-    // Calcular duración en segundos
     const now = new Date();
     const duration = Math.floor((now.getTime() - this.startTime.getTime()) / 1000);
 
@@ -107,86 +287,27 @@ class LocationTrackingService {
   }
 
   /**
-   * Define la tarea que se ejecutará en background
+   * Lee los logs guardados durante background
    */
-  private async defineBackgroundTask(): Promise<void> {
-    TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
-      if (error) {
-        console.error('❌ Error en background task:', error);
-        return;
-      }
-
-      if (data) {
-        const { locations } = data;
-        
-        // Procesar cada ubicación capturada
-        for (const location of locations) {
-          await this.processLocation(location);
-        }
-      }
-    });
+  async readBackgroundLogs(): Promise<any[]> {
+    try {
+      const logsStr = await AsyncStorage.getItem('background_logs');
+      return logsStr ? JSON.parse(logsStr) : [];
+    } catch (error) {
+      console.error('Error leyendo logs:', error);
+      return [];
+    }
   }
 
   /**
-   * Procesa una ubicación capturada
+   * Limpia los logs de background
    */
-  private async processLocation(location: Location.LocationObject): Promise<void> {
+  async clearBackgroundLogs(): Promise<void> {
     try {
-      const locationData: QueuedLocation = {
-        user_id: this.currentUserId!,
-        plate: this.currentPlate!,
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy || 0,
-        speed: location.coords.speed ? location.coords.speed * 3.6 : 0,
-        heading: location.coords.heading || 0,
-        timestamp: new Date(location.timestamp).toISOString(),
-      };
-
-      // 🎯 CALCULAR DISTANCIA CON FILTRO
-      if (this.lastLocation) {
-        const distance = this.calculateDistance(
-          this.lastLocation.latitude,
-          this.lastLocation.longitude,
-          locationData.latitude,
-          locationData.longitude
-        );
-
-        // ✅ FILTRO: Solo contar si el movimiento es >= 50m
-        // Esto elimina el "ruido" del GPS cuando estás parado
-        if (distance >= MIN_DISTANCE_THRESHOLD) {
-          this.totalDistance += distance;
-          
-          // Solo actualizar lastLocation si el movimiento fue significativo
-          this.lastLocation = { 
-            latitude: locationData.latitude, 
-            longitude: locationData.longitude 
-          };
-          
-          console.log(`📍 Movimiento válido #${this.locationCount}: ${distance.toFixed(0)}m | Total: ${this.totalDistance.toFixed(0)}m`);
-        } else {
-          console.log(`⏸️ Movimiento ignorado: ${distance.toFixed(1)}m (< ${MIN_DISTANCE_THRESHOLD}m)`);
-        }
-      } else {
-        // Primera ubicación = punto de referencia
-        this.lastLocation = { 
-          latitude: locationData.latitude, 
-          longitude: locationData.longitude 
-        };
-        console.log('📍 Primera ubicación establecida como referencia');
-      }
-
-      this.locationCount++;
-
-      // Guardar en cola local (SIEMPRE, para el tracking en BD)
-      await this.queueLocationUpdate(locationData);
-
-      // Actualizar sesión cada 5 ubicaciones
-      if (this.locationCount % 5 === 0) {
-        await this.updateSession();
-      }
+      await AsyncStorage.removeItem('background_logs');
+      console.log('✅ Logs de background limpiados');
     } catch (error) {
-      console.error('❌ Error procesando ubicación:', error);
+      console.error('Error limpiando logs:', error);
     }
   }
 
@@ -199,7 +320,7 @@ class LocationTrackingService {
     lat2: number,
     lon2: number
   ): number {
-    const R = 6371e3; // Radio de la Tierra en metros
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -210,7 +331,7 @@ class LocationTrackingService {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distancia en metros
+    return R * c;
   }
 
   /**
@@ -244,26 +365,6 @@ class LocationTrackingService {
       }
     } catch (error) {
       console.error('❌ Error en updateSession:', error);
-    }
-  }
-
-  /**
-   * Añade una ubicación a la cola local
-   */
-  private async queueLocationUpdate(locationData: QueuedLocation): Promise<void> {
-    try {
-      const queueKey = `location_queue_${this.currentUserId}`;
-      const existingQueue = await AsyncStorage.getItem(queueKey);
-      const queue: QueuedLocation[] = existingQueue ? JSON.parse(existingQueue) : [];
-      
-      queue.push(locationData);
-      
-      // Limitar tamaño de cola (últimas 20 ubicaciones)
-      const trimmedQueue = queue.slice(-20);
-      
-      await AsyncStorage.setItem(queueKey, JSON.stringify(trimmedQueue));
-    } catch (error) {
-      console.error('❌ Error guardando en cola:', error);
     }
   }
 
@@ -312,6 +413,15 @@ class LocationTrackingService {
       this.sessionId = session.id;
       console.log('✅ Sesión creada:', this.sessionId);
 
+      // Guardar datos para el background task
+      await AsyncStorage.setItem('active_tracking_session', JSON.stringify({
+        userId: this.currentUserId,
+        plate: this.currentPlate,
+        sessionId: this.sessionId,
+        startTime: this.startTime?.toISOString()
+      }));
+      console.log('💾 Datos de tracking guardados para background');
+
       // Verificar permisos
       const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus !== 'granted') {
@@ -334,7 +444,6 @@ class LocationTrackingService {
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: GPS_UPDATE_INTERVAL,
-        distanceInterval: GPS_DISTANCE_INTERVAL,
         foregroundService: {
           notificationTitle: '🚗 Modo Conductor Activo',
           notificationBody: 'DriveSkore está registrando tu ubicación',
@@ -345,9 +454,6 @@ class LocationTrackingService {
       });
 
       console.log('✅ Location updates iniciados');
-
-      // Iniciar sincronización periódica
-      this.startPeriodicSync();
 
       this.isTracking = true;
       console.log('✅ Tracking iniciado exitosamente');
@@ -365,6 +471,9 @@ class LocationTrackingService {
         this.sessionId = null;
       }
       
+      // Limpiar AsyncStorage
+      await AsyncStorage.removeItem('active_tracking_session');
+      
       return false;
     }
   }
@@ -376,7 +485,7 @@ class LocationTrackingService {
     try {
       await Notifications.setNotificationChannelAsync('location-tracking', {
         name: 'Tracking de Ubicación',
-        importance: Notifications.AndroidImportance.DEFAULT,
+        importance: Notifications.AndroidImportance.MAX,
         sound: 'default',
       });
 
@@ -385,7 +494,7 @@ class LocationTrackingService {
           title: '🚗 Modo Conductor Activo',
           body: 'DriveSkore está registrando tu ubicación',
           sticky: true,
-          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+          priority: Notifications.AndroidNotificationPriority.MAX,
         },
         trigger: null,
       });
@@ -393,101 +502,6 @@ class LocationTrackingService {
       console.log('✅ Foreground service iniciado');
     } catch (error) {
       console.error('❌ Error iniciando foreground service:', error);
-    }
-  }
-
-  /**
-   * Inicia sincronización periódica
-   */
-  private startPeriodicSync(): void {
-    this.syncTimer = setInterval(() => {
-      this.syncQueuedLocations();
-    }, SYNC_INTERVAL);
-    
-    console.log('✅ Sincronización periódica iniciada (cada 5s)');
-  }
-
-  /**
-   * Sincroniza ubicaciones en cola con Supabase
-   */
-  private async syncQueuedLocations(): Promise<void> {
-    try {
-      // Validación temprana
-      if (!this.currentUserId || !this.currentPlate) {
-        console.error('❌ No hay userId o plate configurado');
-        return;
-      }
-  
-      const userId: string = this.currentUserId;
-      const plate: string = this.currentPlate;
-  
-      const queueKey = `location_queue_${userId}`;
-      const existingQueue = await AsyncStorage.getItem(queueKey);
-      
-      if (!existingQueue) return;
-      
-      const queue: QueuedLocation[] = JSON.parse(existingQueue);
-      
-      if (queue.length === 0) return;
-  
-      console.log(`📡 Sincronizando ${queue.length} ubicaciones...`);
-  
-      const locationsToSync = queue.slice(-5);
-      
-      // Preparar datos con session_id
-      const insertData: DriverLocationInsert[] = locationsToSync.map((loc: QueuedLocation) => ({
-        user_id: userId,
-        plate: plate,
-        session_id: this.sessionId,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        location: `POINT(${loc.longitude} ${loc.latitude})`,
-        accuracy: loc.accuracy,
-        speed: loc.speed,
-        heading: loc.heading,
-        bluetooth_mac_hash: 'placeholder',
-        captured_at: loc.timestamp,
-      }));
-  
-      console.log('📦 Preparando insert de', insertData.length, 'ubicaciones');
-
-      const { data, error } = await supabase
-        .from('driver_locations')
-        .insert(insertData)
-        .select();
-  
-      if (error) {
-        console.error('❌ Error insertando ubicaciones:', error.message);
-        console.log('🔄 Intentando inserción individual...');
-        
-        let successCount = 0;
-        for (const item of insertData) {
-          const { error: singleError } = await supabase
-            .from('driver_locations')
-            .insert(item);
-          
-          if (singleError) {
-            console.error('❌ Error individual:', singleError.message);
-          } else {
-            successCount++;
-          }
-        }
-        
-        console.log(`✅ Insertadas ${successCount}/${insertData.length} ubicaciones`);
-        
-        if (successCount > 0) {
-          await AsyncStorage.removeItem(queueKey);
-        }
-        
-        return;
-      }
-  
-      console.log('✅ Ubicaciones insertadas:', data?.length || 0);
-      await AsyncStorage.removeItem(queueKey);
-      console.log('🧹 Cola limpiada exitosamente');
-      
-    } catch (error) {
-      console.error('❌ Error en syncQueuedLocations:', error);
     }
   }
 
@@ -529,17 +543,12 @@ class LocationTrackingService {
         console.log('✅ Location updates detenidos');
       }
 
-      console.log('📡 Sincronizando ubicaciones pendientes...');
-      await this.syncQueuedLocations();
-
-      if (this.syncTimer) {
-        clearInterval(this.syncTimer);
-        this.syncTimer = null;
-        console.log('✅ Timer detenido');
-      }
-
       await Notifications.dismissAllNotificationsAsync();
       console.log('✅ Notificaciones canceladas');
+
+      // Limpiar datos de AsyncStorage
+      await AsyncStorage.removeItem('active_tracking_session');
+      console.log('🧹 Datos de tracking limpiados de AsyncStorage');
 
       // Resetear stats
       this.isTracking = false;
@@ -566,54 +575,10 @@ class LocationTrackingService {
   }
 
   /**
-   * Obtiene estadísticas de la cola
-   */
-  async getQueueStats(): Promise<{ count: number; oldest?: string; newest?: string }> {
-    try {
-      const queueKey = `location_queue_${this.currentUserId}`;
-      const existingQueue = await AsyncStorage.getItem(queueKey);
-      
-      if (!existingQueue) {
-        return { count: 0 };
-      }
-      
-      const queue: QueuedLocation[] = JSON.parse(existingQueue);
-      
-      return {
-        count: queue.length,
-        oldest: queue[0]?.timestamp,
-        newest: queue[queue.length - 1]?.timestamp,
-      };
-    } catch (error) {
-      console.error('❌ Error obteniendo stats:', error);
-      return { count: 0 };
-    }
-  }
-
-  /**
-   * Fuerza sincronización inmediata
-   */
-  async forceSyncNow(): Promise<boolean> {
-    try {
-      console.log('🔄 Forzando sincronización...');
-      await this.syncQueuedLocations();
-      return true;
-    } catch (error) {
-      console.error('❌ Error en sync forzado:', error);
-      return false;
-    }
-  }
-
-  /**
    * Limpia el servicio
    */
   cleanup(): void {
     console.log('🧹 Limpiando LocationTrackingService...');
-    
-    if (this.syncTimer) {
-      clearInterval(this.syncTimer);
-      this.syncTimer = null;
-    }
     
     this.isTracking = false;
     this.currentUserId = null;

@@ -157,12 +157,12 @@ export default function DriverModeScreen() {
 
   // También, asegúrate de que updateStats tenga logs para debug:
   const updateStats = async () => {
-    console.log('📊 updateStats() llamado');
+    //console.log('📊 updateStats() llamado');
     
     try {
       // Obtener datos reales del servicio de tracking
       const trackingData = await LocationTrackingService.getTrackingStats();
-      console.log('📊 Datos recibidos:', trackingData);
+      //console.log('📊 Datos recibidos:', trackingData);
       
       if (trackingData) {
         const newStats = {
@@ -171,7 +171,7 @@ export default function DriverModeScreen() {
           lastUpdate: new Date()
         };
         
-        console.log('📊 Actualizando estado con:', newStats);
+        //console.log('📊 Actualizando estado con:', newStats);
         setStats(newStats);
       } else {
         console.log('⚠️ No hay datos de tracking');

@@ -1,4 +1,4 @@
-// src/services/EventCaptureService.ts
+// src/services/EventService.ts
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';

@@ -96,6 +96,17 @@
           "cameraPermission": "DriveSkore necesita acceso a la cámara para añadir imagen en el perfil."
         }
       ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://maven.google.com"
+            ]
+          }
+        }
+      ],
+      ["./plugin/withWorkManager.js"],
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "expo-router"
