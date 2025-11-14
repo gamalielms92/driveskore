@@ -2,12 +2,13 @@
 // ✅ LANDING PAGE COMPLETA para Web + Home para Móvil
 // ✅ PARALLAX FUNCIONANDO CORRECTAMENTE
 
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import type { Vehicle } from '../../src/types/vehicle';
-
+import { getVehicleDescription, getVehicleDisplayName, getVehicleIcon } from '../../src/utils/vehicleHelpers';
 
 // Componente helper para crear secciones con parallax
 interface ParallaxSectionProps {
@@ -22,6 +23,36 @@ export default function HomeScreen() {
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const loadActiveVehicle = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        setIsLoggedIn(false);
+        setActiveVehicle(null);
+        return;
+      }
+  
+      setIsLoggedIn(true);
+  
+      // Buscar vehículo activo
+      const { data: vehicle } = await supabase
+        .from('user_vehicles')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('online', true)
+        .maybeSingle();
+  
+      setActiveVehicle(vehicle);
+      console.log('🔄 Vehículo activo recargado:', vehicle?.plate || vehicle?.nickname || 'ninguno');
+      
+    } catch (error) {
+      console.error('Error cargando vehículo activo:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -83,6 +114,16 @@ export default function HomeScreen() {
       };
     }
   }, []);
+
+  // Añadir useFocusEffect después del useEffect existente:
+useFocusEffect(
+  useCallback(() => {
+    console.log('🏠 Index enfocado - Recargando vehículo activo...');
+    if (Platform.OS !== 'web') {
+      loadActiveVehicle();
+    }
+  }, [])
+);
 
   const checkAuth = async () => {
     try {
@@ -520,17 +561,13 @@ export default function HomeScreen() {
 {!loading && activeVehicle && (
   <View style={styles.activeVehicleCard}>
     <Text style={styles.activeVehicleTitle}>
-      {activeVehicle.vehicle_type === 'car' ? '🚗' : 
-       activeVehicle.vehicle_type === 'motorcycle' ? '🏍️' :
-       activeVehicle.vehicle_type === 'bike' ? '🚲' : '🛴'} Vehículo activo
+      {getVehicleIcon(activeVehicle.vehicle_type)} Vehículo activo
     </Text>
     <Text style={styles.activeVehiclePlate}>
-      {activeVehicle.brand && activeVehicle.model 
-        ? `${activeVehicle.brand} ${activeVehicle.model}` 
-        : activeVehicle.nickname || 'Mi vehículo'}
+      {getVehicleDescription(activeVehicle)}
     </Text>
     <Text style={styles.activeVehicleIdentifier}>
-      {activeVehicle.plate || (activeVehicle.serial_number ? `Serie: ${activeVehicle.serial_number}` : '')}
+      {getVehicleDisplayName(activeVehicle)}
     </Text>
     {activeVehicle.nickname && activeVehicle.brand && (
       <Text style={styles.activeVehicleNickname}>"{activeVehicle.nickname}"</Text>

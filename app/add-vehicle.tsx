@@ -39,7 +39,6 @@ export default function AddVehicleScreen() {
     color: '',
     vehicle_type: 'car',
     plate: '',
-    serial_number: '',
     nickname: '',
     is_primary: false
   });
@@ -184,7 +183,9 @@ export default function AddVehicleScreen() {
         .from('user_vehicles')
         .insert({
           user_id: user.id,
-          plate: plateNormalized,
+          plate: formData.vehicle_type === 'bike' || formData.vehicle_type === 'scooter' 
+          ? null  // Para bicis/patinetes siempre null
+          : plateNormalized,  // Para coches/motos usar la matrícula
           nickname: formData.nickname?.trim() || null,
           online: isFirstVehicle,
           vehicle_photo_url: formData.vehicle_photo_url,
@@ -193,7 +194,6 @@ export default function AddVehicleScreen() {
           year: formData.year,
           color: formData.color,
           vehicle_type: formData.vehicle_type,
-          serial_number: formData.serial_number?.trim() || null,
           is_primary: formData.is_primary || isFirstVehicle
         });
       
@@ -424,82 +424,31 @@ export default function AddVehicleScreen() {
 
           {/* Matrícula o Número de Serie */}
           {(formData.vehicle_type === 'car' || formData.vehicle_type === 'motorcycle') ? (
-            <View style={styles.section}>
-              <Text style={styles.label}>
-                🚙 Matrícula <Text style={styles.required}>*</Text>
-              </Text>
-              <View style={styles.plateInputContainer}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    plateValidation?.isValid && !isBlacklisted(formData.plate) && styles.inputValid,
-                    plateValidation && !plateValidation.isValid && styles.inputInvalid
-                  ]}
-                  placeholder="Ej: 1234ABC"
-                  value={formData.plate}
-                  onChangeText={handlePlateChange}
-                  autoCapitalize="characters"
-                  maxLength={10}
-                />
-                {formData.plate && (
-                  <View style={styles.plateValidationIcon}>
-                    <Text style={styles.plateValidationIconText}>
-                      {plateValidation?.isValid && !isBlacklisted(formData.plate) ? '✅' : '❌'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              
-              {plateValidation && formData.plate && (
-                <>
-                  {plateValidation.isValid && !isBlacklisted(formData.plate) ? (
-                    <View style={styles.validationSuccess}>
-                      <Text style={styles.validationSuccessText}>
-                        ✓ Matrícula válida ({plateValidation.format === 'current' ? 'Formato actual' : 'Formato provincial'})
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.validationError}>
-                      <Text style={styles.validationErrorText}>
-                        {isBlacklisted(formData.plate) 
-                          ? '✗ Combinación de letras no permitida por la DGT'
-                          : '✗ Formato inválido. Ejemplo: 1234ABC o M1234BC'}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-          ) : (
-            <>
-              <View style={styles.section}>
-                <Text style={styles.label}>
-                  🚙 Matrícula (opcional)
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Si tiene matrícula"
-                  value={formData.plate}
-                  onChangeText={handlePlateChange}
-                  autoCapitalize="characters"
-                  maxLength={10}
-                />
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.label}>
-                  🔢 Número de Serie (opcional)
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: WBY12345678"
-                  value={formData.serial_number}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, serial_number: text }))}
-                  maxLength={30}
-                />
-              </View>
-            </>
-          )}
+  // Solo para coches y motos mostrar matrícula
+  <View style={styles.section}>
+    <Text style={styles.label}>
+      🚙 Matrícula <Text style={styles.required}>*</Text>
+    </Text>
+    <TextInput
+      style={styles.input}
+      placeholder="Ej: 1234ABC"
+      value={formData.plate}
+      onChangeText={handlePlateChange}
+      autoCapitalize="characters"
+      maxLength={10}
+    />
+    {/* Validación visual de matrícula... */}
+  </View>
+) : (
+  // Para bicis y patinetes NO mostrar NADA
+  <View style={styles.infoCard}>
+    <Text style={styles.infoIcon}>ℹ️</Text>
+    <Text style={styles.infoText}>
+      Las bicicletas y patinetes no requieren matrícula. 
+      Se asignará un identificador automático interno.
+    </Text>
+  </View>
+)}
 
           {/* Apodo */}
           <View style={styles.section}>
@@ -773,5 +722,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  infoCard: {
+    backgroundColor: '#E3F2FD',
+    padding: 15,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1565C0',
+    lineHeight: 20,
   },
 });

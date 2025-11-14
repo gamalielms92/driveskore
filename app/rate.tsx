@@ -19,6 +19,7 @@ import { Analytics } from '../src/services/Analytics';
 import type { Vehicle } from '../src/types/vehicle';
 import { DRIVING_ATTRIBUTES } from '../src/utils/gamification';
 import { validateSpanishPlate } from '../src/utils/plateValidator';
+import { getVehicleDisplayName, getVehicleIcon, isVirtualPlate } from '../src/utils/vehicleHelpers';
 
 interface Attribute {
   id: string;
@@ -354,7 +355,7 @@ export default function RateScreen() {
         ) : (
           <View style={styles.unknownDriverSection}>
             <Text style={styles.plateLabel}>Evaluando a:</Text>
-            <Text style={styles.plate}>{displayPlate}</Text>
+            <Text style={styles.plate}>{currentVehicle ? getVehicleDisplayName(currentVehicle) : displayPlate}</Text>
               <Text style={styles.unknownDriverText}>
                 Este conductor no tiene perfil en DriveSkore.
               </Text>
@@ -365,10 +366,14 @@ export default function RateScreen() {
         {currentVehicle && (
           <View style={styles.currentVehicleInfo}>
             <Text style={styles.currentVehicleText}>
-              🚗 {currentVehicle.brand} {currentVehicle.model}
+              {getVehicleIcon(currentVehicle.vehicle_type)} {currentVehicle.brand} {currentVehicle.model}
             </Text>
             {currentVehicle.year && (
               <Text style={styles.currentVehiclePlate}>Año {currentVehicle.year}</Text>
+            )}
+            {/* Mostrar identificador real solo si no es matrícula virtual */}
+            {!isVirtualPlate(currentVehicle.plate) && currentVehicle.plate && (
+              <Text style={styles.currentVehiclePlate}>Matrícula: {currentVehicle.plate}</Text>
             )}
           </View>
         )}

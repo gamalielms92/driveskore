@@ -20,7 +20,6 @@ export interface Vehicle {
   year: number; // OBLIGATORIO (1900-presente)
   color: string; // OBLIGATORIO (Rojo, Negro, etc.)
   vehicle_type: VehicleType; // OBLIGATORIO
-  serial_number: string | null; // Para bicis/patinetes
   is_primary: boolean; // Vehículo principal
   
   created_at: string;
@@ -35,7 +34,6 @@ export interface VehicleFormData {
   color: string;
   vehicle_type: VehicleType;
   plate?: string;
-  serial_number?: string;
   nickname?: string;
   is_primary?: boolean;
 }

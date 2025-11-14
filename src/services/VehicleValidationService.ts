@@ -57,22 +57,6 @@ export class VehicleValidationService {
       }
     }
     
-    if (data.vehicle_type === 'bike' || data.vehicle_type === 'scooter') {
-      // Bicis/patinetes pueden tener matrícula O número de serie
-      if ((!data.plate || data.plate.trim() === '') && 
-          (!data.serial_number || data.serial_number.trim() === '')) {
-        errors.push('🚲 Debes proporcionar matrícula o número de serie');
-      }
-      
-      // Si tiene número de serie, validarlo
-      if (data.serial_number && data.serial_number.trim() !== '') {
-        const serialValidation = this.validateSerialNumber(data.serial_number);
-        if (!serialValidation.isValid) {
-          errors.push(serialValidation.error || '🔢 Número de serie inválido');
-        }
-      }
-    }
-    
     // 7. Validar nickname si existe
     if (data.nickname && data.nickname.length > 50) {
       errors.push('✏️ El apodo no puede tener más de 50 caracteres');
@@ -101,40 +85,6 @@ export class VehicleValidationService {
       return {
         isValid: false,
         error: 'Formato inválido. Ejemplo válido: 1234ABC'
-      };
-    }
-    
-    return { isValid: true };
-  }
-  
-  /**
-   * Valida número de serie
-   */
-  static validateSerialNumber(serialNumber: string): { isValid: boolean; error?: string } {
-    const clean = serialNumber.trim();
-    
-    // Mínimo 5 caracteres, máximo 30
-    if (clean.length < 5) {
-      return {
-        isValid: false,
-        error: 'El número de serie debe tener al menos 5 caracteres'
-      };
-    }
-    
-    if (clean.length > 30) {
-      return {
-        isValid: false,
-        error: 'El número de serie no puede tener más de 30 caracteres'
-      };
-    }
-    
-    // Solo alfanuméricos y guiones
-    const validCharsRegex = /^[A-Z0-9-]+$/i;
-    
-    if (!validCharsRegex.test(clean)) {
-      return {
-        isValid: false,
-        error: 'El número de serie solo puede contener letras, números y guiones'
       };
     }
     

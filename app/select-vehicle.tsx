@@ -13,23 +13,8 @@ import {
   View
 } from 'react-native';
 import { supabase } from '../src/config/supabase';
-
-interface Vehicle {
-  id: string;
-  plate: string | null;
-  nickname: string | null;
-  online: boolean;
-  created_at: string;
-  // Nuevos campos
-  vehicle_photo_url: string | null;
-  brand: string | null;
-  model: string | null;
-  year: number | null;
-  color: string | null;
-  vehicle_type: 'car' | 'bike' | 'scooter';
-  serial_number: string | null;
-  is_primary: boolean;
-}
+import type { Vehicle } from '../src/types/vehicle';
+import { getVehicleDescription, getVehicleDisplayName, getVehicleIcon } from '../src/utils/vehicleHelpers';
 
 export default function SelectVehicleScreen() {
   const router = useRouter();
@@ -175,31 +160,7 @@ export default function SelectVehicleScreen() {
     }
   };
 
-  const getVehicleIcon = (type: string) => {
-    switch (type) {
-      case 'car': return '🚗';
-      case 'motorcycle': return '🏍️';
-      case 'bike': return '🚲';
-      case 'scooter': return '🛴';
-      default: return '🚗';
-    }
-  };
 
-  const getVehicleName = (vehicle: Vehicle) => {
-    if (vehicle.brand && vehicle.model) {
-      return `${vehicle.brand} ${vehicle.model}`;
-    }
-    if (vehicle.nickname) {
-      return vehicle.nickname;
-    }
-    return vehicle.plate || vehicle.serial_number || 'Vehículo sin nombre';
-  };
-
-  const getVehicleIdentifier = (vehicle: Vehicle) => {
-    if (vehicle.plate) return vehicle.plate;
-    if (vehicle.serial_number) return `Serie: ${vehicle.serial_number}`;
-    return '';
-  };
 
   if (loading) {
     return (
@@ -275,7 +236,7 @@ export default function SelectVehicleScreen() {
                     </Text>
                     <View style={styles.vehicleNameContainer}>
                       <Text style={styles.vehicleName}>
-                        {getVehicleName(vehicle)}
+                        {getVehicleDescription(vehicle)}
                       </Text>
                       {vehicle.year && (
                         <Text style={styles.vehicleYear}>({vehicle.year})</Text>
@@ -288,7 +249,7 @@ export default function SelectVehicleScreen() {
                   )}
 
                   <Text style={styles.vehicleIdentifier}>
-                    {getVehicleIdentifier(vehicle)}
+                    {getVehicleDisplayName(vehicle)}
                   </Text>
 
                   {vehicle.nickname && vehicle.brand && (
@@ -306,7 +267,7 @@ export default function SelectVehicleScreen() {
                     onPress={() => handleToggleOnline(
                       vehicle.id, 
                       vehicle.online, 
-                      getVehicleName(vehicle)
+                      getVehicleDescription(vehicle)
                     )}
                   >
                     <Text style={[
@@ -319,7 +280,7 @@ export default function SelectVehicleScreen() {
 
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDeleteVehicle(vehicle.id, getVehicleName(vehicle))}
+                    onPress={() => handleDeleteVehicle(vehicle.id, getVehicleDescription(vehicle))}
                   >
                     <Text style={styles.deleteButtonText}>🗑️</Text>
                   </TouchableOpacity>

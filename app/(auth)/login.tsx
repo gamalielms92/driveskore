@@ -12,9 +12,19 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
+  // Helper para mostrar alertas en web y móvil
+  const showAlert = (title: string, message: string, onOk?: () => void) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n\n${message}`);
+      onOk?.();
+    } else {
+      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
+    }
+  };
+
   const handleAuth = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Por favor rellena todos los campos');
+      showAlert('Error', 'Por favor rellena todos los campos');
       return;
     }
 
@@ -35,10 +45,10 @@ export default function LoginScreen() {
 
         await Analytics.trackSignUp('email');
 
-        Alert.alert(
+        showAlert(
           '🎉 ¡Registro exitoso!',
           'Por favor verifica tu email antes de iniciar sesión.',
-          [{ text: 'OK', onPress: () => setIsSignUp(false) }]
+          () => setIsSignUp(false)
         );
         
       } else {
@@ -48,7 +58,30 @@ export default function LoginScreen() {
           password,
         });
 
-        if (error) throw error;
+        if (error) {
+          // Manejar diferentes tipos de errores
+          if (error.message.includes('Email not confirmed')) {
+            showAlert(
+              '📧 Email no verificado',
+              'Por favor, verifica tu email antes de iniciar sesión. Revisa tu bandeja de entrada y spam.'
+            );
+          } else if (error.message.includes('Invalid login credentials')) {
+            showAlert(
+              '❌ Credenciales incorrectas',
+              'El email o contraseña no son correctos. Por favor, inténtalo de nuevo.'
+            );
+          } else if (error.message.includes('User not found')) {
+            showAlert(
+              '👤 Usuario no encontrado',
+              'No existe una cuenta con este email. ¿Quizás necesitas registrarte primero?'
+            );
+          } else {
+            // Error genérico
+            showAlert('Error de inicio de sesión', error.message);
+          }
+          setLoading(false);
+          return;
+        }
         
         // Inicializar EventCaptureService con el userId
         if (data.user) {
@@ -60,7 +93,8 @@ export default function LoginScreen() {
         // El _layout.tsx se encargará de redirigir
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      // Error genérico para casos no manejados
+      showAlert('Error', error.message || 'Ha ocurrido un error. Por favor, inténtalo de nuevo.');
     } finally {
       setLoading(false);
     }

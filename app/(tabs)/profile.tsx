@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Text
 import { supabase } from '../../src/config/supabase';
 import EventCaptureService from '../../src/services/EventCaptureService';
 import WeeklyRankingService from '../../src/services/WeeklyRankingService';
+import type { Vehicle } from '../../src/types/vehicle';
 import {
   getDriverRank,
   getEarnedBadges,
@@ -14,6 +15,7 @@ import {
   getUserLevel,
   type UserStats
 } from '../../src/utils/gamification';
+import { getVehicleDisplayName, getVehicleIcon } from '../../src/utils/vehicleHelpers';
 
 interface UserRating {
   id: string;
@@ -21,14 +23,6 @@ interface UserRating {
   score: number;
   comment: string;
   created_at: string;
-}
-
-interface Vehicle {
-  id: string;
-  plate: string;
-  nickname: string | null;
-  online: boolean;
-  vehicle_type?: string;
 }
 
 interface DriverProfile {
@@ -466,19 +460,9 @@ export default function ProfileScreen() {
             </Text>
           ) : (
             <View style={styles.vehiclesList}>
-              {vehicles.slice(0, 3).map(vehicle => {
-                // Determinar icono según tipo
-                const vehicleIcon = vehicle.vehicle_type === 'motorcycle' ? '🏍️'
-                  : vehicle.vehicle_type === 'bike' ? '🚲'
-                  : vehicle.vehicle_type === 'scooter' ? '🛴'
-                  : '🚗';
-                
-                // Determinar qué mostrar (matrícula, nickname o tipo)
-                const displayText = vehicle.plate 
-                  || vehicle.nickname 
-                  || (vehicle.vehicle_type === 'bike' ? 'Bicicleta' 
-                    : vehicle.vehicle_type === 'scooter' ? 'Patinete' 
-                    : 'Vehículo');
+{vehicles.slice(0, 3).map(vehicle => {
+  const vehicleIcon = getVehicleIcon(vehicle.vehicle_type || 'car');
+  const displayText = getVehicleDisplayName(vehicle);
                 
                 return (
                   <View key={vehicle.id} style={styles.vehicleItem}>

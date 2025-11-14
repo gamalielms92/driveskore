@@ -23,22 +23,15 @@ import CapturePreferencesService from '../src/services/CapturePreferencesService
 import EventCaptureService from '../src/services/EventCaptureService';
 import FloatingButtonNative from '../src/services/FloatingButtonNative';
 import LocationTrackingService from '../src/services/LocationTrackingService';
-
-interface ActiveVehicleData {
-  plate: string | null;
-  serial_number: string | null;
-  brand: string | null;
-  model: string | null;
-  vehicle_type: 'car' | 'motorcycle' | 'bike' | 'scooter';
-  nickname: string | null;
-}
+import type { Vehicle } from '../src/types/vehicle'; // <-- IMPORTAR TIPO
+import { getVehicleDescription, getVehicleDisplayName, getVehicleIcon } from '../src/utils/vehicleHelpers';
 
 export default function DriverModeScreen() {
   const router = useRouter();
   const [isTracking, setIsTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
-  const [activeVehicle, setActiveVehicle] = useState<ActiveVehicleData | null>(null);
+  const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [stats, setStats] = useState({
     duration: 0,
     distance: 0,
@@ -64,7 +57,7 @@ export default function DriverModeScreen() {
 
       const { data: vehicle } = await supabase
         .from('user_vehicles')
-        .select('plate, serial_number, brand, model, vehicle_type, nickname')
+        .select('*')
         .eq('user_id', user.id)
         .eq('online', true)
         .maybeSingle();
@@ -246,7 +239,7 @@ export default function DriverModeScreen() {
       }
 
       // Preparar identificador del vehículo
-      const vehicleIdentifier = activeVehicle.plate || activeVehicle.serial_number || 'unknown';
+      const vehicleIdentifier = activeVehicle.plate || 'unknown';
       const vehicleName = activeVehicle.brand && activeVehicle.model 
         ? `${activeVehicle.brand} ${activeVehicle.model}`
         : activeVehicle.nickname || vehicleIdentifier;
@@ -446,47 +439,42 @@ export default function DriverModeScreen() {
         </View>
 
         {/* Estado del vehículo */}
-        <View style={[
-            styles.vehicleCard,
-            isTracking && styles.vehicleCardActive
-          ]}>
-          <Text style={styles.cardTitle}>
-            {activeVehicle?.vehicle_type === 'car' ? '🚗' : 
-             activeVehicle?.vehicle_type === 'motorcycle' ? '🏍️' :
-             activeVehicle?.vehicle_type === 'bike' ? '🚲' : 
-             activeVehicle?.vehicle_type === 'scooter' ? '🛴' : '🚗'} Vehículo activo
-          </Text>
-          {activeVehicle ? (
-            <>
-              <Text style={[
-                styles.vehiclePlate,
-                isTracking && styles.vehiclePlateTracking
-              ]}>
-                {isTracking ? '🟢' : '🔵'} {activeVehicle.brand && activeVehicle.model 
-                  ? `${activeVehicle.brand} ${activeVehicle.model}`
-                  : activeVehicle.nickname || 'Mi vehículo'}
-              </Text>
-              <Text style={styles.vehicleIdentifier}>
-                {activeVehicle.plate || (activeVehicle.serial_number ? `Serie: ${activeVehicle.serial_number}` : 'Sin identificador')}
-              </Text>
-              <Text style={styles.vehicleStatus}>
-                {isTracking ? 'Estado: Online' : 'Listo para conducir'}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.noVehicle}>⚪ Sin vehículo activo</Text>
-              <TouchableOpacity
-                style={styles.selectVehicleButton}
-                onPress={() => router.push('/select-vehicle')}
-              >
-                <Text style={styles.selectVehicleButtonText}>
-                  Seleccionar vehículo →
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+<View style={[
+    styles.vehicleCard,
+    isTracking && styles.vehicleCardActive
+  ]}>
+  <Text style={styles.cardTitle}>
+    {activeVehicle ? getVehicleIcon(activeVehicle.vehicle_type) : '🚗'} Vehículo activo
+  </Text>
+  {activeVehicle ? (
+    <>
+      <Text style={[
+        styles.vehiclePlate,
+        isTracking && styles.vehiclePlateTracking
+      ]}>
+        {isTracking ? '🟢' : '🔵'} {getVehicleDescription(activeVehicle)}
+      </Text>
+      <Text style={styles.vehicleIdentifier}>
+        {getVehicleDisplayName(activeVehicle)}
+      </Text>
+      <Text style={styles.vehicleStatus}>
+        {isTracking ? 'Estado: Online' : 'Listo para conducir'}
+      </Text>
+    </>
+  ) : (
+    <>
+      <Text style={styles.noVehicle}>⚪ Sin vehículo activo</Text>
+      <TouchableOpacity
+        style={styles.selectVehicleButton}
+        onPress={() => router.push('/select-vehicle')}
+      >
+        <Text style={styles.selectVehicleButtonText}>
+          Seleccionar vehículo →
+        </Text>
+      </TouchableOpacity>
+    </>
+  )}
+</View>
 
         {/* Control de tracking */}
         <View style={[

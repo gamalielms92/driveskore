@@ -6,14 +6,15 @@ import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } f
 import { supabase } from '../../src/config/supabase';
 import WeeklyRankingService from '../../src/services/WeeklyRankingService';
 import {
-    calculateAttributeStats,
-    DRIVING_ATTRIBUTES,
-    getDriverRank,
-    getEarnedBadges,
-    getUserLevel,
-    type AttributeStats,
-    type UserStats
+  calculateAttributeStats,
+  DRIVING_ATTRIBUTES,
+  getDriverRank,
+  getEarnedBadges,
+  getUserLevel,
+  type AttributeStats,
+  type UserStats
 } from '../../src/utils/gamification';
+import { getVehicleIcon } from '../../src/utils/vehicleHelpers';
 
 interface Rating {
   id: string;
@@ -307,15 +308,6 @@ export default function ConductorProfileScreen() {
     return distribution;
   };
 
-  const getVehicleIcon = (type: string | null) => {
-    switch (type) {
-      case 'car': return '🚗';
-      case 'bike': return '🏍️';
-      case 'scooter': return '🛴';
-      default: return '🚗';
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -441,7 +433,7 @@ export default function ConductorProfileScreen() {
                   ) : (
                     <View style={styles.vehiclePhotoPlaceholder}>
                       <Text style={styles.vehiclePhotoIcon}>
-                        {getVehicleIcon(vehicle.vehicle_type)}
+                        {getVehicleIcon(vehicle.vehicle_type || 'car')}
                       </Text>
                     </View>
                   )}
@@ -686,7 +678,7 @@ console.log('DRIVING_ATTRIBUTES[0].id:', DRIVING_ATTRIBUTES[0]?.id);
                       const ratingVehicle = vehicles.find(v => v.plate === rating.plate);
                       const vehicleInfo = ratingVehicle?.brand && ratingVehicle?.model
                         ? `${ratingVehicle.brand} ${ratingVehicle.model}`
-                        : rating.plate;
+                        : 'Vehículo';  // <-- NO mostrar rating.plate
                       
                       return (
                         <Text style={styles.commentPlate}>Sobre {vehicleInfo}</Text>
