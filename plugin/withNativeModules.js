@@ -79,7 +79,7 @@ const {
     });
   
     // ============================================================================
-    // 3. COPIAR ARCHIVOS KOTLIN Y MODIFICAR MAINAPPLICATION (TODO EN UNO)
+    // 3. COPIAR ARCHIVOS KOTLIN Y MODIFICAR MAINAPPLICATION
     // ============================================================================
     config = withDangerousMod(config, [
       'android',
@@ -107,11 +107,11 @@ const {
         // Copiar TODOS los archivos Kotlin
         const nativeFilesPath = path.join(projectRoot, 'native', 'android');
         const files = [
-          // FloatingButton
+          // FloatingButton (necesita registrarse manualmente)
           'FloatingButtonModule.kt',
           'FloatingButtonPackage.kt',
           'FloatingButtonService.kt',
-          // WorkManager
+          // WorkManager (se registra automáticamente como módulo Expo)
           'LocationSyncWorker.kt',
           'WorkManagerModule.kt',
         ];
@@ -128,47 +128,37 @@ const {
           }
         });
   
-        // Modificar MainApplication.kt UNA SOLA VEZ
+        // Modificar MainApplication.kt SOLO para FloatingButton
         const mainAppPath = path.join(androidPath, 'MainApplication.kt');
   
         if (fs.existsSync(mainAppPath)) {
           let content = fs.readFileSync(mainAppPath, 'utf8');
           let modified = false;
   
-          // ========== IMPORTS ==========
-          const imports = [
-            'import com.driveskore.app.FloatingButtonPackage',
-            'import com.driveskore.app.WorkManagerModule',
-          ];
+          // ========== IMPORTS (solo FloatingButton) ==========
+          const floatingButtonImport = 'import com.driveskore.app.FloatingButtonPackage';
   
-          imports.forEach((importLine) => {
-            if (!content.includes(importLine)) {
-              content = content.replace(
-                'import expo.modules.ReactNativeHostWrapper',
-                `import expo.modules.ReactNativeHostWrapper\n${importLine}`
-              );
-              modified = true;
-              console.log(`✅ Import añadido: ${importLine}`);
-            }
-          });
+          if (!content.includes(floatingButtonImport)) {
+            content = content.replace(
+              'import expo.modules.ReactNativeHostWrapper',
+              `import expo.modules.ReactNativeHostWrapper\n${floatingButtonImport}`
+            );
+            modified = true;
+            console.log(`✅ Import añadido: ${floatingButtonImport}`);
+          }
   
-          // ========== PACKAGES ==========
-          const packages = [
-            'add(FloatingButtonPackage())',
-            'add(WorkManagerModule())',
-          ];
+          // ========== PACKAGES (solo FloatingButton) ==========
+          const floatingButtonPackage = 'add(FloatingButtonPackage())';
   
-          packages.forEach((packageLine) => {
-            if (!content.includes(packageLine)) {
-              content = content.replace(
-                /\/\/ add\(MyReactNativePackage\(\)\)/,
-                `// add(MyReactNativePackage())
-                ${packageLine}`
-              );
-              modified = true;
-              console.log(`✅ Package añadido: ${packageLine}`);
-            }
-          });
+          if (!content.includes(floatingButtonPackage)) {
+            content = content.replace(
+              /\/\/ add\(MyReactNativePackage\(\)\)/,
+              `// add(MyReactNativePackage())
+                ${floatingButtonPackage}`
+            );
+            modified = true;
+            console.log(`✅ Package añadido: ${floatingButtonPackage}`);
+          }
   
           if (modified) {
             fs.writeFileSync(mainAppPath, content);
