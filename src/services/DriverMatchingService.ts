@@ -37,9 +37,6 @@ class DriverMatchingService {
     SPEED_MATCH: 10,
   };
 
-// FIX PARA: src/services/DriverMatchingService.ts
-// Reemplaza el método findCandidates completo con esta versión
-
 /**
  * Encuentra candidatos potenciales para un evento capturado
  */

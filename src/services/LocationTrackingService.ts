@@ -45,10 +45,10 @@ interface TrackingStats {
 // ============================================================================
 
 const LOCATION_TASK_NAME = 'background-location-task';
-const SYNC_INTERVAL = 15000; // 15 segundos
-const GPS_UPDATE_INTERVAL = 5000; // 5 segundos
+const SYNC_INTERVAL = 5000; // 5 segundos
+const GPS_UPDATE_INTERVAL = 1000; // 1 segundos
 const GPS_DISTANCE_INTERVAL = 10; // 10 metros
-const MIN_DISTANCE_THRESHOLD = 30; // 🎯 Umbral mínimo para contar distancia
+const MIN_DISTANCE_THRESHOLD = 50; // 🎯 Umbral mínimo para contar distancia
 
 // ============================================================================
 // SERVICIO
@@ -404,7 +404,7 @@ class LocationTrackingService {
       this.syncQueuedLocations();
     }, SYNC_INTERVAL);
     
-    console.log('✅ Sincronización periódica iniciada (cada 15s)');
+    console.log('✅ Sincronización periódica iniciada (cada 5s)');
   }
 
   /**

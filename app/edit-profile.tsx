@@ -23,7 +23,7 @@ interface UserProfileData {
   avatar_url: string;
   bio: string;
   phone: string;
-  invited_by_code: string; // ✅ NUEVO
+  invited_by_code: string;
 }
 
 export default function EditProfileScreen() {
@@ -33,13 +33,14 @@ export default function EditProfileScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [userId, setUserId] = useState('');
   const [email, setEmail] = useState('');
+  const [hasExistingReferralCode, setHasExistingReferralCode] = useState(false); // ✅ NUEVO
   
   const [profileData, setProfileData] = useState<UserProfileData>({
     full_name: '',
     avatar_url: '',
     bio: '',
     phone: '',
-    invited_by_code: '' // ✅ NUEVO
+    invited_by_code: ''
   });
 
   useEffect(() => {
@@ -76,8 +77,11 @@ export default function EditProfileScreen() {
           avatar_url: profile.avatar_url || '',
           bio: profile.bio || '',
           phone: profile.phone || '',
-          invited_by_code: profile.invited_by_code || '' // ✅ NUEVO
+          invited_by_code: profile.invited_by_code || ''
         });
+        
+        // ✅ Detectar si ya tiene código guardado en BD
+        setHasExistingReferralCode(!!profile.invited_by_code);
       }
 
     } catch (error: any) {
@@ -130,7 +134,7 @@ export default function EditProfileScreen() {
 
       // ✅ Si hay código nuevo y no tenía código antes
       const hasNewReferralCode = profileData.invited_by_code.trim() 
-        && (!existingProfile?.invited_by_code || existingProfile.invited_by_code === '');
+        && !hasExistingReferralCode;
 
       if (hasNewReferralCode) {
         // Procesar código de referido usando la función SQL
@@ -152,6 +156,9 @@ export default function EditProfileScreen() {
         }
 
         console.log('✅ Código de referido aplicado');
+        
+        // ✅ Actualizar el estado para bloquear el campo
+        setHasExistingReferralCode(true);
       }
 
       // Guardar perfil
@@ -328,13 +335,13 @@ export default function EditProfileScreen() {
             />
           </View>
 
-          {/* ✅ NUEVO: Código de invitación */}
+          {/* Código de invitación */}
           <View style={styles.section}>
             <Text style={styles.label}>🎁 Código de Invitación (opcional)</Text>
             <TextInput
               style={[
                 styles.input, 
-                profileData.invited_by_code ? styles.inputDisabled : null
+                hasExistingReferralCode ? styles.inputDisabled : null
               ]}
               placeholder="DRIVE-XXXXX"
               value={profileData.invited_by_code}
@@ -344,10 +351,10 @@ export default function EditProfileScreen() {
               }))}
               maxLength={11}
               autoCapitalize="characters"
-              editable={!profileData.invited_by_code}
+              editable={!hasExistingReferralCode}
             />
             <Text style={styles.hint}>
-              {profileData.invited_by_code 
+              {hasExistingReferralCode
                 ? '✅ Ya usaste un código de invitación' 
                 : 'Si tienes un código de invitación, ingrésalo aquí'}
             </Text>
@@ -498,7 +505,7 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 16,
   },
-  inputDisabled: { // ✅ NUEVO
+  inputDisabled: {
     backgroundColor: '#f0f0f0',
     color: '#999',
   },
