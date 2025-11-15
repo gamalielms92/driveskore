@@ -128,61 +128,44 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
       const { locations } = data;
       await logToStorage(`📍 ${locations.length} ubicaciones capturadas en background`);
       
-// 🔥 USAR FETCH DIRECTO EN LUGAR DE WORKMANAGER
-let successCount = 0;
-let failCount = 0;
-
-for (const location of locations) {
-  try {
-    const payload = {
-      user_id: userId,
-      plate: plate,
-      session_id: sessionId,
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      location: `POINT(${location.coords.longitude} ${location.coords.latitude})`,
-      accuracy: location.coords.accuracy || 0,
-      speed: location.coords.speed ? location.coords.speed * 3.6 : 0,
-      heading: location.coords.heading || 0,
-      bluetooth_mac_hash: 'background-keepawake', // 🔥 Nuevo identificador
-      captured_at: new Date(location.timestamp).toISOString()
-    };
-    
-    const response = await fetchWithTimeout(
-      `${SUPABASE_URL}/rest/v1/driver_locations`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY!,
-          'Authorization': `Bearer ${session.access_token}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify(payload)
-      },
-      10000
-    );
-    
-    if (response.ok) {
-      successCount++;
-      await logToStorage('✅ INSERT directo exitoso');
-    } else {
-      failCount++;
-      const errorText = await response.text();
-      await logToStorage('❌ INSERT falló', { status: response.status, error: errorText });
-    }
-    
-  } catch (err: any) {
-    failCount++;
-    await logToStorage('💥 ERROR en fetch', { message: err?.message });
-  }
-}
-
-await logToStorage('📊 Resultado inserts directos', { 
-  success: successCount, 
-  fail: failCount, 
-  total: locations.length 
-});
+      // 🔥 USAR WORKMANAGER EN LUGAR DE FETCH DIRECTO
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const location of locations) {
+        try {
+          await logToStorage('🔧 Programando insert con WorkManager');
+          
+          // 🔥 Llamar a WorkManager nativo
+          const workId = await WorkManager.scheduleLocationSync({
+            supabaseUrl: SUPABASE_URL!,
+            accessToken: session.access_token,
+            anonKey: SUPABASE_ANON_KEY!,
+            userId: userId,
+            plate: plate,
+            sessionId: sessionId,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            accuracy: location.coords.accuracy || 0,
+            speed: location.coords.speed ? location.coords.speed * 3.6 : 0,
+            heading: location.coords.heading || 0,
+            timestamp: new Date(location.timestamp).toISOString()
+          });
+          
+          await logToStorage('✅ WorkManager job programado', { workId });
+          successCount++;
+          
+        } catch (err: any) {
+          failCount++;
+          await logToStorage('💥 Error programando WorkManager', { message: err?.message });
+        }
+      }
+      
+      await logToStorage('📊 WorkManager jobs programados', { 
+        success: successCount, 
+        fail: failCount, 
+        total: locations.length 
+      });
       
       // Actualizar estadísticas de la sesión
       try {
