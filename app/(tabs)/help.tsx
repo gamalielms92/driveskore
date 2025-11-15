@@ -343,7 +343,7 @@ export default function HelpScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>DriveSkore - Closed Beta</Text>
+          <Text style={styles.footerText}>DriveSkore - 1.0.0 - Beta</Text>
           <Text style={styles.footerText}>TFM - Ingeniería Informática</Text>
           <Text style={styles.footerText}>Universidad de Huelva</Text>
           <Text style={styles.footerText}>Autor: Gamaliel Moreno Sánchez</Text>
