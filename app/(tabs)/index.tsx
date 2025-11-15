@@ -5,7 +5,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import type { Vehicle } from '../../src/types/vehicle';
 import { getVehicleDescription, getVehicleDisplayName, getVehicleIcon } from '../../src/utils/vehicleHelpers';
@@ -272,22 +272,36 @@ useFocusEffect(
           <Text style={styles.heroDescription}>
             Una comunidad que valora y promueve la conducción responsable
           </Text>
-          
+
           {/* QR y Descarga */}
           <View style={styles.downloadSection}>
-            <View style={styles.qrPlaceholder}>
-              <Text style={styles.qrIcon}>📱</Text>
-              <Text style={styles.qrText}>Escanea para descargar</Text>
-              <Text style={styles.qrSubtext}>O usa el enlace de descarga</Text>
-            </View>
             <TouchableOpacity 
-              style={styles.downloadButton}
-              onPress={() => {
-                alert('Link de descarga: Configura tu URL de EAS Build aquí');
-              }}
-            >
-              <Text style={styles.downloadButtonText}>📥 Descargar APK</Text>
+                onPress={async () => {
+                const url = 'https://qrco.de/bgSaiG'; // URL corta que redirige al APK
+                
+                try {
+                  const supported = await Linking.canOpenURL(url);
+                  if (supported) {
+                    await Linking.openURL(url);
+                  } else {
+                    alert('No se puede abrir el enlace. Visita: https://qrco.de/bgSaiG');
+                  }
+                } catch (error) {
+                  console.error('Error abriendo enlace:', error);
+                  alert('Error al abrir descarga. URL: https://qrco.de/bgSaiG');
+                }
+                }}
+                >
+                <View style={styles.qrContainer}>
+                <Image
+                  source={require('../../assets/images/qr.png')}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              </View>
             </TouchableOpacity>
+            
+            <Text style={styles.versionText}>v1.0.0-beta · Pruebas en Campus UHU</Text>
           </View>
 
           <TouchableOpacity 
@@ -351,7 +365,7 @@ useFocusEffect(
           <Text style={[styles.sectionTitle, { color: '#FFF' }]}>¿Cómo funciona?</Text>
           
           {[
-            { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android e iOS. Regístrate con tu email.' },
+            { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android (en iOS próximanente). Regístrate con tu email.' },
             { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tu vehículo para recibir valoraciones.' },
             { num: '3', icon: '📸', title: 'Captura Eventos', text: 'Usa el botón flotante o el mando Bluetooth.' },
             { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa comportamientos entre 1 y 5 estrellas.' },
@@ -875,7 +889,7 @@ const styles = StyleSheet.create({
   },
   qrIcon: {
     fontSize: 60,
-    marginBottom: 8,
+    //marginBottom: 8,
   },
   qrText: {
     fontSize: 14,
@@ -911,6 +925,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderColor: '#FFF',
+    marginTop: 30,
+    marginBottom: 30,
   },
   loginButtonText: {
     fontSize: 16,
@@ -1161,5 +1177,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1565C0',
     lineHeight: 22,
+  },
+  qrContainer: {
+    alignItems: 'center',
+    marginTop: 34,
+    marginBottom: 34,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
   },
 });
