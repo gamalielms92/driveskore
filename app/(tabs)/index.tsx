@@ -192,10 +192,24 @@ useFocusEffect(
           <View style={styles.webLoggedInContent}>
             {/* Header */}
             <View style={styles.webHeader}>
-              <Text style={styles.webHeaderTitle}>¡Bienvenido a DriveSkore! 🚗</Text>
+                      <View style={{ alignItems: 'center' }}>
+          <img 
+            src="/logo.svg"
+            alt="DriveSkore Logo"
+            style={{
+              width: '100%',
+              maxWidth: '1000px',
+              height: 'auto',
+              marginBottom: '24px',
+              //filter: 'brightness(0) invert(1)',  // Hace el logo blanco
+            }}
+          />
+            
+              <Text style={styles.webHeaderTitle}>¡Bienvenido a DriveSkore!</Text>
               <Text style={styles.webHeaderSubtitle}>
                 Usa los tabs de navegación para explorar la plataforma
               </Text>
+            </View>
             </View>
 
             {/* Quick Actions */}
@@ -277,18 +291,18 @@ useFocusEffect(
           <View style={styles.downloadSection}>
             <TouchableOpacity 
                 onPress={async () => {
-                const url = 'https://qrco.de/bgSaiG'; // URL corta que redirige al APK
+                const url = 'https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk';
                 
                 try {
                   const supported = await Linking.canOpenURL(url);
                   if (supported) {
                     await Linking.openURL(url);
                   } else {
-                    alert('No se puede abrir el enlace. Visita: https://qrco.de/bgSaiG');
+                    alert('No se puede abrir el enlace. Visita: https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk');
                   }
                 } catch (error) {
                   console.error('Error abriendo enlace:', error);
-                  alert('Error al abrir descarga. URL: https://qrco.de/bgSaiG');
+                  alert('Error al abrir descarga. URL: https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk');
                 }
                 }}
                 >
@@ -310,6 +324,27 @@ useFocusEffect(
           >
             <Text style={styles.loginButtonText}>🔐 Login</Text>
           </TouchableOpacity>
+
+{/* GitHub Link */}
+<TouchableOpacity
+    style={styles.githubLink}
+    onPress={async () => {
+      const githubUrl = 'https://github.com/gamalielms92/driveskore/releases/tag/v1.0.0-beta';
+      try {
+        await Linking.openURL(githubUrl);
+      } catch (error) {
+        console.error('Error abriendo GitHub:', error);
+      }
+    }}
+  >
+    <Image
+      source={require('../../assets/images/github-mark-white.png')}
+      style={styles.githubIcon}
+      resizeMode="contain"
+    />
+    <Text style={styles.githubText}>Ver en GitHub</Text>
+  </TouchableOpacity>
+
         </View>
       </ParallaxSection>
 
@@ -1199,5 +1234,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 8,
+  },
+  githubLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  githubIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
+  },
+  githubText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
   },
 });
