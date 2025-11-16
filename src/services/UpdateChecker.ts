@@ -1,90 +1,105 @@
 import { Alert, Linking } from 'react-native';
+import { supabase } from '../config/supabase';
 
-const CURRENT_VERSION = '1.0.0-beta'; // Cambiar según tu versión actual
-const GITHUB_REPO = 'gamalielms92/driveskore';
+const CURRENT_VERSION = '1.0.0-beta';
+const CURRENT_VERSION_CODE = 1; // Incrementar con cada build
 
 export async function checkForUpdates() {
-  try {
-    console.log('🔍 Verificando actualizaciones...');
-    
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      { 
-        headers: { 
-          'Accept': 'application/vnd.github.v3+json' 
-        } 
-      }
-    );
-    
-    if (!response.ok) {
-      console.log('⚠️ No se pudo verificar actualizaciones');
-      return;
-    }
-    
-    const data = await response.json();
-    const latestVersion = data.tag_name.replace('v', ''); // v1.0.0 → 1.0.0
-    const downloadUrl = data.assets[0]?.browser_download_url;
-    const releaseNotes = data.body || 'Mejoras y correcciones';
-    
-    console.log('📦 Versión actual:', CURRENT_VERSION);
-    console.log('🆕 Última versión:', latestVersion);
-    
-    if (!downloadUrl) {
-      console.log('⚠️ No hay archivo de descarga disponible');
-      return;
-    }
-    
-    // Comparar versiones (simple)
-    if (latestVersion !== CURRENT_VERSION) {
-      console.log('✨ Nueva versión disponible!');
+    try {
+      console.log('🔍 Verificando actualizaciones en Supabase...');
       
-      Alert.alert(
-        '🎉 Actualización disponible',
-        `Versión ${latestVersion}\n\n${truncateReleaseNotes(releaseNotes)}`,
-        [
-          { 
-            text: 'Ahora no', 
-            style: 'cancel',
-            onPress: () => console.log('Update postponed')
-          },
-          { 
-            text: 'Descargar', 
-            onPress: async () => {
-              console.log('📥 Abriendo descarga:', downloadUrl);
-              try {
-                const supported = await Linking.canOpenURL(downloadUrl);
-                if (supported) {
-                  await Linking.openURL(downloadUrl);
-                } else {
-                  Alert.alert('Error', 'No se puede abrir el enlace de descarga');
-                }
-              } catch (error) {
-                console.error('Error abriendo descarga:', error);
-                Alert.alert('Error', 'No se pudo abrir la descarga');
-              }
-            }
-          }
-        ]
-      );
-    } else {
-      console.log('✅ App actualizada');
+      // Obtener última versión de Supabase
+      const { data, error } = await supabase
+        .from('app_versions')
+        .select('*')
+        .order('version_code', { ascending: false })
+        .limit(1)
+        .single();
+  
+      if (error) {
+        console.log('⚠️ Error obteniendo versiones:', error.message);
+        return;
+      }
+  
+      if (!data) {
+        console.log('⚠️ No se encontraron versiones en BD');
+        return;
+      }
+  
+      const latestVersion = data.version;
+      const latestVersionCode = data.version_code;
+      const isRequired = data.required;
+      const downloadUrl = data.download_url;
+      const releaseNotes = data.release_notes || 'Mejoras y correcciones';
+  
+      // 🔥 LOGS MÁS DETALLADOS
+      console.log('📦 Versión actual:', CURRENT_VERSION, `(code: ${CURRENT_VERSION_CODE})`);
+      console.log('🆕 Última versión:', latestVersion, `(code: ${latestVersionCode})`);
+      console.log('⚖️ Comparación:', latestVersionCode, '>', CURRENT_VERSION_CODE, '=', latestVersionCode > CURRENT_VERSION_CODE);
+      console.log('⚠️ Actualización requerida:', isRequired);
+      console.log('🔗 URL descarga:', downloadUrl);
+  
+      // Comparar por version_code (más confiable que string)
+      if (latestVersionCode > CURRENT_VERSION_CODE) {
+        console.log('✨ ¡Nueva versión disponible!');
+        
+        showUpdateAlert(
+          latestVersion,
+          releaseNotes,
+          downloadUrl,
+          isRequired
+        );
+      } else {
+        console.log('✅ App actualizada (versión más reciente instalada)');
+      }
+    } catch (error) {
+      console.log('❌ Error verificando actualizaciones:', error);
     }
-  } catch (error) {
-    // Silencioso - no molestar al usuario si falla
-    console.log('❌ Error verificando actualizaciones:', error);
   }
+
+function showUpdateAlert(
+  version: string,
+  notes: string,
+  downloadUrl: string,
+  required: boolean
+) {
+  Alert.alert(
+    required ? '⚠️ Actualización requerida' : '🎉 Nueva versión disponible',
+    `Versión ${version}\n\n${notes}`,
+    [
+      // Solo mostrar "Ahora no" si NO es requerida
+      ...(!required ? [
+        { 
+          text: 'Ahora no', 
+          style: 'cancel' as const,
+          onPress: () => console.log('Update postponed')
+        }
+      ] : []),
+      { 
+        text: required ? 'Actualizar ahora' : 'Descargar',
+        onPress: async () => {
+          console.log('📥 Abriendo descarga:', downloadUrl);
+          try {
+            const supported = await Linking.canOpenURL(downloadUrl);
+            if (supported) {
+              await Linking.openURL(downloadUrl);
+            } else {
+              Alert.alert('Error', 'No se puede abrir el enlace de descarga');
+            }
+          } catch (error) {
+            console.error('Error abriendo descarga:', error);
+            Alert.alert('Error', 'No se pudo abrir la descarga');
+          }
+        }
+      }
+    ],
+    { cancelable: !required } // No se puede cancelar si es requerida
+  );
 }
 
-// Limitar notas de release a 150 caracteres
-function truncateReleaseNotes(notes: string): string {
-  const maxLength = 150;
-  if (notes.length <= maxLength) return notes;
-  return notes.substring(0, maxLength) + '...';
-}
-
-// Comparar versiones semánticas (opcional - más preciso)
+// Utilidad para comparar versiones semánticas (opcional)
 export function compareVersions(v1: string, v2: string): number {
-  const cleanV1 = v1.replace(/[^0-9.]/g, ''); // Quitar -beta, -alpha, etc
+  const cleanV1 = v1.replace(/[^0-9.]/g, '');
   const cleanV2 = v2.replace(/[^0-9.]/g, '');
   
   const parts1 = cleanV1.split('.').map(Number);
