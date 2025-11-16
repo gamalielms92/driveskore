@@ -14,6 +14,7 @@ import { supabase } from '../src/config/supabase';
 import ABShutter3Service from '../src/services/ABShutter3Service';
 import { Analytics } from '../src/services/Analytics';
 import EventCaptureService from '../src/services/EventCaptureService';
+import { checkForUpdates } from '../src/services/UpdateChecker';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
@@ -24,6 +25,18 @@ export default function RootLayout() {
   useEffect(() => {
     initializeAuth();
   }, []);
+
+  // 🆕 VERIFICAR ACTUALIZACIONES
+  useEffect(() => {
+    // Solo en Android (no web)
+    if (Platform.OS === 'android' && isReady) {
+      const timer = setTimeout(() => {
+        checkForUpdates();
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isReady]);
 
   // ✅ MODIFICADO: Protección de rutas adaptada para web
   useEffect(() => {
