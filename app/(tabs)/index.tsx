@@ -292,14 +292,14 @@ useFocusEffect(
             {/* QR Code */}
             <TouchableOpacity 
               onPress={async () => {
-                const url = 'https://qrco.de/bgSaiG';
+                const url = 'https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk';
                 
                 try {
                   const supported = await Linking.canOpenURL(url);
                   if (supported) {
                     await Linking.openURL(url);
                   } else {
-                    alert('No se puede abrir el enlace. Visita: https://qrco.de/bgSaiG');
+                    alert('No se puede abrir el enlace. Visita: https://github.com/gamalielms92/driveskore/releases/tag/v1.0.0-beta');
                   }
                 } catch (error) {
                   console.error('Error abriendo enlace:', error);
@@ -320,7 +320,7 @@ useFocusEffect(
             <TouchableOpacity 
               style={styles.downloadButton}
               onPress={async () => {
-                const url = 'https://qrco.de/bgSaiG';
+                const url = 'https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk';
                 
                 try {
                   const supported = await Linking.canOpenURL(url);
