@@ -289,24 +289,25 @@ useFocusEffect(
 
           {/* QR y Descarga */}
           <View style={styles.downloadSection}>
+            {/* QR Code */}
             <TouchableOpacity 
-                onPress={async () => {
-                const url = 'https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk';
+              onPress={async () => {
+                const url = 'https://qrco.de/bgSaiG';
                 
                 try {
                   const supported = await Linking.canOpenURL(url);
                   if (supported) {
                     await Linking.openURL(url);
                   } else {
-                    alert('No se puede abrir el enlace. Visita: https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk');
+                    alert('No se puede abrir el enlace. Visita: https://qrco.de/bgSaiG');
                   }
                 } catch (error) {
                   console.error('Error abriendo enlace:', error);
-                  alert('Error al abrir descarga. URL: https://github.com/gamalielms92/driveskore/releases/download/v1.0.0-beta/DriveSkore_v.1.0.0-beta.apk');
+                  alert('Error al abrir descarga');
                 }
-                }}
-                >
-                <View style={styles.qrContainer}>
+              }}
+            >
+              <View style={styles.qrContainer}>
                 <Image
                   source={require('../../assets/images/qr.png')}
                   style={styles.qrImage}
@@ -314,38 +315,52 @@ useFocusEffect(
                 />
               </View>
             </TouchableOpacity>
-            
-            <Text style={styles.versionText}>v1.0.0-beta · Pruebas en Campus UHU</Text>
+
+            {/* Botón de Descarga Directa */}
+            <TouchableOpacity 
+              style={styles.downloadButton}
+              onPress={async () => {
+                const url = 'https://qrco.de/bgSaiG';
+                
+                try {
+                  const supported = await Linking.canOpenURL(url);
+                  if (supported) {
+                    await Linking.openURL(url);
+                  } else {
+                    alert('No se puede abrir el enlace');
+                  }
+                } catch (error) {
+                  console.error('Error:', error);
+                  alert('Error al abrir descarga');
+                }
+              }}
+            >
+              <Text style={styles.downloadButtonText}>📥 Descargar APK</Text>
+            </TouchableOpacity>
+
+            {/* GitHub Link */}
+            <TouchableOpacity
+              style={styles.githubLink}
+              onPress={async () => {
+                const githubUrl = 'https://github.com/gamalielms92/driveskore/releases/tag/v1.0.0-beta';
+                try {
+                  await Linking.openURL(githubUrl);
+                } catch (error) {
+                  console.error('Error abriendo GitHub:', error);
+                }
+              }}
+            >
+              <Image
+                source={require('../../assets/images/github-mark-white.png')}
+                style={styles.githubIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.githubText}>Ver en GitHub</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.versionText}>v1.0.0-beta · Piloto Campus UHU</Text>
+            </View>
           </View>
-
-          <TouchableOpacity 
-            style={styles.loginButton}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Text style={styles.loginButtonText}>🔐 Login</Text>
-          </TouchableOpacity>
-
-{/* GitHub Link */}
-<TouchableOpacity
-    style={styles.githubLink}
-    onPress={async () => {
-      const githubUrl = 'https://github.com/gamalielms92/driveskore/releases/tag/v1.0.0-beta';
-      try {
-        await Linking.openURL(githubUrl);
-      } catch (error) {
-        console.error('Error abriendo GitHub:', error);
-      }
-    }}
-  >
-    <Image
-      source={require('../../assets/images/github-mark-white.png')}
-      style={styles.githubIcon}
-      resizeMode="contain"
-    />
-    <Text style={styles.githubText}>Ver en GitHub</Text>
-  </TouchableOpacity>
-
-        </View>
       </ParallaxSection>
 
       {/* ========== 2. ¿QUÉ ES DRIVESKORE? ========== */}
@@ -924,7 +939,6 @@ const styles = StyleSheet.create({
   },
   qrIcon: {
     fontSize: 60,
-    //marginBottom: 8,
   },
   qrText: {
     fontSize: 14,
@@ -947,6 +961,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     width: 250,
+    marginBottom: 30,
   },
   downloadButtonText: {
     fontSize: 18,
