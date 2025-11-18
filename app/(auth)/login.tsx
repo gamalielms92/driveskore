@@ -11,6 +11,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
 
   // Helper para mostrar alertas en web y móvil
   const showAlert = (title: string, message: string, onOk?: () => void) => {
@@ -27,6 +28,15 @@ export default function LoginScreen() {
       showAlert('Error', 'Por favor rellena todos los campos');
       return;
     }
+
+        // ✅ VALIDACIÓN DEL CHECKBOX
+        if (isSignUp && !acceptedPrivacy) {
+          showAlert(
+            'Política de Privacidad', 
+            'Debes aceptar la Política de Privacidad para registrarte'
+          );
+          return;
+        }
 
     setLoading(true);
 
@@ -100,6 +110,11 @@ export default function LoginScreen() {
     }
   };
 
+  // ✅ FUNCIÓN PARA ABRIR POLÍTICA DE PRIVACIDAD (navegación interna)
+  const openPrivacyPolicy = () => {
+    router.push('/privacy');
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -135,6 +150,26 @@ export default function LoginScreen() {
           secureTextEntry
           editable={!loading}
         />
+
+        {/* ✅ CHECKBOX DE PRIVACIDAD (solo en registro) */}
+        {isSignUp && (
+                  <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}
+                    disabled={loading}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, acceptedPrivacy && styles.checkboxChecked]}>
+                      {acceptedPrivacy && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.checkboxLabel}>
+                      Acepto la{' '}
+                      <Text style={styles.link} onPress={openPrivacyPolicy}>
+                        Política de Privacidad
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -213,5 +248,42 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     textAlign: 'center',
     fontSize: 16,
+  },
+  // ✅ ESTILOS DEL CHECKBOX
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    backgroundColor: 'white',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#007AFF',
+  },
+  checkmark: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  link: {
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

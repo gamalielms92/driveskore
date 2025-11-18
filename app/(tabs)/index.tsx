@@ -589,7 +589,11 @@ useFocusEffect(
             <Text style={[styles.footerLink, { color: '#FFF' }]}>Ayuda</Text>
           </TouchableOpacity>
           <Text style={[styles.footerSeparator, { color: 'rgba(255,255,255,0.6)' }]}>•</Text>
-          <Text style={[styles.footerLink, { color: '#FFF' }]}>Privacidad</Text>
+
+          <TouchableOpacity onPress={() => router.push('/privacy')}>
+            <Text style={[styles.footerLink, { color: '#FFF' }]}>Política de Privacidad</Text>
+          </TouchableOpacity>
+
           <Text style={[styles.footerSeparator, { color: 'rgba(255,255,255,0.6)' }]}>•</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/help')}>
             <Text style={[styles.footerLink, { color: '#FFF' }]}>Contacto</Text>
