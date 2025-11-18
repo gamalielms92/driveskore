@@ -388,7 +388,7 @@ useFocusEffect(
             Visión
           </Text>
           <Text style={[styles.sectionText, { color: '#333' }]}>
-            Hacer que los ciudadanos del planeta conduzcan de manera más segura, cortés y responsable gracias al concepto de la "aldea global digital", donde las personas no son anónimas y están motivadas intrínsecamente a comportarse de manera ejemplar, creando así una cultura vial global basada en el respeto mutuo y la responsabilidad compartida.
+            Hacer que los ciudadanos del planeta conduzcan de manera más segura, cortés y responsable gracias al concepto de la "aldea global digital", donde las personas no son anónimas y están motivadas a comportarse de manera ejemplar, creando así una cultura vial global basada en el respeto mutuo y la responsabilidad compartida.
           </Text>
           <Text style={[styles.sectionSubTitle, { color: '#333' }]}>
             Valores Fundamentales
@@ -397,7 +397,7 @@ useFocusEffect(
             Honestidad: Transparencia total en el funcionamiento del sistema, protección contra manipulaciones y valoraciones falsas, comunicación clara sobre el uso de datos.
           </Text>
           <Text style={[styles.sectionText, { color: '#333' }]}>
-            Cuidado del Planeta: Reducción de accidentes y congestión vehicular que contribuye a menor contaminación. Promoción de conducción eficiente que reduce emisiones.
+            Cuidado del Planeta: Reducción de accidentes y congestión se tráfico que contribuye a menor contaminación. Promoción de conducción eficiente que reduce emisiones.
           </Text>
           <Text style={[styles.sectionText, { color: '#333' }]}>
             Tratar al Prójimo como a Ti Mismo: Fomentar la empatía y cortesía en la carretera. Crear una comunidad que se cuida mutuamente. Promover el respeto por todos los usuarios de la vía (conductores, ciclistas, peatones).
@@ -416,10 +416,10 @@ useFocusEffect(
           
           {[
             { num: '1', icon: '📱', title: 'Descarga la App', text: 'Disponible para Android (en iOS próximanente). Regístrate con tu email.' },
-            { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tu vehículo para recibir valoraciones.' },
-            { num: '3', icon: '📸', title: 'Captura Eventos', text: 'Usa el botón flotante o el mando Bluetooth.' },
-            { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa comportamientos entre 1 y 5 estrellas.' },
-            { num: '5', icon: '🏆', title: 'Sube de Nivel', text: 'Sube de nivel y desbloquea logros.' },
+            { num: '2', icon: '🚗', title: 'Registra tu Vehículo', text: 'Añade tu vehículo para recibir valoraciones y votar a los demás.' },
+            { num: '3', icon: '🎮', title: 'Captura Eventos', text: 'Configura el botón flotante o el mando Bluetooth.' },
+            { num: '4', icon: '⭐', title: 'Valora Conductores', text: 'Puntúa comportamientos entre 0 y 5 estrellas.' },
+            { num: '5', icon: '🏆', title: 'Sube de Nivel', text: 'Sube de nivel, desbloquea logros y consigue beneficios.' },
           ].map((step) => (
             <View key={step.num} style={styles.stepCard}>
               <Text style={styles.stepNumber}>{step.num}</Text>
@@ -454,7 +454,7 @@ useFocusEffect(
             <Text style={styles.prizeValue}>
               Invita a tus amigos, con tu código único, durante el periodo de pruebas. 
               Por cada uno que verifique su email, ganas 1 papeleta. 
-              ¡Con 10 amigos te conviertes en Embajador y ganas 5 papeletas extra!
+              ¡Con 10 amigos te conviertes en Embajador y ganas 5 papeletas extra.
               El sorteo estará vigente hasta el 7 de diciembre de 2025. 
               En cuanto tengamos más información, lo publicaremos en esta sección.
             </Text>

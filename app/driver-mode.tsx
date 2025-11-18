@@ -201,7 +201,7 @@ export default function DriverModeScreen() {
       if (!activeVehicle) {
         Alert.alert(
           'Sin vehículo activo',
-          'Debes activar un vehículo en la pantalla "Mis Vehículos" para poder usar el Modo Conductor.',
+          'Debes activar un vehículo primero para usar el Modo Conductor.',
           [
             { text: 'Cancelar', style: 'cancel' },
             { 
@@ -221,7 +221,7 @@ export default function DriverModeScreen() {
       if (foregroundStatus !== 'granted') {
         Alert.alert(
           'Permisos necesarios',
-          'La app necesita acceso a tu ubicación para funcionar en modo conductor.'
+          'La app necesita acceso a tu ubicación para funcionar en el modo conductor.'
         );
         return;
       }
@@ -533,8 +533,8 @@ export default function DriverModeScreen() {
             style={styles.actionCard}
             onPress={() => router.push('/capture-settings')}
           >
-            <Text style={styles.actionIcon}>⚙️</Text>
-            <Text style={styles.actionTitle}>Ajustes</Text>
+            <Text style={styles.actionIcon}>🎮</Text>
+            <Text style={styles.actionTitle}>Controles</Text>
             <Text style={styles.actionDescription}>
               Selecciona la forma de evaluar
             </Text>
@@ -544,14 +544,16 @@ export default function DriverModeScreen() {
 
         {/* Información */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>💡 ¿Cómo funciona?</Text>
+          <Text style={styles.infoTitle}>💡 ¿Es tu primera vez?</Text>
           <Text style={styles.infoText}>
-            1. Activa un vehículo si no lo está{'\n'}
-            2. Inicia el seguimiento antes de conducir{'\n'}
-            3. Tu ubicación se registra automáticamente{'\n'}
-            4. Puedes capturar para posterior valoración{'\n'}
-            5. Otros conductores pueden valorarte{'\n'}
-            6. Detén el seguimiento al terminar tu viaje
+            1. Activa un vehículo si aún no lo está{'\n'}
+            2. Accede a controles y elige uno para votar{'\n'}
+            3. Iniciar el seguimiento antes de conducir{'\n'}
+            • Tu ubicación se registra automáticamente{'\n'}
+            • Puedes capturar para posterior valoración{'\n'}
+            • Otros conductores pueden valorarte{'\n'}
+            4. Detener el seguimiento al finalizar tu viaje{'\n'}
+            • Listo, las próximas sólo iniciar/detener modo.
           </Text>
         </View>
 

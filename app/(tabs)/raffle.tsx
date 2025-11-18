@@ -133,7 +133,7 @@ export default function RaffleScreen() {
         <View style={styles.prizeInfo}>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Fecha orientativa:</Text>
-            <Text style={styles.prizeValue}>9~12 de Diciembre</Text>
+            <Text style={styles.prizeValue}>9~12 de diciembre</Text>
           </View>
           <View style={styles.prizeItem}>
             <Text style={styles.prizeLabel}>Premio:</Text>
@@ -144,17 +144,17 @@ export default function RaffleScreen() {
             <Text style={styles.prizeValue}>Streaming en vivo 🎥</Text>
           </View>
           <View style={styles.prizeItem}>
-            <Text style={styles.prizeLabel}>Duración:</Text>
-            <Text style={styles.prizeValue}>Finalizará el 7 de Diciembre</Text>
+            <Text style={styles.prizeLabel}>Vigencia:</Text>
+            <Text style={styles.prizeValue}>Participa hasta el 7 de diciembre</Text>
           </View>
         </View>
         
         <View style={styles.rulesBox}>
           <Text style={styles.rulesTitle}>⚠️ Importante:</Text>
           <Text style={styles.rulesText}>
-            Solo los invitados que verifiquen su email se contabilizarán para el sorteo.
+            Solo los invitados que completen su perfil con el código contabilizarán para el sorteo.
 
-            Para estar al día sobre actualizaciones y novedades, visita: https://driveskore.vercel.app/
+            Para estar al día sobre actualizaciones y novedades, visita: https://driveskore.org/
           </Text>
         </View>
       </View>
@@ -180,15 +180,15 @@ export default function RaffleScreen() {
         <Text style={styles.ctaTitle}>¿Cómo funciona el sorteo?</Text>
         <View style={styles.ctaList}>
           <Text style={styles.ctaItem}>1. Comparte tu código único</Text>
-          <Text style={styles.ctaItem}>2. Tus amig@s se registran con el código</Text>
-          <Text style={styles.ctaItem}>3. Verifican su email ✅</Text>
-          <Text style={styles.ctaItem}>4. ¡Ganas 1 entrada al sorteo por cada amig@!</Text>
-          <Text style={styles.ctaItem}>5. Con 10 amig@s → logro Embajador 👑 + 5 papeletas extra</Text>
+          <Text style={styles.ctaItem}>2. Tus amig@s se registran</Text>
+          <Text style={styles.ctaItem}>3. Completan su perfil y añaden el código ✅</Text>
+          <Text style={styles.ctaItem}>4. ¡Ganas 1 papeleta al sorteo por cada amig@!</Text>
+          <Text style={styles.ctaItem}>5. Con 10 amig@s → logro Embajador 👑 + 5 papeletas extra 🎉</Text>
         </View>
       </View>
 
-      {/* Recordatorio si hay pendientes */}
-      {pendingReferrals > 0 && (
+      {/* Recordatorio si hay amigos pendientes */}
+      {/*pendingReferrals > 0 && (
         <View style={styles.reminderCard}>
           <Text style={styles.reminderIcon}>💡</Text>
           <Text style={styles.reminderTitle}>Recuerda a tus amig@s</Text>
@@ -197,7 +197,7 @@ export default function RaffleScreen() {
             ¡Recuérdales que revisen su correo para que cuenten en el sorteo!
           </Text>
         </View>
-      )}
+      )*/}
     </ScrollView>
   );
 }

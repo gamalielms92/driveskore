@@ -152,16 +152,22 @@ if (listError) {
   const handleShare = async () => {
     if (!code) return;
 
-    const message = `¡Únete a la prueba de DriveSkore! 🚗⭐
+    const message = `¡Invitación a la prueba de DriveSkore! 🚗⭐
 
-Soy parte integrante de la prueba. Únete y participa en el sorteo exclusivo.
+    Te invito a formar parte de algo nuevo: una comunidad donde la buena conducción importa. 
 
-🎁 Código: ${code}
-📱 Descarga la app DriveSkore
+    ✨ Valora y sé valorado
+    📊 Mejora tu "skore" de conductor
+    🏆 Ranking y logros
 
-https://driveskore.vercel.app/
+    🎁 Además, ¡Hay un sorteo en curso!
 
-¡Nos vemos en la carretera! 👋`;
+    🎟️ Código: ${code}
+    📱 Descarga la app DriveSkore
+
+    🌐https://driveskore.org/
+
+    ¡Nos vemos en la carretera! 👋`;
 
     try {
       await Share.share({ message });
