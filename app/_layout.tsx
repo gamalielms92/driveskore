@@ -191,6 +191,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)/login" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="success" />
+      <Stack.Screen name="privacy" />
     </Stack>
   );
 }
