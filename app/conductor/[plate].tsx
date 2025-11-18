@@ -5,6 +5,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import WeeklyRankingService from '../../src/services/WeeklyRankingService';
+import type { Vehicle } from '../../src/types/vehicle';
 import {
   calculateAttributeStats,
   DRIVING_ATTRIBUTES,
@@ -44,20 +45,6 @@ interface UserProfile {
   pilot_survey_completed?: boolean;
 }
 
-interface Vehicle {
-  id: string;
-  plate: string;
-  nickname: string | null;
-  online: boolean;
-  brand: string | null;
-  model: string | null;
-  year: number | null;
-  color: string | null;
-  vehicle_type: string | null;
-  vehicle_photo_url: string | null;
-  is_primary: boolean;
-}
-
 interface VehicleProfile {
   plate: string;
   total_score: number;
@@ -67,7 +54,6 @@ interface VehicleProfile {
 }
 
 export default function ConductorProfileScreen() {
-  const { plate } = useLocalSearchParams<{ plate: string }>();
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -76,6 +62,10 @@ export default function ConductorProfileScreen() {
   const [aggregatedProfile, setAggregatedProfile] = useState<VehicleProfile | null>(null);
   const [userRatingsGivenCount, setUserRatingsGivenCount] = useState(0);
   const [globalPosition, setGlobalPosition] = useState<number | null>(null);
+  const { plate, userId: userIdParam } = useLocalSearchParams<{ 
+    plate: string;
+    userId?: string;
+  }>();
   
   useFocusEffect(
     useCallback(() => {
@@ -85,27 +75,38 @@ export default function ConductorProfileScreen() {
 
   const loadPersonData = async () => {
     try {
-      // 1. Buscar el dueño del vehículo por la matrícula
-      const { data: vehicleData, error: vehicleError } = await supabase
-        .from('user_vehicles')
-        .select('user_id')
-        .eq('plate', plate)
-        .maybeSingle();
-
-      if (vehicleError) throw vehicleError;
-
-      if (!vehicleData) {
-        // Si no hay dueño registrado, mostrar error
-        Alert.alert(
-          'Conductor no encontrado',
-          'Esta matrícula no está registrada en DriveSkore.'
-        );
-        setLoading(false);
-        return;
+      console.log('🚀 === INICIO loadPersonData ===');
+      console.log('🔍 Plate recibido:', plate);
+      console.log('👤 UserId recibido:', userIdParam);
+  
+      let userId: string;
+  
+      // Si viene userId por parámetro, usarlo directamente (desde search)
+      if (userIdParam) {
+        userId = userIdParam;
+        console.log('✅ Usando userId del parámetro:', userId);
+      } else {
+        // Si no, buscar por plate (navegación desde otros lados)
+        const { data: vehicleData, error: vehicleError } = await supabase
+          .from('user_vehicles')
+          .select('user_id')
+          .eq('plate', plate)
+          .limit(1)
+          .single();
+  
+        if (vehicleError) throw vehicleError;
+  
+        if (!vehicleData) {
+          Alert.alert('Conductor no encontrado', 'Esta matrícula no está registrada en DriveSkore.');
+          setLoading(false);
+          return;
+        }
+  
+        userId = vehicleData.user_id;
+        console.log('✅ UserId obtenido de vehículo:', userId);
       }
-
-      const userId = vehicleData.user_id;
-
+  
+      // Continuar con el resto del código usando este userId...
       // 2. Cargar perfil del usuario
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
@@ -410,12 +411,12 @@ export default function ConductorProfileScreen() {
       </View>
 
       {/* VEHÍCULOS DE LA PERSONA */}
-      {vehicles.length > 0 && (
+      {vehicles.filter(v => !v.deleted).length > 0 && ( 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             🚗 Vehículos de {userProfile.full_name}
           </Text>
-          {vehicles.map((vehicle) => {
+          {vehicles.filter(v => !v.deleted).map((vehicle) => {
             const vProfile = vehicleProfiles.find(p => p.plate === vehicle.plate);
             const vAvg = vProfile && vProfile.num_ratings > 0 
               ? vProfile.total_score / vProfile.num_ratings 
@@ -470,7 +471,7 @@ export default function ConductorProfileScreen() {
                   )}
                 </View>
 
-                {vehicle.plate === plate && (
+                {vehicle.online && (
                   <View style={styles.currentVehicleBadge}>
                     <Text style={styles.currentVehicleText}>👁️ Mostrado para recibir valoraciones</Text>
                   </View>

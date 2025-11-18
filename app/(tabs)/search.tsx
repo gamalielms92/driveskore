@@ -95,27 +95,30 @@ export default function SearchScreen() {
           // UN SOLO RESULTADO - Cargar primer vehículo y redirigir
           const userId = users[0].user_id;
 
-          const { data: vehicles, error: vehiclesError } = await supabase
-            .from('user_vehicles')
-            .select('plate')
-            .eq('user_id', userId)
-            .order('is_primary', { ascending: false })
-            .limit(1);
+// Buscar cualquier vehículo del usuario que tenga perfil en la tabla profiles
+// Buscar cualquier vehículo del usuario que tenga perfil en la tabla profiles
+const { data: profileWithPlate, error: profileError } = await supabase
+  .from('profiles')
+  .select('plate')
+  .eq('user_id', userId)
+  .limit(1)
+  .maybeSingle();
 
-          if (vehiclesError) throw vehiclesError;
+if (profileError) throw profileError;
 
-          if (vehicles && vehicles.length > 0) {
-            router.push(`/conductor/${vehicles[0].plate}`);
-            setSearchPlate('');
-            return;
-          } else {
-            Alert.alert(
-              'Perfil encontrado',
-              `Se encontró a ${users[0].full_name}, pero no tiene vehículos registrados.`,
-              [{ text: 'OK' }]
-            );
-            return;
-          }
+if (profileWithPlate && profileWithPlate.plate) {
+  // ✅ NUEVO: Pasar userId como query param
+  router.push(`/conductor/${profileWithPlate.plate}?userId=${userId}`);
+  setSearchPlate('');
+  return;
+} else {
+  Alert.alert(
+    'Perfil encontrado',
+    `Se encontró a ${users[0].full_name}, pero aún no tiene perfil de conductor (necesita recibir al menos una valoración).`,
+    [{ text: 'OK' }]
+  );
+  return;
+}
         } else {
           // MÚLTIPLES RESULTADOS
           setLoading(false);

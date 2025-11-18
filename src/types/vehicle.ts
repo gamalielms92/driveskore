@@ -12,6 +12,7 @@ export interface Vehicle {
   plate: string | null; // Opcional para bicis/patinetes
   nickname: string | null;
   online: boolean;
+  deleted: boolean;
   
   // NUEVOS CAMPOS
   vehicle_photo_url: string; // OBLIGATORIO

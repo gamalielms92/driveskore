@@ -38,6 +38,7 @@ export default function SelectVehicleScreen() {
         .from('user_vehicles')
         .select('*')
         .eq('user_id', user.id)
+        .eq('deleted', false)
         .order('is_primary', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -64,10 +65,17 @@ export default function SelectVehicleScreen() {
   const handleToggleOnline = async (vehicleId: string, currentState: boolean, vehicleName: string) => {
     try {
       if (!currentState) {
-        // 1️⃣ Obtener datos del vehículo que vamos a activar
         const vehicleToActivate = vehicles.find(v => v.id === vehicleId);
         
-        // 2️⃣ Si tiene matrícula, desactivarla en OTROS usuarios
+        // Desactivar todos los vehículos del usuario actual
+        await supabase
+          .from('user_vehicles')
+          .update({ online: false })
+          .eq('user_id', userId);
+  
+        console.log('🔄 Desactivados todos los vehículos del usuario actual');
+        
+        // Si tiene matrícula, desactivarla en OTROS usuarios
         if (vehicleToActivate?.plate) {
           console.log('🔍 Verificando matrícula en otros usuarios:', vehicleToActivate.plate);
           
@@ -83,45 +91,21 @@ export default function SelectVehicleScreen() {
             console.log('✅ Matrícula desactivada en otros usuarios (si existía)');
           }
         }
-  
-        // 3️⃣ Desactivar todos los vehículos del usuario actual
-        await supabase
-          .from('user_vehicles')
-          .update({ online: false })
-          .eq('user_id', userId);
-  
-        console.log('🔄 Desactivados todos los vehículos del usuario actual');
       }
-
-      // Actualizar el estado del vehículo seleccionado
+  
+      // Actualizar el vehículo seleccionado
       const { error } = await supabase
         .from('user_vehicles')
         .update({ online: !currentState })
         .eq('id', vehicleId);
-
+  
       if (error) throw error;
-
+  
       console.log(`✅ Vehículo ${vehicleName} ${!currentState ? 'activado' : 'desactivado'}`);
-
-      // Actualizar estado local de forma segura manteniendo todos los datos
-      setVehicles(prevVehicles => {
-        const updatedVehicles = prevVehicles.map(vehicle => {
-          if (vehicle.id === vehicleId) {
-            // Este es el vehículo que cambiamos
-            console.log('🔄 Actualizando vehículo:', vehicle.brand, vehicle.model, '- Online:', !currentState);
-            console.log('📷 Foto URL:', vehicle.vehicle_photo_url);
-            return { ...vehicle, online: !currentState };
-          } else if (!currentState && vehicle.online) {
-            // Si estamos activando otro, desactivar los demás que estaban activos
-            return { ...vehicle, online: false };
-          }
-          return vehicle;
-        });
-        
-        console.log('✅ Estado actualizado. Total vehículos:', updatedVehicles.length);
-        return updatedVehicles;
-      });
-
+  
+      // Recargar vehículos desde la BD
+      await loadVehicles();
+  
       Alert.alert(
         '✅ Estado actualizado',
         `${vehicleName} está ahora ${!currentState ? 'activo 🟢' : 'inactivo ⚪'}\n\n${!currentState ? 'Las valoraciones que recibas irán a tu perfil de conductor.' : 'Este vehículo ya no recibe valoraciones en tu perfil.'}`
@@ -129,15 +113,14 @@ export default function SelectVehicleScreen() {
     } catch (error: any) {
       console.error('Error:', error);
       Alert.alert('Error', 'No se pudo actualizar el estado del vehículo');
-      // Recargar en caso de error para volver al estado real
       await loadVehicles();
     }
   };
 
   const handleDeleteVehicle = async (vehicleId: string, vehicleName: string) => {
     Alert.alert(
-      '¿Eliminar vehículo?',
-      `Se eliminará ${vehicleName} de tu lista`,
+      '⚠️ ¿Eliminar vehículo?',
+      `${vehicleName} se elimina de tu garaje, pero mantendrás su historial de valoraciones.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -147,11 +130,14 @@ export default function SelectVehicleScreen() {
             try {
               const { error } = await supabase
                 .from('user_vehicles')
-                .delete()
+                .update({ 
+                  deleted: true,
+                  online: false  // También desactivarlo
+                })
                 .eq('id', vehicleId);
-
+  
               if (error) throw error;
-
+  
               Alert.alert('✅ Eliminado', `${vehicleName} ha sido eliminado`);
               await loadVehicles();
             } catch (error: any) {
