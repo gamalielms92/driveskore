@@ -179,6 +179,23 @@ export default function AddVehicleScreen() {
           .eq('user_id', user.id);
       }
       
+            // 🔥 NUEVO: Si tiene matrícula, desactivarla en otros usuarios
+      if (plateNormalized) {
+        console.log('🔍 Verificando si la matrícula existe en otros usuarios:', plateNormalized);
+        
+        const { error: deactivateError } = await supabase
+          .from('user_vehicles')
+          .update({ online: false })
+          .eq('plate', plateNormalized)
+          .neq('user_id', user.id);
+
+        if (deactivateError) {
+          console.error('⚠️ Error desactivando matrícula en otros usuarios:', deactivateError);
+        } else {
+          console.log('✅ Matrícula desactivada en otros usuarios (si existía)');
+        }
+      }
+
       const { error } = await supabase
         .from('user_vehicles')
         .insert({

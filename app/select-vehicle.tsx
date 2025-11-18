@@ -64,13 +64,33 @@ export default function SelectVehicleScreen() {
   const handleToggleOnline = async (vehicleId: string, currentState: boolean, vehicleName: string) => {
     try {
       if (!currentState) {
-        // Si vamos a activar este vehículo, desactivar todos los demás del usuario
+        // 1️⃣ Obtener datos del vehículo que vamos a activar
+        const vehicleToActivate = vehicles.find(v => v.id === vehicleId);
+        
+        // 2️⃣ Si tiene matrícula, desactivarla en OTROS usuarios
+        if (vehicleToActivate?.plate) {
+          console.log('🔍 Verificando matrícula en otros usuarios:', vehicleToActivate.plate);
+          
+          const { error: otherUsersError } = await supabase
+            .from('user_vehicles')
+            .update({ online: false })
+            .eq('plate', vehicleToActivate.plate)
+            .neq('user_id', userId);
+  
+          if (otherUsersError) {
+            console.error('⚠️ Error desactivando matrícula en otros usuarios:', otherUsersError);
+          } else {
+            console.log('✅ Matrícula desactivada en otros usuarios (si existía)');
+          }
+        }
+  
+        // 3️⃣ Desactivar todos los vehículos del usuario actual
         await supabase
           .from('user_vehicles')
           .update({ online: false })
           .eq('user_id', userId);
-
-        console.log('🔄 Desactivados todos los vehículos del usuario');
+  
+        console.log('🔄 Desactivados todos los vehículos del usuario actual');
       }
 
       // Actualizar el estado del vehículo seleccionado
