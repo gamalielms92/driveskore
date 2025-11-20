@@ -1365,7 +1365,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
   },
   videoContainer: {
-    width: '25%',
+    width: '40%',
     height: '90%',  
     backgroundColor: '#000',
     alignSelf: 'center',
