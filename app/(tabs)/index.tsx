@@ -2,10 +2,12 @@
 // ✅ LANDING PAGE COMPLETA para Web + Home para Móvil
 // ✅ PARALLAX FUNCIONANDO CORRECTAMENTE
 
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import type { Vehicle } from '../../src/types/vehicle';
 import { getVehicleDescription, getVehicleDisplayName, getVehicleIcon } from '../../src/utils/vehicleHelpers';
@@ -23,6 +25,8 @@ export default function HomeScreen() {
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const videoRef = useRef<Video>(null);
 
   const loadActiveVehicle = async () => {
     try {
@@ -180,6 +184,52 @@ useFocusEffect(
     );
   };
 
+  // ========================================
+  // COMPONENTE MODAL DE VIDEO
+  // ========================================
+  const VideoModal = () => (
+    <Modal
+      visible={showVideoModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        setShowVideoModal(false);
+        videoRef.current?.pauseAsync();
+      }}
+    >
+      <View style={styles.modalContainer}>
+        <TouchableOpacity 
+          style={styles.modalBackground}
+          activeOpacity={1}
+          onPress={() => {
+            setShowVideoModal(false);
+            videoRef.current?.pauseAsync();
+          }}
+        />
+        
+        <View style={styles.videoContainer}>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={() => {
+              setShowVideoModal(false);
+              videoRef.current?.pauseAsync();
+            }}
+          >
+            <Ionicons name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          
+          <Video
+            ref={videoRef}
+            source={{ uri: 'https://driveskore.vercel.app/instalacion.mp4' }}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={false}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
 
   // ========================================
   // VERSIÓN WEB - LANDING PAGE
@@ -315,6 +365,17 @@ useFocusEffect(
                 />
               </View>
             </TouchableOpacity>
+
+           {/* Botón de ayuda de instalación */}
+            <TouchableOpacity 
+              style={styles.helpButton}
+              onPress={() => setShowVideoModal(true)}
+            >
+              <Ionicons name="play-circle" size={24} color="#FFF" />
+              <Text style={styles.helpButtonText}>¿Cómo instalar la app?</Text>
+            </TouchableOpacity>
+            {/* Modal de video */}
+            <VideoModal />
 
             {/* Botón de Descarga Directa */}
             <TouchableOpacity 
@@ -1270,5 +1331,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     textDecorationLine: 'underline',
+  },
+  // ===== MODAL DE VIDEO =====
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  helpButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+    marginLeft: 10,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+  },
+  videoContainer: {
+    width: '90%',
+    maxWidth: 800,
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 24,
+    padding: 8,
   },
 });
