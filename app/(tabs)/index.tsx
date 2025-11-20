@@ -1365,16 +1365,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
   },
   videoContainer: {
-    width: '90%',
-    maxWidth: 800,
-    aspectRatio: 16 / 9,
+    width: '25%',
+    height: '90%',  
     backgroundColor: '#000',
-    borderRadius: 12,
-    overflow: 'hidden',
+    alignSelf: 'center',
+    justifyContent: 'center',  
+    alignItems: 'center', 
   },
   video: {
     width: '100%',
     height: '100%',
+    alignSelf: 'center',     // ✅ Centra el video
+    justifyContent: 'center',
   },
   closeButton: {
     position: 'absolute',
