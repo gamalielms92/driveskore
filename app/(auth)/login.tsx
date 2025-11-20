@@ -117,9 +117,9 @@ export default function LoginScreen() {
         router.push('/privacy');
       } else {
         // En móvil, abrir en navegador externo
-        const privacyUrl = 'https://driveskore.vercel.app/privacy';
+        const privacyUrl = 'https://driveskore.vercel.app/privacy.html';
         Linking.openURL(privacyUrl).catch(err => 
-          console.error('Lo siento, puedes ir a driveskore.org para leerla:', err)
+          console.error('Error abriendo política de privacidad:', err)
         );
       }
     };

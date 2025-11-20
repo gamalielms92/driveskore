@@ -651,7 +651,7 @@ useFocusEffect(
           </TouchableOpacity>
           <Text style={[styles.footerSeparator, { color: 'rgba(255,255,255,0.6)' }]}>•</Text>
 
-          <TouchableOpacity onPress={() => router.push('/privacy')}>
+          <TouchableOpacity onPress={() => router.push('/privacy.html')}>
             <Text style={[styles.footerLink, { color: '#FFF' }]}>Política de Privacidad</Text>
           </TouchableOpacity>
 
