@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Linking, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/config/supabase';
 import { Analytics } from '../../src/services/Analytics';
 import EventCaptureService from '../../src/services/EventCaptureService';
@@ -110,10 +110,19 @@ export default function LoginScreen() {
     }
   };
 
-  // ✅ FUNCIÓN PARA ABRIR POLÍTICA DE PRIVACIDAD (navegación interna)
-  const openPrivacyPolicy = () => {
-    router.push('/privacy');
-  };
+    // ✅ FUNCIÓN PARA ABRIR POLÍTICA DE PRIVACIDAD
+    const openPrivacyPolicy = () => {
+      if (Platform.OS === 'web') {
+        // En web, navegar internamente
+        router.push('/privacy');
+      } else {
+        // En móvil, abrir en navegador externo
+        const privacyUrl = 'https://driveskore.vercel.app/privacy';
+        Linking.openURL(privacyUrl).catch(err => 
+          console.error('Lo siento, puedes ir a driveskore.org para leerla:', err)
+        );
+      }
+    };
 
   return (
     <KeyboardAvoidingView

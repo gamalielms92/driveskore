@@ -79,12 +79,12 @@ export class VehicleValidationService {
     const newFormatRegex = /^[0-9]{4}[BCDFGHJKLMNPRSTVWXYZ]{3}$/;
     
     // Formato antiguo: A-1234-BC o AB-1234-C
-    const oldFormatRegex = /^[A-Z]{1,2}[0-9]{4}[A-Z]{1,2}$/;
+    const oldFormatRegex = /^[A-Z]{0,2}[0-9]{4}[A-Z]{1,2}$/;
     
     if (!newFormatRegex.test(cleanPlate) && !oldFormatRegex.test(cleanPlate)) {
       return {
         isValid: false,
-        error: 'Formato inválido. Ejemplo válido: 1234ABC'
+        error: 'Formato inválido. Ejemplo: 1234 ABC o matrícula anterior al año 2000'
       };
     }
     
