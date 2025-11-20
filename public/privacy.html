@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidad - DriveSkore</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #F8F9FA;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background-color: #007AFF;
+            padding: 50px 20px 15px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            color: #FFF;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .back-icon {
+            font-size: 24px;
+            margin-right: 8px;
+        }
+
+        .content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1A1A1A;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            font-weight: 600;
+            color: #007AFF;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .date {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .institution {
+            font-size: 14px;
+            color: #007AFF;
+            text-align: center;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        .section {
+            display: flex;
+            align-items: center;
+            margin-top: 30px;
+            margin-bottom: 12px;
+        }
+
+        .section-number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #007AFF;
+            margin-right: 8px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1A1A1A;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+
+        .paragraph {
+            font-size: 15px;
+            color: #333;
+            line-height: 24px;
+            margin-bottom: 12px;
+        }
+
+        .bold {
+            font-weight: 700;
+            color: #1A1A1A;
+        }
+
+        .email {
+            color: #007AFF;
+            font-weight: 600;
+        }
+
+        .bullet-list {
+            margin-bottom: 12px;
+        }
+
+        .bullet-item {
+            font-size: 15px;
+            color: #333;
+            line-height: 24px;
+            margin-bottom: 8px;
+            padding-left: 8px;
+        }
+
+        .warning-box {
+            background-color: #FFF3E0;
+            border-left: 4px solid #FF9800;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .warning-icon {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .warning-text {
+            font-size: 15px;
+            color: #E65100;
+            line-height: 22px;
+        }
+
+        .provider-box {
+            background-color: #F5F5F5;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .provider-item {
+            font-size: 14px;
+            color: #333;
+            line-height: 22px;
+            margin-bottom: 6px;
+        }
+
+        .rights-box {
+            background-color: #E8F5E9;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .right-item {
+            font-size: 15px;
+            color: #1B5E20;
+            line-height: 24px;
+            margin-bottom: 8px;
+        }
+
+        .highlight {
+            font-size: 15px;
+            font-weight: bold;
+            color: #007AFF;
+            text-align: center;
+            margin-top: 8px;
+            display: block;
+        }
+
+        .security-box {
+            background-color: #FFF9C4;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .security-item {
+            font-size: 14px;
+            color: #F57F17;
+            line-height: 22px;
+            margin-bottom: 6px;
+        }
+
+        .age-box {
+            background-color: #FFEBEE;
+            border-left: 4px solid #F44336;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+            display: flex;
+        }
+
+        .age-icon {
+            font-size: 32px;
+            margin-right: 12px;
+        }
+
+        .age-text {
+            font-size: 14px;
+            color: #C62828;
+            line-height: 22px;
+        }
+
+        .acceptance-box {
+            background-color: #E1F5FE;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 12px 0;
+        }
+
+        .acceptance-text {
+            font-size: 15px;
+            color: #01579B;
+            line-height: 24px;
+            font-weight: 600;
+        }
+
+        .contact-box {
+            background-color: #F3E5F5;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .contact-item {
+            font-size: 15px;
+            color: #4A148C;
+            line-height: 24px;
+            margin-bottom: 6px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 30px;
+            padding-bottom: 20px;
+            border-top: 2px solid #E0E0E0;
+            text-align: center;
+        }
+
+        .footer-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007AFF;
+            margin-bottom: 4px;
+        }
+
+        .footer-subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .footer-text {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .bottom-back-button {
+            background-color: #007AFF;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 24px;
+            border-radius: 12px;
+            margin-top: 30px;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+
+        .bottom-back-icon {
+            color: #FFF;
+            font-size: 20px;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        .bottom-back-text {
+            color: #FFF;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .spacer {
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="javascript:history.back()" class="back-button">
+            <span class="back-icon">←</span>
+            <span>Volver</span>
+        </a>
+    </div>
+
+    <div class="content">
+        <h1 class="title">POLÍTICA DE PRIVACIDAD</h1>
+        <h2 class="subtitle">DriveSkore</h2>
+        <p class="date">Última actualización: 18 de noviembre de 2025</p>
+        <p class="institution">Universidad de Huelva - Trabajo Fin de Máster</p>
+
+        <!-- Sección 1 -->
+        <div class="section">
+            <span class="section-number">1.</span>
+            <h3 class="section-title">RESPONSABLE DEL TRATAMIENTO</h3>
+        </div>
+        <p class="paragraph">
+            <span class="bold">Identidad:</span> DriveSkore (Proyecto Académico TFM)<br>
+            <span class="bold">Responsable:</span> [Gamaliel Moreno Sánchez]<br>
+            <span class="bold">Universidad:</span> Universidad de Huelva<br>
+            <span class="bold">Contacto:</span> [gamaliel.moreno@alu.uhu.es]<br>
+            <span class="bold">Finalidad:</span> Proyecto de ingeniería Informática (Trabajo Fin de Máster)
+        </p>
+
+        <!-- Sección 2 -->
+        <div class="section">
+            <span class="section-number">2.</span>
+            <h3 class="section-title">PRINCIPIOS DEL TRATAMIENTO</h3>
+        </div>
+        <p class="paragraph">
+            DriveSkore trata tus datos personales conforme al <span class="bold">Reglamento (UE) 2016/679 (RGPD)</span> y la <span class="bold">Ley Orgánica 3/2018 de Protección de Datos (LOPDGDD)</span>, garantizando:
+        </p>
+        <div class="bullet-list">
+            <p class="bullet-item">✅ <span class="bold">Licitud y transparencia:</span> Solo tratamos datos con tu consentimiento explícito.</p>
+            <p class="bullet-item">✅ <span class="bold">Minimización:</span> Solo recopilamos datos estrictamente necesarios.</p>
+            <p class="bullet-item">✅ <span class="bold">Exactitud:</span> Puedes modificar tus datos en cualquier momento.</p>
+            <p class="bullet-item">✅ <span class="bold">Limitación de conservación:</span> Datos eliminados tras finalizar el piloto académico.</p>
+            <p class="bullet-item">✅ <span class="bold">Integridad y confidencialidad:</span> Cifrado SSL/TLS y almacenamiento seguro.</p>
+        </div>
+
+        <!-- Sección 3 -->
+        <div class="section">
+            <span class="section-number">3.</span>
+            <h3 class="section-title">DATOS QUE RECOPILAMOS</h3>
+        </div>
+
+        <h4 class="subsection-title">3.1. Datos obligatorios (registro)</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">Email</span> (autenticación y comunicación)</p>
+            <p class="bullet-item">• <span class="bold">Nombre completo</span> (identificación en la app)</p>
+            <p class="bullet-item">• <span class="bold">Contraseña</span> (cifrada con bcrypt)</p>
+        </div>
+
+        <h4 class="subsection-title">3.2. Datos opcionales (voluntarios)</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">Foto de perfil</span> (puedes usar avatar por defecto)</p>
+            <p class="bullet-item">• <span class="bold">Matrícula(s) de vehículo(s)</span> (solo si es un coche o una moto)</p>
+            <p class="bullet-item">• <span class="bold">Foto del vehículo</span> (solo si quieres valorar y ser valorado)</p>
+            <p class="bullet-item">• <span class="bold">Nivel de conductor</span> (según sistema de puntos interno)</p>
+        </div>
+
+        <h4 class="subsection-title">3.3. Datos generados automáticamente</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">Valoraciones</span> realizadas/recibidas</p>
+            <p class="bullet-item">• <span class="bold">Código de referidos</span> (sistema de invitaciones)</p>
+            <p class="bullet-item">• <span class="bold">Fecha de registro</span> y última actividad</p>
+            <p class="bullet-item">• <span class="bold">Ubicación GPS</span> (solo cuando usas captura en tiempo real)</p>
+            <p class="bullet-item">• <span class="bold">Datos técnicos:</span> Tipo de dispositivo, versión de app, IP</p>
+        </div>
+
+        <!-- Sección 4 -->
+        <div class="section">
+            <span class="section-number">4.</span>
+            <h3 class="section-title">FINALIDAD DEL TRATAMIENTO</h3>
+        </div>
+        <p class="paragraph">Utilizamos tus datos exclusivamente para:</p>
+        <div class="bullet-list">
+            <p class="bullet-item">📌 <span class="bold">Gestión de cuenta:</span> Registro, autenticación y perfil</p>
+            <p class="bullet-item">📌 <span class="bold">Funcionalidad de la app:</span> Sistema de valoraciones y ranking</p>
+            <p class="bullet-item">📌 <span class="bold">Sistema cerrado:</span> Solo usuarios registrados pueden ser valorados</p>
+            <p class="bullet-item">📌 <span class="bold">Sistema de referidos:</span> Código de invitación y programa Embajador</p>
+            <p class="bullet-item">📌 <span class="bold">Sorteo:</span> Participación en sorteo (7 dic 2025)</p>
+            <p class="bullet-item">📌 <span class="bold">Análisis académico:</span> Estadísticas anónimas para el TFM</p>
+            <p class="bullet-item">📌 <span class="bold">Mejora del servicio:</span> Feedback y corrección de errores</p>
+            <p class="bullet-item">📌 <span class="bold">Comunicaciones:</span> Notificaciones sobre actualizaciones y sorteo</p>
+        </div>
+
+        <div class="warning-box">
+            <span class="warning-icon">⚠️</span>
+            <p class="warning-text">
+                <span class="bold">NO vendemos, alquilamos ni cedemos tus datos a terceros con fines comerciales.</span>
+            </p>
+        </div>
+
+        <!-- Sección 5 -->
+        <div class="section">
+            <span class="section-number">5.</span>
+            <h3 class="section-title">BASE LEGAL DEL TRATAMIENTO</h3>
+        </div>
+        <div class="bullet-list">
+            <p class="bullet-item">✅ <span class="bold">Consentimiento explícito</span> (Art. 6.1.a RGPD): Al registrarte y aceptar esta política</p>
+            <p class="bullet-item">✅ <span class="bold">Interés legítimo</span> (Art. 6.1.f RGPD): Prevención de fraude y seguridad</p>
+            <p class="bullet-item">✅ <span class="bold">Cumplimiento contractual</span> (Art. 6.1.b RGPD): Prestación del servicio</p>
+        </div>
+
+        <!-- Sección 6 -->
+        <div class="section">
+            <span class="section-number">6.</span>
+            <h3 class="section-title">DESTINATARIOS DE LOS DATOS</h3>
+        </div>
+
+        <h4 class="subsection-title">6.1. Proveedores tecnológicos</h4>
+        <div class="provider-box">
+            <p class="provider-item">🔹 <span class="bold">Supabase</span> (Supabase Inc., EE.UU.): Base de datos [Cláusulas UE]</p>
+            <p class="provider-item">🔹 <span class="bold">Firebase</span> (Google LLC, EE.UU.): Analytics [Privacy Shield]</p>
+            <p class="provider-item">🔹 <span class="bold">Vercel</span> (Vercel Inc., EE.UU.): Hosting landing</p>
+            <p class="provider-item">🔹 <span class="bold">OCR.space</span> (A9t9 GmbH, Austria - UE): OCR matrículas</p>
+            <p class="provider-item">🔹 <span class="bold">Formspree</span> (Formspree LLC, EE.UU.): Feedback</p>
+        </div>
+
+        <h4 class="subsection-title">6.2. Otros usuarios (limitado)</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• Tu <span class="bold">nombre</span> y <span class="bold">puntuación</span> son visibles en rankings</p>
+            <p class="bullet-item">• Tu <span class="bold">matrícula NUNCA</span> es visible en tu perfil público sin tu consentimiento</p>
+        </div>
+
+        <!-- Sección 7 -->
+        <div class="section">
+            <span class="section-number">7.</span>
+            <h3 class="section-title">TRANSFERENCIAS INTERNACIONALES</h3>
+        </div>
+        <p class="paragraph">
+            Algunos datos se almacenan en servidores fuera de la UE (EE.UU.), protegidos mediante:
+        </p>
+        <div class="bullet-list">
+            <p class="bullet-item">✅ Cláusulas Contractuales Tipo de la Comisión Europea</p>
+            <p class="bullet-item">✅ Certificación Privacy Shield (cuando aplica)</p>
+            <p class="bullet-item">✅ Cifrado SSL/TLS en tránsito</p>
+        </div>
+
+        <!-- Sección 8 -->
+        <div class="section">
+            <span class="section-number">8.</span>
+            <h3 class="section-title">PLAZO DE CONSERVACIÓN</h3>
+        </div>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">Durante el piloto:</span> Datos activos mientras uses la app</p>
+            <p class="bullet-item">• <span class="bold">Fin del piloto</span> (31 de diciembre 2025): Datos personales eliminados en 30 días</p>
+            <p class="bullet-item">• <span class="bold">Estadísticas anónimas:</span> Conservadas para el TFM (sin identificadores)</p>
+            <p class="bullet-item">• <span class="bold">Derecho de supresión:</span> Puedes eliminar tu cuenta en cualquier momento</p>
+        </div>
+
+        <!-- Sección 9 -->
+        <div class="section">
+            <span class="section-number">9.</span>
+            <h3 class="section-title">TUS DERECHOS (RGPD)</h3>
+        </div>
+        <p class="paragraph">
+            Puedes ejercer estos derechos enviando email a <span class="email">[gamaliel.moreno@alu.uhu.es]</span>:
+        </p>
+        <div class="rights-box">
+            <p class="right-item">🔹 <span class="bold">Acceso:</span> Solicitar copia de tus datos</p>
+            <p class="right-item">🔹 <span class="bold">Rectificación:</span> Corregir datos inexactos</p>
+            <p class="right-item">🔹 <span class="bold">Supresión</span> ("derecho al olvido"): Eliminar tu cuenta</p>
+            <p class="right-item">🔹 <span class="bold">Oposición:</span> Oponerte a ciertos tratamientos</p>
+            <p class="right-item">🔹 <span class="bold">Portabilidad:</span> Recibir tus datos (JSON/CSV)</p>
+            <p class="right-item">🔹 <span class="bold">Limitación:</span> Restringir el procesamiento</p>
+            <p class="right-item">🔹 <span class="bold">Reclamación:</span> Queja ante la AEPD → www.aepd.es</p>
+        </div>
+        <span class="highlight">Respuesta garantizada en 30 días.</span>
+
+        <!-- Sección 10 -->
+        <div class="section">
+            <span class="section-number">10.</span>
+            <h3 class="section-title">SEGURIDAD DE LOS DATOS</h3>
+        </div>
+        <div class="security-box">
+            <p class="security-item">🔒 <span class="bold">Cifrado:</span> SSL/TLS en tránsito, contraseñas hasheadas (bcrypt)</p>
+            <p class="security-item">🔒 <span class="bold">Acceso restringido:</span> Solo personal autorizado</p>
+            <p class="security-item">🔒 <span class="bold">Auditorías:</span> Logs de acceso y monitorización</p>
+            <p class="security-item">🔒 <span class="bold">Backups:</span> Copias de seguridad cifradas</p>
+        </div>
+
+        <!-- Sección 11 -->
+        <div class="section">
+            <span class="section-number">11.</span>
+            <h3 class="section-title">COOKIES Y TECNOLOGÍAS</h3>
+        </div>
+        <h4 class="subsection-title">11.1. Landing page</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">Cookies técnicas:</span> Necesarias para navegación</p>
+            <p class="bullet-item">• <span class="bold">Firebase Analytics:</span> Estadísticas anónimas</p>
+        </div>
+        <h4 class="subsection-title">11.2. App móvil</h4>
+        <div class="bullet-list">
+            <p class="bullet-item">• <span class="bold">No usa cookies</span> (app nativa)</p>
+            <p class="bullet-item">• <span class="bold">Firebase Analytics:</span> Eventos anónimos (crashlytics)</p>
+        </div>
+
+        <!-- Sección 12 -->
+        <div class="section">
+            <span class="section-number">12.</span>
+            <h3 class="section-title">MENORES DE EDAD</h3>
+        </div>
+        <div class="age-box">
+            <span class="age-icon">🔞</span>
+            <div>
+                <p class="age-text">
+                    DriveSkore está destinado a <span class="bold">mayores de 18 años</span>.<br><br>
+                    Si detectamos usuarios menores:<br>
+                    1. Suspensión inmediata de cuenta<br>
+                    2. Solicitud de verificación de edad<br>
+                    3. Eliminación de datos si no se acredita mayoría de edad
+                </p>
+            </div>
+        </div>
+
+        <!-- Sección 13 -->
+        <div class="section">
+            <span class="section-number">13.</span>
+            <h3 class="section-title">CAMBIOS EN ESTA POLÍTICA</h3>
+        </div>
+        <p class="paragraph">Te notificaremos cambios mediante:</p>
+        <div class="bullet-list">
+            <p class="bullet-item">📧 Email (cambios sustanciales)</p>
+            <p class="bullet-item">📱 Notificación in-app</p>
+            <p class="bullet-item">🌐 Aviso en landing page</p>
+        </div>
+
+        <!-- Sección 14 -->
+        <div class="section">
+            <span class="section-number">14.</span>
+            <h3 class="section-title">ACEPTACIÓN</h3>
+        </div>
+        <div class="acceptance-box">
+            <p class="acceptance-text">
+                Al registrarte en DriveSkore:<br>
+                ✅ Confirmas haber leído esta política<br>
+                ✅ Consientes el tratamiento descrito<br>
+                ✅ Eres mayor de 18 años
+            </p>
+        </div>
+
+        <!-- Sección 15 -->
+        <div class="section">
+            <span class="section-number">15.</span>
+            <h3 class="section-title">CONTACTO Y RECLAMACIONES</h3>
+        </div>
+        <div class="contact-box">
+            <p class="contact-item"><span class="bold">Email:</span> [gamaliel.moreno@alu.uhu.es]</p>
+            <p class="contact-item"><span class="bold">Respuesta:</span> 30 días máximo</p>
+            <p class="contact-item"><span class="bold">Reclamaciones AEPD:</span> www.aepd.es</p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-title">DriveSkore</p>
+            <p class="footer-subtitle">Universidad de Huelva</p>
+            <p class="footer-text">Proyecto académico TFM · Conducción responsable</p>
+        </div>
+
+        <!-- Botón Volver al final -->
+        <button onclick="history.back()" class="bottom-back-button">
+            <span class="bottom-back-icon">←</span>
+            <span class="bottom-back-text">Volver</span>
+        </button>
+
+        <div class="spacer"></div>
+    </div>
+</body>
+</html>
