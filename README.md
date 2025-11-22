@@ -519,33 +519,6 @@ npm run test:coverage
 npm run test:watch
 ```
 
-## 12. CI/CD con GitHub Actions
-
-### 12.1 Workflow Básico
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-```
-
 ## 12. Monitorización
 
 ### 12.1 Firebase Crashlytics
