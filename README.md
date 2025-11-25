@@ -504,24 +504,9 @@ eas submit --platform android --profile production
 eas submit --platform ios --profile production
 ```
 
-## 11. Testing
+## 11. Monitorización
 
-### 11.1 Configurar Jest
-
-```bash
-# Ya incluido en el proyecto
-npm test
-
-# Con coverage
-npm run test:coverage
-
-# Watch mode
-npm run test:watch
-```
-
-## 12. Monitorización
-
-### 12.1 Firebase Crashlytics
+### 11.1 Firebase Crashlytics
 
 ```javascript
 // Ya configurado en src/config/firebase.ts
@@ -534,7 +519,7 @@ crashlytics().recordError(error);
 // https://console.firebase.google.com/project/YOUR_PROJECT/crashlytics
 ```
 
-### 12.2 Supabase Dashboard
+### 11.2 Supabase Dashboard
 
 ```bash
 # Monitorizar:
