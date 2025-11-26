@@ -12,6 +12,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false); // ✅ NUEVO
 
   // Helper para mostrar alertas en web y móvil
   const showAlert = (title: string, message: string, onOk?: () => void) => {
@@ -23,20 +24,56 @@ export default function LoginScreen() {
     }
   };
 
+  // ✅ NUEVA FUNCIÓN: Recuperar contraseña
+  const handlePasswordReset = async () => {
+    if (!email) {
+      showAlert('Error', 'Por favor introduce tu email para recuperar la contraseña');
+      return;
+    }
+
+    // Validar formato de email básico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      showAlert('Error', 'Por favor introduce un email válido');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://driveskore.vercel.app/reset-password.html',
+      });
+
+      if (error) throw error;
+
+      showAlert(
+        '📧 Email enviado',
+        'Si existe una cuenta con este email, recibirás un enlace para restablecer tu contraseña. Revisa también la carpeta de spam.',
+        () => setIsResettingPassword(false)
+      );
+
+    } catch (error: any) {
+      showAlert('Error', error.message || 'No se pudo enviar el email de recuperación');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAuth = async () => {
     if (!email || !password) {
       showAlert('Error', 'Por favor rellena todos los campos');
       return;
     }
 
-        // ✅ VALIDACIÓN DEL CHECKBOX
-        if (isSignUp && !acceptedPrivacy) {
-          showAlert(
-            'Política de Privacidad', 
-            'Debes aceptar la Política de Privacidad para registrarte'
-          );
-          return;
-        }
+    // ✅ VALIDACIÓN DEL CHECKBOX
+    if (isSignUp && !acceptedPrivacy) {
+      showAlert(
+        'Política de Privacidad', 
+        'Debes aceptar la Política de Privacidad para registrarte'
+      );
+      return;
+    }
 
     setLoading(true);
 
@@ -110,19 +147,19 @@ export default function LoginScreen() {
     }
   };
 
-    // ✅ FUNCIÓN PARA ABRIR POLÍTICA DE PRIVACIDAD
-    const openPrivacyPolicy = () => {
-      if (Platform.OS === 'web') {
-        // En web, navegar internamente
-        router.push('/privacy');
-      } else {
-        // En móvil, abrir en navegador externo
-        const privacyUrl = 'https://driveskore.vercel.app/privacy.html';
-        Linking.openURL(privacyUrl).catch(err => 
-          console.error('Error abriendo política de privacidad:', err)
-        );
-      }
-    };
+  // ✅ FUNCIÓN PARA ABRIR POLÍTICA DE PRIVACIDAD
+  const openPrivacyPolicy = () => {
+    if (Platform.OS === 'web') {
+      // En web, navegar internamente
+      router.push('/privacy');
+    } else {
+      // En móvil, abrir en navegador externo
+      const privacyUrl = 'https://driveskore.vercel.app/privacy.html';
+      Linking.openURL(privacyUrl).catch(err => 
+        console.error('Error abriendo política de privacidad:', err)
+      );
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -136,7 +173,11 @@ export default function LoginScreen() {
           resizeMode="contain"
         />
         <Text style={styles.subtitle}>
-          {isSignUp ? 'Crea tu cuenta' : 'Evalúa conductores, mejora las carreteras'}
+          {isResettingPassword 
+            ? 'Recuperar contraseña' 
+            : isSignUp 
+              ? 'Crea tu cuenta' 
+              : 'Evalúa conductores, mejora las carreteras'}
         </Text>
 
         <TextInput
@@ -150,55 +191,89 @@ export default function LoginScreen() {
           editable={!loading}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-        />
+        {/* ✅ OCULTAR CONTRASEÑA EN MODO RECUPERACIÓN */}
+        {!isResettingPassword && (
+          <TextInput
+            style={styles.input}
+            placeholder="Contraseña"
+            placeholderTextColor="#999"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            editable={!loading}
+          />
+        )}
+
+        {/* ✅ ENLACE "¿OLVIDASTE TU CONTRASEÑA?" (solo en login, no en registro ni reset) */}
+        {!isSignUp && !isResettingPassword && (
+          <TouchableOpacity
+            style={styles.forgotPasswordContainer}
+            onPress={() => setIsResettingPassword(true)}
+            disabled={loading}
+          >
+            <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+        )}
 
         {/* ✅ CHECKBOX DE PRIVACIDAD (solo en registro) */}
         {isSignUp && (
-                  <TouchableOpacity
-                    style={styles.checkboxContainer}
-                    onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}
-                    disabled={loading}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.checkbox, acceptedPrivacy && styles.checkboxChecked]}>
-                      {acceptedPrivacy && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>
-                      Acepto la{' '}
-                      <Text style={styles.link} onPress={openPrivacyPolicy}>
-                        Política de Privacidad
-                      </Text>
-                    </Text>
-                  </TouchableOpacity>
-                )}
+          <TouchableOpacity
+            style={styles.checkboxContainer}
+            onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}
+            disabled={loading}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, acceptedPrivacy && styles.checkboxChecked]}>
+              {acceptedPrivacy && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              Acepto la{' '}
+              <Text style={styles.link} onPress={openPrivacyPolicy}>
+                Política de Privacidad
+              </Text>
+            </Text>
+          </TouchableOpacity>
+        )}
 
+        {/* ✅ BOTÓN PRINCIPAL (cambia según el modo) */}
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleAuth}
+          onPress={isResettingPassword ? handlePasswordReset : handleAuth}
           disabled={loading}
         >
           <Text style={styles.buttonText}>
-            {loading ? 'Cargando...' : isSignUp ? 'Registrarse' : 'Iniciar Sesión'}
+            {loading 
+              ? 'Cargando...' 
+              : isResettingPassword 
+                ? 'Enviar email de recuperación'
+                : isSignUp 
+                  ? 'Registrarse' 
+                  : 'Iniciar Sesión'}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.switchButton}
-          onPress={() => setIsSignUp(!isSignUp)}
-          disabled={loading}
-        >
-          <Text style={styles.switchText}>
-            {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
-          </Text>
-        </TouchableOpacity>
+        {/* ✅ ENLACES SECUNDARIOS */}
+        {isResettingPassword ? (
+          // Modo recuperación: mostrar "Volver"
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={() => setIsResettingPassword(false)}
+            disabled={loading}
+          >
+            <Text style={styles.switchText}>← Volver al inicio de sesión</Text>
+          </TouchableOpacity>
+        ) : (
+          // Modo normal: alternar entre login/registro
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={() => setIsSignUp(!isSignUp)}
+            disabled={loading}
+          >
+            <Text style={styles.switchText}>
+              {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -294,5 +369,15 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  // ✅ NUEVO: Enlace "¿Olvidaste tu contraseña?"
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+    marginTop: -5,
+  },
+  forgotPasswordText: {
+    color: '#007AFF',
+    fontSize: 14,
   },
 });

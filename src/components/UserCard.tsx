@@ -136,7 +136,7 @@ export default function UserCard({
             // Modo compacto: solo el activo o el primero
             <View style={styles.vehicleBadge}>
               <Text style={styles.vehicleBadgeText}>
-                {activeVehicle?.plate || vehicles[0].plate || vehicles[0].serial_number}
+                {activeVehicle?.plate || vehicles[0].plate}
               </Text>
             </View>
           ) : (
@@ -160,7 +160,7 @@ export default function UserCard({
                       {vehicle.brand} {vehicle.model}
                     </Text>
                     <Text style={styles.vehiclePlate}>
-                      {vehicle.plate || vehicle.serial_number}
+                      {vehicle.plate}
                     </Text>
                   </View>
                   
