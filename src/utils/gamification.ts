@@ -3,7 +3,7 @@
  * Sistema de Gamificación DriveSkore v2.0
  * 
  * CAMBIOS PRINCIPALES:
- * - Niveles basados en valoraciones REALIZADAS (no recibidas)
+ * - Niveles basados en valoraciones
  * - Badges de ranking semanal con contador
  * - Badge "Beta Tester" para participantes del piloto
  * - Requisitos más altos para badges élite

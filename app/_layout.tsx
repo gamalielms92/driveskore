@@ -1,5 +1,5 @@
 // app/_layout.tsx
-// ✅ VERSIÓN CORREGIDA: Permite acceso público en web
+// Permite acceso público en web
 declare global {
   var RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS: boolean | undefined;
 }
@@ -14,6 +14,8 @@ import { supabase } from '../src/config/supabase';
 import ABShutter3Service from '../src/services/ABShutter3Service';
 import { Analytics } from '../src/services/Analytics';
 import EventCaptureService from '../src/services/EventCaptureService';
+import FloatingButtonNative from '../src/services/FloatingButtonNative';
+import LocationTrackingService from '../src/services/LocationTrackingService';
 import { checkForUpdates } from '../src/services/UpdateChecker';
 
 export default function RootLayout() {
@@ -142,6 +144,14 @@ export default function RootLayout() {
               // Limpiar ABShutter3Service
               ABShutter3Service.cleanup();
               console.log('🧹 ABShutter3Service limpiado');
+              
+              // Limpiar LocationTrackingService
+              await LocationTrackingService.stopTracking();
+              console.log('🧹 LocationTrackingService limpiado');
+              
+              // Limpiar FloatingButtonNative
+              await FloatingButtonNative.stop();
+              console.log('🧹 FloatingButtonNative limpiado');
             }
             
             setIsAuthenticated(false);

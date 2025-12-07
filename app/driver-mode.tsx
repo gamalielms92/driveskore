@@ -16,6 +16,7 @@ import {
   View
 } from 'react-native';
 import FloatingButtonListener from '../src/components/FloatingButtonListener';
+import FloatingButtonLocal from '../src/components/FloatingButtonLocal';
 import { supabase } from '../src/config/supabase';
 import ABShutter3Service from '../src/services/ABShutter3Service';
 import { Analytics } from '../src/services/Analytics';
@@ -37,6 +38,7 @@ export default function DriverModeScreen() {
     distance: 0,
     lastUpdate: null as Date | null
   });
+  const [floatingButtonEnabled, setFloatingButtonEnabled] = useState(false);
 
   const trackingInterval = useRef<NodeJS.Timeout | null>(null);
   const appState = useRef(AppState.currentState);
@@ -276,7 +278,7 @@ export default function DriverModeScreen() {
                 
                 if (success) {
                   setIsTracking(true);
-                  // ✅ NUEVO: Leer preferencias de captura
+                  // ✅ Android: Leer preferencias de captura
                   const preferences = await CapturePreferencesService.getAllPreferences();
                   console.log('📋 Preferencias de captura:', preferences);
 
@@ -286,7 +288,7 @@ export default function DriverModeScreen() {
                     ABShutter3Service.startListening();
                   }
 
-                  // ✅ NUEVO: Activar Botón Flotante si está en preferencias
+                  // ✅ Android: Activar Botón Flotante si está en preferencias
                   if (preferences.floatingButtonEnabled && Platform.OS === 'android') {
                     console.log('🔘 Activando botón virtual...');
     
@@ -298,6 +300,13 @@ export default function DriverModeScreen() {
                       console.warn('⚠️ No hay permiso para botón flotante');
                     }
                   }
+
+                  // Cargar preferencia del botón flotante iOS
+                  if (Platform.OS === 'ios') {
+                    const fbEnabled = await CapturePreferencesService.getFloatingButtonEnabled();
+                    setFloatingButtonEnabled(fbEnabled);
+                  }
+
                   // ✅ NUEVO: Trackear inicio del modo conductor
                   await Analytics.trackDriverModeStarted();
                   console.log('📊 Analytics: driver_mode_started');
@@ -363,6 +372,12 @@ export default function DriverModeScreen() {
                 console.log('🛑 Deteniendo botón virtual...');
                 await FloatingButtonNative.stop();
               }
+              // Detener botón flotante local iOS
+              if (Platform.OS === 'ios' && floatingButtonEnabled) {
+                console.log('🛑 Deteniendo botón flotante local iOS...');
+                setFloatingButtonEnabled(false);
+              }
+
               // ✅ NUEVO: Usar duración de las stats existentes
               const duration = stats.duration || 0;
               
@@ -439,42 +454,42 @@ export default function DriverModeScreen() {
         </View>
 
         {/* Estado del vehículo */}
-<View style={[
-    styles.vehicleCard,
-    isTracking && styles.vehicleCardActive
-  ]}>
-  <Text style={styles.cardTitle}>
-    {activeVehicle ? getVehicleIcon(activeVehicle.vehicle_type) : '🚗'} Vehículo activo
-  </Text>
-  {activeVehicle ? (
-    <>
-      <Text style={[
-        styles.vehiclePlate,
-        isTracking && styles.vehiclePlateTracking
-      ]}>
-        {isTracking ? '🟢' : '🔵'} {getVehicleDescription(activeVehicle)}
-      </Text>
-      <Text style={styles.vehicleIdentifier}>
-        {getVehicleDisplayName(activeVehicle)}
-      </Text>
-      <Text style={styles.vehicleStatus}>
-        {isTracking ? 'Estado: Online' : 'Listo para conducir'}
-      </Text>
-    </>
-  ) : (
-    <>
-      <Text style={styles.noVehicle}>⚪ Sin vehículo activo</Text>
-      <TouchableOpacity
-        style={styles.selectVehicleButton}
-        onPress={() => router.push('/select-vehicle')}
-      >
-        <Text style={styles.selectVehicleButtonText}>
-          Seleccionar vehículo →
+      <View style={[
+          styles.vehicleCard,
+          isTracking && styles.vehicleCardActive
+        ]}>
+        <Text style={styles.cardTitle}>
+          {activeVehicle ? getVehicleIcon(activeVehicle.vehicle_type) : '🚗'} Vehículo activo
         </Text>
-      </TouchableOpacity>
-    </>
-  )}
-</View>
+        {activeVehicle ? (
+          <>
+            <Text style={[
+              styles.vehiclePlate,
+              isTracking && styles.vehiclePlateTracking
+            ]}>
+              {isTracking ? '🟢' : '🔵'} {getVehicleDescription(activeVehicle)}
+            </Text>
+            <Text style={styles.vehicleIdentifier}>
+              {getVehicleDisplayName(activeVehicle)}
+            </Text>
+            <Text style={styles.vehicleStatus}>
+              {isTracking ? 'Estado: Online' : 'Listo para conducir'}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.noVehicle}>⚪ Sin vehículo activo</Text>
+            <TouchableOpacity
+              style={styles.selectVehicleButton}
+              onPress={() => router.push('/select-vehicle')}
+            >
+              <Text style={styles.selectVehicleButtonText}>
+                Seleccionar vehículo →
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
 
         {/* Control de tracking */}
         <View style={[
@@ -571,6 +586,10 @@ export default function DriverModeScreen() {
       </View>
       {/* Listener del botón flotante (invisible) */}
       <FloatingButtonListener />
+      {/* Botón flotante iOS */}
+      {Platform.OS === 'ios' && isTracking && floatingButtonEnabled && (
+        <FloatingButtonLocal enabled={true} />
+      )}
     </ScrollView>
   );
 }
